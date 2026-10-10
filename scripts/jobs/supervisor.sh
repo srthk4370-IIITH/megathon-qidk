@@ -37,6 +37,7 @@ if alive export_llama; then
   fi
 fi
 start export_llama
+start kaggle_fetch
 start build_native
 start host_eval
 done_ build_native && start deploy_runtime
