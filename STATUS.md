@@ -111,3 +111,11 @@ Run on the real board (SM8750P, Android 15) from the App laptop. Legend as above
 | Dashboard / detail / edit | ✅ | Demo data loaded on the board; search, filters, detail. |
 | Ask tab (O-2) | ✅ | Counts, place and time questions, meaning-based search ("toxic fumes" → ammonia leak), ~50 ms per question. Voice questions use the same mic/Whisper path. |
 | End-to-end latency (mock LLM) | ✅ | speech end → form ≈ 1.7 s ASR + 2 s review + mock LLM; real LLM timing pending the bundle. |
+
+## Extras (HANDBOOK "Extra optional work") — status
+
+| Extra | Flag (`config/app_config.json` → `features`) | State | Evidence |
+|---|---|---|---|
+| 1. Response clock | `response_clock` | ON BOARD | 8 tests; on the QIDK: timer, SOP steps, taps logged with offsets, dialler, survives force-stop. DB v3. |
+| 2. One-tap launch + wake word | `quick_launch`, `wake_word` | PLANNED | — |
+| 3. Multi-witness merging | `multi_witness` | PLANNED | — |

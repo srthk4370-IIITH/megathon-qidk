@@ -113,6 +113,7 @@ class RoomIncidentRepository(
         db.withTransaction {
             dao.deleteSearch(id)
             dao.deleteVector(id)
+            dao.deleteResponseActions(id)
             dao.delete(id)
             dao.insertAudit(listOf(AuditEntity(incidentId = id, at = nowMs(), actor = actor.tag, action = "DELETE", field = null, oldValue = null, newValue = null)))
         }
@@ -142,7 +143,7 @@ class RoomIncidentRepository(
     }
 
     override fun observeDetail(id: String): Flow<IncidentDetail?> =
-        merge(dao.observe(id), dao.observeRecs(id), dao.observeTurns(id)).map { load(id) }.distinctUntilChanged()
+        merge(dao.observe(id), dao.observeRecs(id), dao.observeTurns(id), dao.observeResponseActions(id)).map { load(id) }.distinctUntilChanged()
 
     override suspend fun load(id: String): IncidentDetail? {
         val st = loadStored(id) ?: return null
@@ -152,12 +153,20 @@ class RoomIncidentRepository(
                 it.audioPath, it.audioMs, it.asrMs, it.llmMs, it.llmToolJson, it.llmStatsJson, it.idx, it.createdAt)
         }
         val recs = dao.recs(id).map { RecRow(it.id, it.sopId, it.text, it.immediate, it.source, it.done) }
-        return IncidentDetail(metaOf(st.row), FormMapper.toForm(st), turns, recs)
+        val actions = dao.responseActions(id).map { ResponseAction(it.stepId, it.label, it.doneAt, it.source) }
+        return IncidentDetail(metaOf(st.row), FormMapper.toForm(st), turns, recs, actions)
     }
 
     override fun observeCounts(): Flow<DashboardCounts> = combine(
         dao.observeTotal(), dao.observeCritical(), dao.observeSince(nowMs() - 24L * 3600_000),
     ) { t, c, d -> DashboardCounts(t, c, d) }
+
+    // ---- Extra 1: response clock -----------------------------------------------------------
+
+    override suspend fun setResponseStart(id: String, startedAtMs: Long) = dao.setResponseStart(id, startedAtMs)
+    override suspend fun addResponseAction(id: String, action: ResponseAction) =
+        dao.insertResponseAction(ResponseActionEntity(incidentId = id, stepId = action.stepId, label = action.label, doneAt = action.doneAtMs, source = action.source))
+    override suspend fun activeResponseDraft(sinceMs: Long): String? = dao.activeResponseDraft(sinceMs)
 
     // ---- Ask tab / vector index (PRD §37 O-2) -----------------------------------------------
 
@@ -276,14 +285,14 @@ class RoomIncidentRepository(
     private fun metaOf(r: IncidentRow) = IncidentMeta(
         r.id, runCatching { IncidentStatus.valueOf(r.status) }.getOrDefault(IncidentStatus.DRAFT), r.refNo,
         Reporter(r.reporterName.orEmpty(), r.reporterEmpId.orEmpty()), r.createdAt, r.reportedAt, r.submittedAt, r.emergencyFlag,
-        r.followupRounds, r.modelVersionsJson,
+        r.followupRounds, r.modelVersionsJson, r.responseStartedAt,
     )
 
     private fun toRow(e: IncidentEntity) = IncidentRow(
         e.id, e.refNo, e.status, e.incidentType, e.title, e.description, e.severity, e.severitySource, e.locationText, e.locationId,
         e.occurredAt, e.occurredAtApprox, e.timeExpression, e.injuries, e.injuredCount, e.nearMiss, e.hazardOngoing, e.detailsJson,
         e.fieldMetaJson, e.otherIncidentsJson, e.lang, e.reporterName, e.reporterEmpId, e.emergencyFlag, e.followupRounds, e.createdAt,
-        e.updatedAt, e.reportedAt, e.submittedAt, e.modelVersionsJson,
+        e.updatedAt, e.reportedAt, e.submittedAt, e.modelVersionsJson, e.responseStartedAt,
     )
 
     private fun toEntity(st: StoredIncident, rowid: Long): IncidentEntity {
@@ -292,7 +301,7 @@ class RoomIncidentRepository(
             rowid, r.id, r.refNo, r.status, r.incidentType, r.title, r.description, r.severity, r.severitySource, r.locationText,
             r.locationId, r.occurredAt, r.occurredAtApprox, r.timeExpression, r.injuries, r.injuredCount, r.nearMiss, r.hazardOngoing,
             r.detailsJson, r.fieldMetaJson, r.otherIncidentsJson, r.lang, r.reporterName, r.reporterEmpId, r.emergencyFlag,
-            r.followupRounds, r.createdAt, r.updatedAt, r.reportedAt, r.submittedAt, r.modelVersionsJson,
+            r.followupRounds, r.createdAt, r.updatedAt, r.reportedAt, r.submittedAt, r.modelVersionsJson, responseStartedAt = r.responseStartedAt,
         )
     }
 }

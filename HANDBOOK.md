@@ -160,7 +160,7 @@ Scope decided 2026-10-11 ~05:00 IST. Preconditions checked first: the core loop 
 
 Status key: PLANNED → BUILT (tests pass) → ON BOARD (verified on the QIDK).
 
-### Extra 1 — Response clock (flag `response_clock`) — status: PLANNED
+### Extra 1 — Response clock (flag `features.response_clock`) — status: ON BOARD (verified on the QIDK 2026-10-11 05:05)
 
 - **What:** when an incident looks like an emergency, a pinned card appears at the top of the conversation and review screens with a large `mm:ss` timer counting up from the moment of detection and the category's *immediate* steps as large tap targets.
 - **Why:** in the first minutes of a fire, injury or gas leak the reporter should be acting, not filling a form. The form keeps filling in the background; the card keeps the next physical step and the elapsed time in front of them, and records what was done and when without any typing.
@@ -168,6 +168,9 @@ Status key: PLANNED → BUILT (tests pass) → ON BOARD (verified on the QIDK).
 - **How:** steps are the `immediate: true` entries of the category in `config/sop.json` plus a fixed "Call ERT" step. Tapping a step writes a `response_actions` row (`id, incident_id, step_id, label, done_at, source = TAP`) and appends the label to the incident's `actions_taken`. "Call ERT" opens the dialler (`ACTION_DIAL`) with the configured number and logs the time automatically. If "Call ERT" has not been done after 120 s (`response_clock.ert_reminder_s`), the card pulses amber and one short reminder is spoken. The start time is stored with the incident so the clock survives an app restart. The clock never blocks reporting; both run in parallel. The detail screen shows the timeline ("Alarm 00:00 → ERT 01:12 → Evacuated 03:40").
 - **Always shown:** "Follow your site's emergency procedures. This checklist is guidance, not medical advice."
 - **Data:** new table `response_actions`; new column `incidents.response_started_at` (migration).
+- **Where the code is:** rules `android/domain/.../core/ResponseClock.kt`; state machine hooks in `ConversationOrchestrator` (`maybeStartResponseClock`, `onResponseStep`, `resumeActiveResponse`); card `android/app/.../ui/components/ResponseClockCard.kt`; storage `response_actions` + `incidents.response_started_at` (Room migration 2→3).
+- **Verified:** 7 JVM tests (start rules, SOP-only steps in SOP order, tap logging, single reminder after 120 s and none once ERT is called, restart, flag off) + 1 database test. On the QIDK: spoken "fire spreading … unconscious" → card with a running timer and the four steps; taps logged with offsets (00:18, 00:20, 00:21, ERT 00:24, dialler opened); after force-stopping and reopening the app the clock continued (00:46) with every step and time intact.
+- **Known limitations:** the card is tall on a phone-sized screen (it can be collapsed with the arrow); the timeline uses a shortened form of the SOP sentence as its label, not a hand-written short name; the reminder is spoken once only; a response clock is resumed after a restart only for a draft started in the last 60 minutes; when no dialler app exists the "Call ERT" tap still logs the time and a message shows the number.
 - **30-second demo:** say "There is a fire spreading in the server room and someone is unconscious" → the card appears with the timer running → tap "Call ERT" (dialler opens, time logged) → tap "Evacuate" → open the saved report: the timeline shows each step with its offset.
 
 ### Extra 2 — One-tap launch and "Hey Qalam" wake word (flags `quick_launch`, `wake_word`) — status: PLANNED

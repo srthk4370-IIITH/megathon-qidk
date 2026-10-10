@@ -55,6 +55,10 @@ class ConversationOrchestrator(
     private var cont: CompletableDeferred<Unit>? = null
     private var spokeComplete = false
     private var editingRef: String? = null
+    private var responseStart: Long? = null
+    private val responseActions = ArrayList<ResponseAction>()
+    private var hintCategory: String? = null
+    private var reminderJob: Job? = null
     @Volatile private var generating = false
     @Volatile private var transcriptFocused = false
 
@@ -155,7 +159,74 @@ class ConversationOrchestrator(
     /** Discard: the draft stays in the DB (§8.2). */
     fun onCancel() { cancelAll(); audio.cancel(); tts.stop(); reset() }
 
-    fun onEmergencyCall() { _events.tryEmit(UiEvent.Dial(settings().ertNumber)) }
+    fun onEmergencyCall() { if (ui.value.response != null) onResponseStep(ResponseClock.ERT) else _events.tryEmit(UiEvent.Dial(settings().ertNumber)) }
+
+    // =========================================================================================
+    // Extra 1 — response clock (runs alongside reporting, never blocks it)
+    // =========================================================================================
+
+    /** A step on the response clock card was tapped: log it with its time and add it to "actions taken". */
+    fun onResponseStep(stepId: String) {
+        val st = ui.value.response?.steps?.firstOrNull { it.id == stepId } ?: return
+        if (stepId == ResponseClock.ERT) _events.tryEmit(UiEvent.Dial(settings().ertNumber))      // the dialler opens every time it is tapped
+        if (st.done) return
+        val action = ResponseAction(stepId, st.label, clock().toEpochMilli(), "TAP")
+        responseActions += action
+        val label = if (stepId == ResponseClock.ERT) "Called the emergency team (ERT)" else st.label.trimEnd('.')
+        val ex = form.state("actions_taken")
+        val list = (ex?.value.let { v -> (v as? kotlinx.serialization.json.JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.content } } ?: emptyList()) + label
+        form = form.with(FieldState("actions_taken", listValue(list.distinct()), if (ex?.status == FieldStatus.USER_EDITED) FieldStatus.USER_EDITED else FieldStatus.FILLED, FieldSource.USER, ex?.turnId, true, ex?.askedCount ?: 0))
+        update { it.copy(form = form, response = it.response?.copy(reminder = if (stepId == ResponseClock.ERT) false else it.response.reminder)) }
+        refreshResponseUi()
+        scope.launch { incidentId?.let { id -> runCatching { repo.addResponseAction(id, action); repo.saveForm(id, form, Actor.User(settings().reporter.empId), rounds, emergencyFlag) } } }
+    }
+
+    private fun maybeStartResponseClock() {
+        if (!cfg.app.features.responseClock) return
+        if (responseStart == null) {
+            if (!ResponseClock.shouldStart(form, ui.value.emergency != null)) return
+            val start = clock().toEpochMilli()
+            responseStart = start
+            scope.launch { incidentId?.let { runCatching { repo.setResponseStart(it, start) } } }
+            startErtReminder(cfg.app.responseClock.ertReminderS * 1000L)
+        }
+        refreshResponseUi()
+    }
+
+    private fun startErtReminder(afterMs: Long) {
+        reminderJob?.cancel()
+        reminderJob = scope.launch {
+            delay(afterMs.coerceAtLeast(0))
+            if (responseActions.any { it.stepId == ResponseClock.ERT } || responseStart == null) return@launch
+            update { it.copy(response = it.response?.copy(reminder = true)) }                  // card pulses amber
+            var waited = 0
+            while (ui.value.state == ConvState.LISTENING && waited < 30_000) { delay(500); waited += 500 }   // never talk into an open mic
+            if (settings().speakQuestions && responseActions.none { it.stepId == ResponseClock.ERT }) tts.speak(ResponseClock.REMINDER, form.lang)
+        }
+    }
+
+    private fun refreshResponseUi() {
+        val start = responseStart ?: return
+        val steps = ResponseClock.steps(cfg.sop, form.incidentType ?: hintCategory, settings().ertNumber, responseActions)
+        update { it.copy(response = ResponseClockUi(start, steps, it.response?.reminder ?: false, settings().ertNumber)) }
+    }
+
+    /** After an app restart: pick up a draft whose response clock was running (started within the last hour). */
+    fun resumeActiveResponse() {
+        if (!cfg.app.features.responseClock || ui.value.state != ConvState.IDLE) return
+        step {
+            val id = repo.activeResponseDraft(clock().toEpochMilli() - 60 * 60_000L) ?: return@step
+            val d = repo.load(id) ?: return@step
+            val start = d.meta.responseStartedAt ?: return@step
+            incidentId = id; form = d.form; rounds = d.meta.followupRounds; emergencyFlag = d.meta.emergencyFlag
+            responseStart = start; responseActions.clear(); responseActions.addAll(d.responseActions)
+            d.turns.filter { it.role == "USER" }.forEach { userTexts.append(it.text).append(' ') }
+            update { it.copy(incidentId = id, form = form, recommendations = d.recommendations.map { r -> Recommendation(r.sopId, r.text, r.immediate, r.source, r.done) }, notice = "Picked up the report that was in progress.") }
+            refreshResponseUi()
+            startErtReminder(cfg.app.responseClock.ertReminderS * 1000L - (clock().toEpochMilli() - start))
+            gotoManualFill(speak = false)
+        }
+    }
     fun onEmergencyDismiss() { update { it.copy(emergency = null) } }
 
     fun onRetry() { retryAction?.let { act -> step { update { u -> u.copy(error = null) }; act() } } }
@@ -284,6 +355,7 @@ class ConversationOrchestrator(
         val critical = form.str("severity") == "CRITICAL"
         if (critical) raiseRed()
         update { it.copy(validation = res, form = form, round = rounds) }
+        maybeStartResponseClock()
         persist()
         when {
             res.complete -> goRecommend(fromConversation = true)
@@ -374,6 +446,7 @@ class ConversationOrchestrator(
     private fun afterReviewEdit(key: String, what: String) {
         val res = Validator.validate(form, tx, clock())
         update { it.copy(form = form, validation = res, notice = null) }
+        maybeStartResponseClock()
         step {
             persist(actor = Actor.User(settings().reporter.empId))
             if (ui.value.state == ConvState.MANUAL_FILL && res.complete) goRecommend(fromConversation = false)
@@ -390,6 +463,8 @@ class ConversationOrchestrator(
         emergencyFlag = true
         val steps = sop.emergencySteps(form, hit.categoryHint ?: form.incidentType).map { it.text }
         update { it.copy(emergency = EmergencyBanner(EmergencyLevel.AMBER, steps, settings().ertNumber, hit.categoryHint)) }
+        hintCategory = hit.categoryHint
+        maybeStartResponseClock()
         if (settings().speakQuestions && tts.ready.value) {
             val phrase = tx.reprompts["emergency"]?.text(form.lang)
             if (phrase != null) scope.launch { tts.speak(phrase, form.lang) }
@@ -532,6 +607,7 @@ class ConversationOrchestrator(
     private fun reset() {
         form = IncidentForm(); incidentId = null; rounds = 0; emergencyFlag = false; question = null; lastAskedFields = emptyList()
         repromptedNoSpeech = false; retryAction = null; userTexts.clear(); narrationText = ""; spokeComplete = false; bubbleSeq = 0; editingRef = null
+        responseStart = null; responseActions.clear(); hintCategory = null; reminderJob?.cancel(); reminderJob = null
         _ui.value = ConversationUiState()
     }
 }

@@ -5,7 +5,10 @@ import com.megathon.incidentvoice.data.*
 import kotlinx.coroutines.flow.*
 
 class InMemoryRepo(private val now: () -> Long = { Fx.now.toEpochMilli() }) : IncidentRepository {
-    class Rec(var meta: IncidentMeta, var form: IncidentForm = IncidentForm(), val turns: MutableList<TurnRecord> = mutableListOf(), var recs: List<Recommendation> = emptyList())
+    class Rec(var meta: IncidentMeta, var form: IncidentForm = IncidentForm(), val turns: MutableList<TurnRecord> = mutableListOf(), var recs: List<Recommendation> = emptyList(), val actions: MutableList<ResponseAction> = mutableListOf())
+    override suspend fun setResponseStart(id: String, startedAtMs: Long) { store[id]!!.meta = store[id]!!.meta.copy(responseStartedAt = startedAtMs) }
+    override suspend fun addResponseAction(id: String, action: ResponseAction) { store[id]!!.actions += action }
+    override suspend fun activeResponseDraft(sinceMs: Long): String? = store.values.lastOrNull { it.meta.status == IncidentStatus.DRAFT && (it.meta.responseStartedAt ?: 0) >= sinceMs }?.meta?.id
     val store = LinkedHashMap<String, Rec>()
     var counter = 0
     override suspend fun createDraft(reporter: Reporter, atMs: Long?): String {
@@ -27,7 +30,7 @@ class InMemoryRepo(private val now: () -> Long = { Fx.now.toEpochMilli() }) : In
     override fun observeList(filter: DashboardFilter, limit: Int): Flow<List<IncidentListItem>> = flowOf(emptyList())
     override fun search(text: String, filter: DashboardFilter, limit: Int): Flow<List<IncidentListItem>> = flowOf(emptyList())
     override fun observeDetail(id: String): Flow<IncidentDetail?> = flowOf(null)
-    override suspend fun load(id: String): IncidentDetail? = store[id]?.let { r -> IncidentDetail(r.meta, r.form, r.turns, r.recs.mapIndexed { i, x -> RecRow(i.toLong(), x.sopId, x.text, x.immediate, x.source, x.done) }) }
+    override suspend fun load(id: String): IncidentDetail? = store[id]?.let { r -> IncidentDetail(r.meta, r.form, r.turns, r.recs.mapIndexed { i, x -> RecRow(i.toLong(), x.sopId, x.text, x.immediate, x.source, x.done) }, r.actions.toList()) }
     override fun observeCounts(): Flow<DashboardCounts> = flowOf(DashboardCounts())
     override suspend fun latestDraft(maxAgeMs: Long): String? = null
     override suspend fun purgeOldDrafts(maxAgeMs: Long): Int = 0

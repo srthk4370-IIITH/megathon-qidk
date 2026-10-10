@@ -44,7 +44,10 @@ data class TurnRecord(
 
 data class RecRow(val id: Long, val sopId: String, val text: String, val immediate: Boolean, val source: String, val done: Boolean)
 
-data class IncidentDetail(val meta: IncidentMeta, val form: IncidentForm, val turns: List<TurnRecord>, val recommendations: List<RecRow>)
+data class IncidentDetail(
+    val meta: IncidentMeta, val form: IncidentForm, val turns: List<TurnRecord>, val recommendations: List<RecRow>,
+    val responseActions: List<com.megathon.incidentvoice.core.ResponseAction> = emptyList(),
+)
 
 data class DashboardCounts(val total: Int = 0, val critical: Int = 0, val last24h: Int = 0)
 
@@ -79,6 +82,11 @@ interface IncidentRepository {
     suspend fun vectors(modelId: String): Map<String, FloatArray> = emptyMap()
     /** Emits whenever any incident changes (used to keep the vector index fresh). */
     fun observeChanges(): Flow<Long> = kotlinx.coroutines.flow.emptyFlow()
+    // ---- Extra 1: response clock
+    suspend fun setResponseStart(id: String, startedAtMs: Long) {}
+    suspend fun addResponseAction(id: String, action: com.megathon.incidentvoice.core.ResponseAction) {}
+    /** A draft whose response clock started after [sinceMs] (the app was closed mid-emergency), newest first. */
+    suspend fun activeResponseDraft(sinceMs: Long): String? = null
     /** Demo reset: removes every report, draft and recording. Returns how many were deleted. */
     suspend fun deleteAll(actor: Actor): Int = 0
 }

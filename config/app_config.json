@@ -66,5 +66,32 @@
   "time": {
     "default_when_missing": "reported_at",
     "status": "DEFAULTED"
+  },
+  "features": {
+    "response_clock": true,
+    "quick_launch": true,
+    "wake_word": true,
+    "multi_witness": true
+  },
+  "response_clock": {
+    "ert_reminder_s": 120
+  },
+  "wake_display": "Hey Qalam",
+  "wake_variants": [
+    "hey kalam",
+    "hey qalam",
+    "hey calum",
+    "hey column",
+    "hey calm",
+    "hey kalam",
+    "a kalam",
+    "hey kallam"
+  ],
+  "wake_min_conf": 0.6,
+  "multi_witness": {
+    "time_window_min": 45,
+    "lookback_h": 12,
+    "min_location_score": 0.85,
+    "min_score": 0.6
   }
 }

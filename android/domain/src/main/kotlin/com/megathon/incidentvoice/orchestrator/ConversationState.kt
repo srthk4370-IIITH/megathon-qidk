@@ -46,10 +46,15 @@ data class ConversationUiState(
     val notice: String? = null,
     /** True when the review screen is editing an already submitted incident (Detail → Edit). */
     val editingExisting: Boolean = false,
+    /** Extra 1: non-null while the response clock is running for this incident. */
+    val response: ResponseClockUi? = null,
     val debug: DebugInfo = DebugInfo(),
 ) {
     val canSubmit: Boolean get() = validation?.complete == true && (state == ConvState.REVIEW || state == ConvState.MANUAL_FILL)
 }
+
+/** Response clock card state. The UI derives the mm:ss text from [startedAtMs]. */
+data class ResponseClockUi(val startedAtMs: Long, val steps: List<com.megathon.incidentvoice.core.ResponseStep>, val reminder: Boolean = false, val ertNumber: String = "112")
 
 sealed interface UiEvent {
     data class Dial(val number: String) : UiEvent

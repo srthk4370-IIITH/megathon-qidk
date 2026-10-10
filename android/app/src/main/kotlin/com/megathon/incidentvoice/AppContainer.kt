@@ -191,6 +191,9 @@ class AppContainer(val context: Context) {
 
     fun startEngine() { appScope.launch { selectEngine(settings.flow.first().engineMode) } }
 
+    /** Extra 1: if the app was closed mid-emergency, bring the running response clock (and its draft) back. */
+    fun resumeResponseClock() { orchestrator.resumeActiveResponse() }
+
     /** PRD §21.6: drafts older than 7 days are purged on startup (audio included). */
     fun housekeeping() { appScope.launch { runCatching { repository.purgeOldDrafts(7L * 24 * 3600_000) } } }
 }
