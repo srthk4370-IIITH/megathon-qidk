@@ -60,7 +60,10 @@ class AppContainer(val context: Context) {
 
     /** AUTO → on-device engine when its model files are on the board, else Mock. */
     fun selectEngine(mode: String) {
-        val useJni = when (mode) { "JNI" -> true; "MOCK" -> false; else -> modelsPresent() }
+        // `adb shell touch <externalFilesDir>/force_mock` keeps AUTO on the Mock engine (so installing the app
+        // never grabs the NPU while the ML owner is running jobs on the board).
+        val forceMock = File(context.getExternalFilesDir(null), "force_mock").exists()
+        val useJni = when (mode) { "JNI" -> true; "MOCK" -> false; else -> modelsPresent() && !forceMock }
         engine.switchTo(if (useJni) jniEngine else mockEngine)
         engineKind.value = if (useJni) "JNI" else "MOCK"
         appScope.launch { runCatching { engine.init(); engine.warmup() } }

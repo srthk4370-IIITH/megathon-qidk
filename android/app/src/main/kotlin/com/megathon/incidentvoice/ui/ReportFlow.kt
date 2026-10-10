@@ -36,7 +36,11 @@ fun ReportFlow(c: AppContainer, onOpenDetail: (String) -> Unit, onGoDashboard: (
 
     LaunchedEffect(o) {
         o.events.collect { ev ->
-            if (ev is UiEvent.Dial) ctx.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:${ev.number}")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            if (ev is UiEvent.Dial) {
+                // The QIDK has no SIM and may have no dialer app: never crash on the emergency button.
+                runCatching { ctx.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:${ev.number}")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+                    .onFailure { android.widget.Toast.makeText(ctx, "No dialer on this device — call ${ev.number} from a phone", android.widget.Toast.LENGTH_LONG).show() }
+            }
         }
     }
 

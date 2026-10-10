@@ -55,6 +55,7 @@ class ConversationOrchestrator(
     private var cont: CompletableDeferred<Unit>? = null
     private var spokeComplete = false
     private var editingRef: String? = null
+    @Volatile private var generating = false
 
     // =========================================================================================
     // UI API (§22.2)
@@ -409,6 +410,8 @@ class ConversationOrchestrator(
     private suspend fun generateOnce(task: LlmTask, prompt: String, sampler: SamplerName, maxTokens: Int, preview: Boolean): Gen {
         val sb = StringBuilder(); var stats: GenStats? = null; var n = 0
         val t0 = System.nanoTime()
+        generating = true
+        try {
         engine.generate(GenRequest(task, prompt, sampler, maxTokens)).collect { ev ->
             when (ev) {
                 is GenEvent.Token -> {
@@ -419,6 +422,7 @@ class ConversationOrchestrator(
                 is GenEvent.Error -> throw EngineException(ev.error)
             }
         }
+        } finally { generating = false }
         if (sb.isBlank()) throw EngineException(EngineError("IV-E601", "Empty output from the engine", retryable = true))
         return Gen(sb.toString(), stats, (System.nanoTime() - t0) / 1_000_000)
     }
@@ -515,7 +519,11 @@ class ConversationOrchestrator(
         }
     }
 
-    private fun cancelAll() { job?.cancel(); job = null; cont?.complete(Unit) }
+    private fun cancelAll() {
+        // a native generation keeps running after its collector is cancelled → tell the engine to stop (frees the NPU)
+        if (generating) scope.launch { runCatching { engine.abort() } }
+        job?.cancel(); job = null; cont?.complete(Unit)
+    }
 
     private fun reset() {
         form = IncidentForm(); incidentId = null; rounds = 0; emergencyFlag = false; question = null; lastAskedFields = emptyList()
