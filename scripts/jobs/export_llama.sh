@@ -15,9 +15,11 @@ fi
 [ -x "$V/bin/qai-hub-models" ] || V=$HOME/venvs/qaihm
 # Upload speed: each S3 connection gets ~40 kB/s on this network; qai_hub defaults to 4 × 256 MiB parts (~170 kB/s).
 S3T=$(ls "$V"/lib/python3.*/site-packages/qai_hub/s3_transfer.py 2>/dev/null | head -1)
-if [ -n "$S3T" ] && ! grep -q "IV patch" "$S3T"; then
-  sed -i 's/^_MULTIPART_CHUNK_SIZE = 256 \* 1024 \* 1024/_MULTIPART_CHUNK_SIZE = 64 * 1024 * 1024  # IV patch: was 256 MiB/; s/    max_request_concurrency=4,/    max_request_concurrency=16,  # IV patch: was 4/' "$S3T"
-  status "patched qai_hub S3 upload: 64 MiB parts × 16 connections"
+if [ -n "$S3T" ] && ! grep -q "IV patch2" "$S3T"; then
+  # 64 MiB parts × 8 connections; 'adaptive' retries throttle to ~0 after S3 SlowDown (seen: upload froze at 51%),
+  # so use 'standard' retries with explicit timeouts.
+  sed -i -E 's/^_MULTIPART_CHUNK_SIZE = [0-9]+ \* 1024 \* 1024.*/_MULTIPART_CHUNK_SIZE = 64 * 1024 * 1024  # IV patch2/; s/    max_request_concurrency=[0-9]+,.*/    max_request_concurrency=8,  # IV patch2/; s/retries=\{"max_attempts": 10, "mode": "adaptive"\},/retries={"max_attempts": 10, "mode": "standard"}, connect_timeout=30, read_timeout=120,  # IV patch2/' "$S3T"
+  status "patched qai_hub S3 upload: 64 MiB × 8, standard retries, timeouts"
 fi
 status "venv $V: $($V/bin/pip list 2>/dev/null | grep -E '^(transformers|torch) ' | tr -s ' ' | tr '\n' ' ')"
 export HF_TOKEN=$(cat ~/.cache/huggingface/token)
@@ -28,7 +30,7 @@ for model in llama_v3_2_3b_instruct llama_v3_2_3b_instruct llama_v3_2_3b_instruc
   fi
   status "export start: $model (expect 3–5 h: local ONNX export, upload, cloud compile, download)"
   "$V/bin/qai-hub-models" export "$model" --device "Samsung Galaxy S25 (Family)" --target-runtime genie \
-      --skip-profiling --output-dir "$dir" 2>&1 | tr '\r' '\n' | grep -v '^W1010'
+      --skip-profiling --output-dir "$dir" 2>&1 | stdbuf -o0 tr '\r' '\n'   # unbuffered: stall detection needs live log
   rc=${PIPESTATUS[0]}
   if find "$dir" -name genie_config.json 2>/dev/null | grep -q .; then
     status "export OK: $model → $dir"; echo "$dir" > "$ST/llama_bundle_root"; mark_done; exit 0

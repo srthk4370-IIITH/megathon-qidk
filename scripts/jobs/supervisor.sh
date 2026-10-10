@@ -25,6 +25,15 @@ start(){
   }
 }
 
+# Hang guard: export log idle > 40 min ⇒ kill its process group (the job restarts next tick; ONNX is cached).
+if alive export_llama; then
+  idle=$(( $(date +%s) - $(stat -c %Y "$HOME/iv/logs/export_llama.log") ))
+  if [ "$idle" -gt 2400 ]; then
+    kill -TERM -"$(ps -o pgid= -p "$(cat "$ST/export_llama.pid")" | tr -d ' ')" 2>/dev/null
+    rm -f "$ST/export_llama.pid"
+    echo "$(date '+%F %T') killed hung export_llama (log idle ${idle}s)" >> "$HOME/iv/logs/supervisor.log"
+  fi
+fi
 start export_llama
 start build_native
 start host_eval
