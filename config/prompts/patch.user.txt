@@ -1,0 +1,7 @@
+Current form: {{form_compact_json}}
+Question asked: "{{question_text}}"
+Asked fields: {{asked_fields}}
+Answer transcript:
+<<<
+{{answer}}
+>>>

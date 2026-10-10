@@ -33,7 +33,7 @@ _Last updated: 2026-10-10 21:20 IST (Saarthak branch)_
 | Branch | Area | Built so far |
 |---|---|---|
 | `Saarthak` | ML / NPU | Docs only. No models exported yet. |
-| Android (TBD) | App + dashboard | — |
+| `renny` (App) | App + dashboard | `config/` (verbatim from PRD), `handover_app.md`. No Android code yet — toolchain (JDK/SDK) not installed on this Mac. |
 
 ## Board / environment
 

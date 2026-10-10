@@ -42,3 +42,17 @@ Only two branches: **App** and **ML**. No separate web/dashboard branch.
 - Who is affected: App branch.
 - Action needed: App follows PRD v1.1 §4.0; nothing else in the contracts (taxonomy, tool schemas, DTOs) changed.
 - Commit: (this commit)
+
+## 2026-10-10 — renny (App) — `config/` created verbatim from PRD
+- What changed: App branch created `config/` straight from the PRD with no edits to keys/enums: `taxonomy.json` (App. A), `site_registry.json` (A.3), `sop.json` (App. B), `app_config.json` (§22.5), `prompts/*` (App. C.1–C.9; `warmup.user.txt` = C.9). Extracted by script and JSON-validated.
+- Who is affected: ML branch (`Saarthak`) — PRD §22.5 / §34.1.
+- Action needed by others: **use this copy of `config/`; do not create a second one.** Any change to keys/enums/prompts goes in PRD.md and here in the same commit.
+- Commit: renny
+
+## 2026-10-10 — renny (App) — decisions affecting the PRD text
+- R1-07 followed everywhere: Room `@Fts4` on platform SQLite. PRD §20.12 (`sqlite-bundled`), §21.1 (BundledSQLiteDriver) and App. E FTS5 DDL are stale; App branch ignores them.
+- P0 detail view has **no** Acknowledge/Resolve/Close (F-36 is P1, contradicts §23.2 "P0"). Status stays SUBMITTED.
+- P0 dashboard: no charts or stat cards; one plain-text count row (total · critical · last 24 h) instead of §23.1/§23.3 stats.
+- Draft resume UI cut (F-35); drafts still auto-saved.
+- Single build flavour with Mock engine for now (planA/planB split from §20.1 deferred); real engines plug in via `InferenceEngine`.
+- Model dir constant: `/sdcard/Android/data/com.megathon.incidentvoice/files/models/` (PRD §20.10), defined once in the app.

@@ -1,0 +1,5 @@
+Function schema: {{tool_schema}}
+Broken output:
+<<<
+{{broken}}
+>>>

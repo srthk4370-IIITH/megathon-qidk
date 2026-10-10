@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "asr": {"language_mode": "auto_en_hi", "max_chunk_s": 28, "min_speech_ratio": 0.1},
+  "vad": {"start_threshold": 0.6, "end_threshold": 0.45, "end_silence_ms": 1200, "followup_end_silence_ms": 1000,
+          "preroll_ms": 300, "no_speech_timeout_ms": 10000, "followup_no_speech_timeout_ms": 8000, "max_narration_s": 180},
+  "llm": {"prefix_cache": false,
+          "max_tokens": {"extract": 320, "patch": 120, "recommend": 260, "repair": 320},
+          "samplers": {"greedy": {"version":1,"seed":42,"temp":1.0,"top-k":1,"top-p":1.0},
+                       "recommend": {"version":1,"seed":42,"temp":0.3,"top-k":40,"top-p":0.95}},
+          "recommend_timeout_ms": 12000},
+  "conversation": {"max_followup_rounds": 3, "transcript_autoproceed_ms": 2000, "tts_post_gap_ms": 300},
+  "thermal": {"defer_background_above_c": 88, "skin_warn_above_c": 60},
+  "models": {"llama_dir": "llama", "whisper_dir": "whisper", "dsp_dir": "dsp"}
+}

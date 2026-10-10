@@ -1,0 +1,112 @@
+{
+  "version": 1,
+  "disclaimer": "Recommendations follow site SOPs. In an emergency, follow your site's emergency procedures and call the emergency team first.",
+  "categories": {
+    "FIRE": [
+      {"id": "FIRE-01", "text": "Raise the fire alarm and call the emergency team / fire brigade.", "immediate": true, "done_keywords": ["alarm", "fire brigade called", "called fire"]},
+      {"id": "FIRE-02", "text": "Evacuate everyone from the area by the nearest safe exit to the assembly point.", "immediate": true, "when": {"evacuation_status": ["NOT_STARTED", "IN_PROGRESS", "UNKNOWN"]}, "done_keywords": ["evacuated"]},
+      {"id": "FIRE-03", "text": "Do not use lifts; use the stairs.", "immediate": true},
+      {"id": "FIRE-04", "text": "Use the correct extinguisher only if the fire is small and you are trained (CO2 for electrical fires).", "when": {"fire_status": ["ACTIVE", "SMOKE_ONLY", "UNKNOWN"]}, "done_keywords": ["extinguisher"]},
+      {"id": "FIRE-05", "text": "Isolate electrical power to the affected area if it is safe to reach the switch.", "done_keywords": ["power off", "isolated power"]},
+      {"id": "FIRE-06", "text": "Take a head count at the assembly point and report missing persons to the fire team.", "immediate": false},
+      {"id": "FIRE-07", "text": "Keep the area closed until the fire team declares it safe; check for hidden embers and smoke damage.", "when": {"fire_status": ["CONTAINED", "EXTINGUISHED"]}},
+      {"id": "FIRE-08", "text": "Get the electrical installation inspected before re-energising.", "when": {"ignition_source": ["*"]}},
+      {"id": "FIRE-09", "text": "Refill or replace any used extinguishers.", "when": {"extinguisher_used": ["YES"]}}
+    ],
+    "MEDICAL": [
+      {"id": "MED-01", "text": "Call the emergency team / ambulance and the site first-aider.", "immediate": true, "when": {"ambulance_called": ["NO", "UNKNOWN"]}, "done_keywords": ["ambulance called", "called ambulance"]},
+      {"id": "MED-02", "text": "If the person is not breathing, start CPR if trained and use the nearest AED.", "immediate": true, "when": {"patient_condition": ["NOT_BREATHING", "UNCONSCIOUS"]}},
+      {"id": "MED-03", "text": "Do not move the injured person unless they are in immediate danger.", "immediate": true},
+      {"id": "MED-04", "text": "Give first aid within your training: control bleeding with firm pressure, cool burns with running water.", "when": {"first_aid_given": ["NO", "UNKNOWN"]}, "done_keywords": ["first aid"]},
+      {"id": "MED-05", "text": "Stay with the person and keep them warm and calm until help arrives."},
+      {"id": "MED-06", "text": "Make the cause of the injury safe (e.g. dry the wet floor, guard the machine) to protect others."},
+      {"id": "MED-07", "text": "Inform the person's supervisor and HR, and record treatment given."},
+      {"id": "MED-08", "text": "Arrange a medical check-up even for minor injuries before the person returns to work."}
+    ],
+    "WATER": [
+      {"id": "WATER-01", "text": "Isolate the water supply valve feeding the leak.", "immediate": true, "when": {"leak_status": ["ONGOING", "UNKNOWN"]}, "done_keywords": ["valve", "supply off", "isolated water"]},
+      {"id": "WATER-02", "text": "Switch off electrical equipment and sockets in the wet area if it is safe to do so.", "immediate": true, "when": {"electrical_risk": ["YES", "UNKNOWN"]}},
+      {"id": "WATER-03", "text": "Cordon off the wet area and place wet-floor signs to prevent slips.", "done_keywords": ["isolated the area", "cordoned", "sign"]},
+      {"id": "WATER-04", "text": "Move documents, IT equipment and stock away from the water."},
+      {"id": "WATER-05", "text": "Mop up or pump out standing water and dry the area.", "when": {"leak_status": ["STOPPED", "CONTROLLED"]}},
+      {"id": "WATER-06", "text": "Ask maintenance to repair the source of the leak and inspect nearby pipes or roof sections."},
+      {"id": "WATER-07", "text": "Check ceilings, walls and electrical fittings for water damage before reuse."},
+      {"id": "WATER-08", "text": "Watch for mould or odour over the next days and log any follow-up repairs."}
+    ],
+    "ELECTRICAL": [
+      {"id": "ELEC-01", "text": "Do not touch the person or equipment if there may be live current; switch off power at the source.", "immediate": true, "when": {"power_isolated": ["NO", "UNKNOWN"]}, "done_keywords": ["power off", "switched off", "isolated"]},
+      {"id": "ELEC-02", "text": "Keep everyone away from sparking or exposed wiring; cordon the area.", "immediate": true, "when": {"electrical_hazard": ["SPARKING", "SHORT_CIRCUIT", "EXPOSED_WIRING", "OVERHEATING"]}},
+      {"id": "ELEC-03", "text": "Anyone who received a shock must get a medical check, even if they feel fine.", "when": {"electrical_hazard": ["SHOCK"]}},
+      {"id": "ELEC-04", "text": "Call a licensed electrician to inspect and repair before re-energising."},
+      {"id": "ELEC-05", "text": "Apply lockout/tagout on the affected circuit until repairs are done."},
+      {"id": "ELEC-06", "text": "For a power outage, check critical loads (servers, cold storage, safety systems) and switch to backup power if available.", "when": {"electrical_hazard": ["POWER_OUTAGE"]}},
+      {"id": "ELEC-07", "text": "Check for burning smell or heat at panels; keep a CO2 extinguisher nearby."}
+    ],
+    "HAZMAT": [
+      {"id": "HAZ-01", "text": "Evacuate people from the area, moving upwind of the release.", "immediate": true, "when": {"area_evacuated": ["NO", "PARTIAL", "UNKNOWN"]}, "done_keywords": ["evacuated", "moved people"]},
+      {"id": "HAZ-02", "text": "Eliminate ignition sources: no switches, phones or flames near a gas leak.", "immediate": true},
+      {"id": "HAZ-03", "text": "Shut the gas or chemical supply valve if it can be done safely.", "immediate": true, "when": {"release_status": ["ONGOING", "UNKNOWN"]}},
+      {"id": "HAZ-04", "text": "Ventilate the area by opening doors and windows if safe."},
+      {"id": "HAZ-05", "text": "Only trained responders with the right PPE should contain the spill using spill kits.", "done_keywords": ["spill kit", "contained"]},
+      {"id": "HAZ-06", "text": "Check the substance's safety data sheet (SDS) for exposure first aid and handling."},
+      {"id": "HAZ-07", "text": "Send anyone with symptoms (coughing, irritation, dizziness) for medical attention.", "when": {"exposure_symptoms": ["*"]}},
+      {"id": "HAZ-08", "text": "Dispose of contaminated material as hazardous waste and record the quantity released."}
+    ],
+    "EQUIPMENT": [
+      {"id": "EQP-01", "text": "Stop the equipment using the emergency stop and keep people clear.", "immediate": true, "when": {"operational_status": ["RUNNING", "DEGRADED", "UNKNOWN"]}, "done_keywords": ["stopped", "switched off"]},
+      {"id": "EQP-02", "text": "Apply lockout/tagout before anyone inspects or repairs the equipment.", "when": {"lockout_tagout": ["NO", "UNKNOWN"]}, "done_keywords": ["lockout", "tagout", "loto"]},
+      {"id": "EQP-03", "text": "Inform maintenance with the equipment ID and a description of the fault."},
+      {"id": "EQP-04", "text": "Check for secondary hazards: leaks, overheating, smoke or loose parts."},
+      {"id": "EQP-05", "text": "Notify the production supervisor of the impact and switch to backup equipment if available."},
+      {"id": "EQP-06", "text": "Do not restart until the equipment is repaired and tested."},
+      {"id": "EQP-07", "text": "Record the failure for the maintenance history and root-cause analysis."}
+    ],
+    "SECURITY": [
+      {"id": "SEC-01", "text": "Do not confront the suspect; move to a safe place and inform security.", "immediate": true, "when": {"security_informed": ["NO", "UNKNOWN"]}, "done_keywords": ["security informed", "told security"]},
+      {"id": "SEC-02", "text": "If anyone is hurt or threatened, call the emergency team / police.", "immediate": true, "when": {"security_event": ["ASSAULT", "THREAT"]}},
+      {"id": "SEC-03", "text": "Preserve the scene: do not touch or move items the suspect handled."},
+      {"id": "SEC-04", "text": "Secure CCTV footage and access-control logs for the time of the incident."},
+      {"id": "SEC-05", "text": "Note a description of the suspect and the direction they went."},
+      {"id": "SEC-06", "text": "List stolen or damaged items with asset tags and estimated value.", "when": {"security_event": ["THEFT", "VANDALISM"]}},
+      {"id": "SEC-07", "text": "Inform the police and file a complaint for theft or assault.", "when": {"police_informed": ["NO", "UNKNOWN"]}},
+      {"id": "SEC-08", "text": "Review and fix the access weakness (door, gate, badge) that allowed the incident."}
+    ],
+    "STRUCTURAL": [
+      {"id": "STR-01", "text": "Keep people away and cordon off the damaged area.", "immediate": true, "when": {"area_cordoned": ["NO", "UNKNOWN"]}, "done_keywords": ["cordoned", "isolated the area", "blocked"]},
+      {"id": "STR-02", "text": "If anyone is trapped (e.g. in a lift), call the emergency team and do not attempt an unsafe rescue.", "immediate": true, "when": {"people_trapped": ["YES", "UNKNOWN"]}},
+      {"id": "STR-03", "text": "Place warning signs for slip or trip hazards and clean or fix them promptly."},
+      {"id": "STR-04", "text": "Clear broken glass or debris with gloves and proper tools."},
+      {"id": "STR-05", "text": "Ask facilities/civil engineering to assess structural safety before reuse."},
+      {"id": "STR-06", "text": "For lift faults, take the lift out of service and call the lift maintenance contractor."},
+      {"id": "STR-07", "text": "Photograph the damage for the record and insurance."}
+    ],
+    "ENVIRONMENTAL": [
+      {"id": "ENV-01", "text": "Stop the source of the release if it is safe to do so.", "immediate": true, "when": {"containment_status": ["ONGOING", "UNKNOWN"]}},
+      {"id": "ENV-02", "text": "Block nearby drains with drain covers or absorbent booms to stop spread.", "immediate": true, "when": {"release_medium": ["DRAIN", "WATER_BODY", "MULTIPLE", "UNKNOWN"]}},
+      {"id": "ENV-03", "text": "Contain and absorb the spill with a spill kit; keep it away from soil and water.", "done_keywords": ["spill kit", "contained"]},
+      {"id": "ENV-04", "text": "Inform the environment/EHS officer; check if regulatory reporting is required."},
+      {"id": "ENV-05", "text": "Collect contaminated material and dispose of it as hazardous waste."},
+      {"id": "ENV-06", "text": "Estimate and record the quantity released and the affected area."},
+      {"id": "ENV-07", "text": "Find and fix the cause (leaking container, faulty valve, wrong disposal)."}
+    ],
+    "VEHICLE": [
+      {"id": "VEH-01", "text": "Stop all vehicle movement in the area and switch off the involved vehicles.", "immediate": true},
+      {"id": "VEH-02", "text": "If a person was hit, call the emergency team and give first aid; do not move them unless in danger.", "immediate": true, "when": {"collision_type": ["VEHICLE_PERSON"]}},
+      {"id": "VEH-03", "text": "Cordon off the area and redirect traffic.", "when": {"traffic_blocked": ["YES", "UNKNOWN"]}},
+      {"id": "VEH-04", "text": "Check for fuel or battery leaks and fire risk."},
+      {"id": "VEH-05", "text": "Record vehicle IDs, driver details and take photos before moving vehicles."},
+      {"id": "VEH-06", "text": "Inspect damaged racks or structures before use (forklift impacts)."},
+      {"id": "VEH-07", "text": "Remove the vehicle from service until inspected; review driver training and route markings."}
+    ],
+    "OTHER": [
+      {"id": "OTH-01", "text": "Make the area safe and keep people away from any hazard.", "immediate": true},
+      {"id": "OTH-02", "text": "Inform your supervisor and the EHS team."}
+    ],
+    "GENERAL": [
+      {"id": "GEN-01", "text": "Inform your supervisor and the EHS team about this incident."},
+      {"id": "GEN-02", "text": "Preserve evidence: photos, CCTV, and do not disturb the scene unnecessarily."},
+      {"id": "GEN-03", "text": "Collect witness statements while details are fresh."},
+      {"id": "GEN-04", "text": "Schedule a root-cause review and track corrective actions to closure."}
+    ]
+  }
+}

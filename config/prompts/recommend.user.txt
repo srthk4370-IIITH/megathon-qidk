@@ -1,0 +1,4 @@
+Incident: {{form_compact_json}}
+Already done: {{actions_taken_list}}
+SOP candidates:
+{{sop_candidates}}
