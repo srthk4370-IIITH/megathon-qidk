@@ -44,3 +44,4 @@ eval/clips/raw/*.m4a
 .kotlin/
 models_dist/whisper/*.bin
 models_dist/llama/
+hs_err_pid*.log
