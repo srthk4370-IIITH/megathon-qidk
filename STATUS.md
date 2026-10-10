@@ -2,14 +2,14 @@
 
 Update this whenever something is built, breaks, or is decided. Feature IDs (F-xx) and milestones (M0–M4) refer to `PRD.md` §5 and §35.
 
-_Last updated: 2026-10-10 (Saarthak branch)_
+_Last updated: 2026-10-10 21:20 IST (Saarthak branch)_
 
 ## Overall
 
 | Milestone | Status |
 |---|---|
-| M0 — contracts frozen, exports running | Not started (hackathon clock not started) |
-| M1 — speech → transcript → tool-call JSON on board | Not started |
+| M0 — contracts frozen, exports running | **Exports running** (laptop + Kaggle); contracts = PRD App. A–D, not yet committed as `config/` files |
+| M1 — approach doc | `M1.md` written |
 | M2 — full conversation on board | Not started |
 | M3 — all P0 features | Not started |
 | M4 — release candidate | Not started |
@@ -25,7 +25,8 @@ _Last updated: 2026-10-10 (Saarthak branch)_
 
 | Item | State | Owner |
 |---|---|---|
-| WSL VHDX compaction (frees ~110 GB on C:) | Sparse flag removed; user re-runs diskpart as admin | User |
+| Llama 3.2 3B V79 Genie export | Running: laptop (since 21:03) + Kaggle TPU kernel `iv-llama-v79-export` | ML |
+| QAIRT 2.50 SDK | Downloading (public URL) to WSL `~/qairt/` | ML |
 
 ## By branch
 
@@ -38,8 +39,8 @@ _Last updated: 2026-10-10 (Saarthak branch)_
 
 | Item | State |
 |---|---|
-| Board clock / timezone | Wrong (2024, GMT) — fix at H0 (PRD §26.3) |
-| QAIRT 2.50 SDK | Not downloaded |
-| Llama 3.2 3B V79 bundle | Not exported |
-| Whisper-small V79 binaries | Not exported |
+| Board clock / timezone | Fixed 21:03 IST |
+| QAIRT 2.50 SDK | Downloading |
+| Llama 3.2 3B V79 bundle | Export running (2 hosts) |
+| Whisper | P0 = whisper.cpp CPU (not started); NPU via ORT-QNN is P1 |
 | Plan A vs Plan B | Undecided (probe at ~H3) |

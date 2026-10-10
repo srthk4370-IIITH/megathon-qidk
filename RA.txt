@@ -22,3 +22,24 @@ Once we get incident type, We will fetch questions regarding each incident type,
 Other Clarification;
 The validator is not model based, but regarding if all questions are answered, the model is only trained to extract information and put it regarding the corresponding question. 
 Optional things will be done later. But bare minimum has to be done. Conversational interface will have vector database right? But 
+
+---------------------------------------------------------------------
+SRS CORRECTIONS (rev 1.1, 2026-10-10) - these override the lines above
+---------------------------------------------------------------------
+1. Translation: there is NO separate translate step. Whisper outputs the raw transcript; the single Llama
+   extraction call writes every field in clear English (Hinglish -> English inside extraction). PRD D-14.
+2. Models:
+   - STT: Whisper-small, stock (NOT fine-tuned). P0 runs whisper.cpp on CPU; NPU (ONNX Runtime QNN EP) is the P1 upgrade.
+   - LLM: Llama 3.2 3B Instruct (stock, w4a16 Genie bundle for Snapdragon 8 Elite / HTP V79). Used for EXTRACTION only
+     (fill_incident_form, update_incident_fields). NOT used for validation.
+   - Validator: rule-based Kotlin code driven by config/taxonomy.json (no model).
+   - Recommendations: SOP templates per category (config/sop.json) in P0; the SAME Llama (different prompt) tailors them in P1.
+     No second model on the NPU.
+   - TTS: Android TextToSpeech API; the only engine on the board is eSpeak NG. Every question is also shown as large text.
+3. Incident types: 10 general categories + OTHER (PRD 10.3). The category only selects the field set and the questions;
+   the validator decides what to ask.
+4. Missing time is not asked: it defaults to the report time, marked approximate and highlighted for review.
+5. Optional conversational interface: no vector database needed. Questions like "fires in Block B last week" become a
+   search_incidents{filters} tool call answered by SQL. Vectors only for "find similar incidents" (later).
+6. Optional cloud sync/alerts: not built; future slide only (judging rule: strictly no cloud APIs).
+7. Dashboard: inside the Android app (recency list + keyword search + filters).
