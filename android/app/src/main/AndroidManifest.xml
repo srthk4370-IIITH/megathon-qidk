@@ -1,6 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+    <!-- Extra 2 Level B (wake word): a foreground service that listens on-device; still no INTERNET permission -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE"/>
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <!-- lets the wake word open the report screen while another app (or the home screen) is in front -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/>
     <queries>
         <intent><action android:name="android.intent.action.TTS_SERVICE"/></intent>
         <intent><action android:name="android.intent.action.DIAL"/></intent>
@@ -30,6 +36,9 @@
             android:icon="@drawable/ic_report_mic" android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
             <intent-filter><action android:name="android.service.quicksettings.action.QS_TILE"/></intent-filter>
         </service>
+
+        <!-- Extra 2 Level B: "Hey Qalam" listener (Vosk, CPU, offline) -->
+        <service android:name=".wake.WakeWordService" android:exported="false" android:foregroundServiceType="microphone"/>
 
         <!-- Extra 2 Level A: home-screen widget with one REPORT button -->
         <receiver android:name=".quick.ReportWidgetReceiver" android:exported="true" android:label="@string/quick_report">

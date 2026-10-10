@@ -44,6 +44,22 @@ class AppContainer(val context: Context) {
 
     /** Extra 2: bumped by the tile / shortcut / widget / wake word; the Report tab then starts listening. */
     val quickReport = MutableStateFlow(0)
+    // Extra 2 Level B: wake word. `wakeHold` keeps the listener off between a detection and the report flow taking the mic.
+    val wakeHold = MutableStateFlow(false)
+    val wake: com.megathon.incidentvoice.wake.WakeEngine by lazy {
+        com.megathon.incidentvoice.wake.WakeEngine(context, config.app) {
+            wakeHold.value = true
+            requestQuickReport()
+            runCatching { context.startActivity(com.megathon.incidentvoice.quick.QuickLaunch.intent(context)) }      // brings the app forward (needs "display over other apps" when in the background)
+            appScope.launch {
+                // hold until the report flow has left idle and come back, or 12 s if it never started (e.g. a permission dialog)
+                val left = kotlinx.coroutines.withTimeoutOrNull(12_000) { orchestrator.ui.first { it.state != com.megathon.incidentvoice.orchestrator.ConvState.IDLE } } != null
+                if (left) orchestrator.ui.first { it.state == com.megathon.incidentvoice.orchestrator.ConvState.IDLE }
+                wakeHold.value = false
+            }
+        }
+    }
+
     fun requestQuickReport() { if (config.app.features.quickLaunch || config.app.features.wakeWord) quickReport.value += 1 }
 
     // The app creates the model folders itself so they are owned by the app uid: folders created by `adb push`
@@ -136,7 +152,10 @@ class AppContainer(val context: Context) {
     val micCapture: AudioCapture by lazy {
         AudioCapture(context, audioRoot, { config.app.vad }) { SileroVad.create(context) ?: EnergyVadAdapter() }
     }
-    val audio: AudioInput by lazy { SwitchableAudioInput(micCapture, MockAudioInput(), File(context.getExternalFilesDir(null), "inject")) { settingsSnapshot.value.useMic } }
+    val audio: AudioInput by lazy {
+        // the wake-word listener must let go of the microphone before any recording starts
+        SwitchableAudioInput(micCapture, MockAudioInput(), File(context.getExternalFilesDir(null), "inject"), beforeListen = { if (config.app.features.wakeWord) { wake.release(); kotlinx.coroutines.delay(150) } }) { settingsSnapshot.value.useMic }
+    }
 
     /** Latest settings snapshot for the orchestrator (kept fresh by a collector). */
     val settingsSnapshot = MutableStateFlow(com.megathon.incidentvoice.data.AppSettings())

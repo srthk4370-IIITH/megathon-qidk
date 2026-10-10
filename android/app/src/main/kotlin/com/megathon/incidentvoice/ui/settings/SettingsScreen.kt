@@ -42,6 +42,18 @@ fun SettingsScreen(c: AppContainer) {
         Text("End-of-speech silence: ${s.vadEndSilenceMs} ms")
         Slider(s.vadEndSilenceMs.toFloat(), { v -> upd { it.copy(vadEndSilenceMs = (v / 50).toInt() * 50) } }, valueRange = 800f..1500f)
 
+        if (c.config.app.features.wakeWord) {
+            val w by c.wake.ui.collectAsStateWithLifecycle()
+            val ctx = androidx.compose.ui.platform.LocalContext.current
+            SwitchRow("Hands-free: \"${c.config.app.wakeDisplay}\"", "Listens on this device for the wake word and starts a report. Nothing leaves the device.", s.wakeEnabled) { v -> upd { it.copy(wakeEnabled = v) } }
+            Text("Wake word: " + when { !s.wakeEnabled -> "off"; w.error != null -> "error — ${w.error}"; w.listening -> "listening"; w.loaded -> "paused (a report or question is using the microphone)"; else -> "loading the model…" } +
+                (if (w.strategy.isNotBlank()) " · ${w.strategy}" else "") + " · detections: ${w.detections}", style = MaterialTheme.typography.bodySmall)
+            Text("Last heard: ${w.lastHeard.ifBlank { "—" }}" + (if (w.lastMatch.isNotBlank()) "  (last match: ${w.lastMatch})" else ""), style = MaterialTheme.typography.bodySmall)
+            if (!android.provider.Settings.canDrawOverlays(ctx)) OutlinedButton({
+                runCatching { ctx.startActivity(android.content.Intent(android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION, android.net.Uri.parse("package:" + ctx.packageName)).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }
+            }) { Text("Allow opening from the home screen") }
+        }
+
         Text("Debug", style = MaterialTheme.typography.titleSmall)
         SwitchRow("Show debug overlay", "Per-stage timings and tok/s in the conversation screen", s.showDebug) { v -> upd { it.copy(showDebug = v) } }
 

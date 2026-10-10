@@ -117,5 +117,5 @@ Run on the real board (SM8750P, Android 15) from the App laptop. Legend as above
 | Extra | Flag (`config/app_config.json` → `features`) | State | Evidence |
 |---|---|---|---|
 | 1. Response clock | `response_clock` | ON BOARD | 8 tests; on the QIDK: timer, SOP steps, taps logged with offsets, dialler, survives force-stop. DB v3. |
-| 2. One-tap launch + wake word | `quick_launch`, `wake_word` | Level A ON BOARD · Level B PLANNED | Tile and shortcut start the app already listening on the QIDK; widget provider registered. |
+| 2. One-tap launch + wake word | `quick_launch`, `wake_word` | Level A ON BOARD · Level B ON BOARD | Tile and shortcut start the app already listening. "Hey Qalam": Vosk on CPU, grammar on sound-alike variants (the name is not in the model vocabulary); detected about 3 of 4 with a synthetic voice (small sample), no false trigger on 2 test sentences; microphone handed to the report flow and taken back at idle. |
 | 3. Multi-witness merging | `multi_witness` | PLANNED | — |

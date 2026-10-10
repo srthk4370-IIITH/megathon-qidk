@@ -37,6 +37,7 @@ import com.megathon.incidentvoice.ui.settings.SettingsScreen
 import com.megathon.incidentvoice.ui.theme.IncidentVoiceTheme
 import android.view.WindowManager
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import com.megathon.incidentvoice.orchestrator.ConvState
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
@@ -59,6 +60,12 @@ class MainActivity : ComponentActivity() {
         }
         handleQuickLaunch(intent)
         com.megathon.incidentvoice.quick.QuickLaunch.applyFlag(this, container.config.app.features.quickLaunch)
+        // Extra 2 Level B: (re)start the wake-word service whenever the app is on screen and the toggle / permission allow it
+        lifecycleScope.launch {
+            repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.STARTED) {
+                container.settings.flow.map { it.wakeEnabled }.distinctUntilChanged().collect { on -> com.megathon.incidentvoice.wake.WakeWordService.sync(this@MainActivity, container, on) }
+            }
+        }
         setContent { IncidentVoiceTheme { AppRoot(container) } }
     }
 }

@@ -43,6 +43,15 @@ fun HomeScreen(c: AppContainer, onMic: () -> Unit, onTypeInstead: () -> Unit, no
         Spacer(Modifier.weight(1f))
         MicButton(listening = false, level = 0f, enabled = status is EngineStatus.Ready, onClick = onMic)
         Text("Tap and describe the incident", style = MaterialTheme.typography.titleMedium)
+        if (c.config.app.features.wakeWord) {
+            val w by c.wake.ui.collectAsStateWithLifecycle()
+            val s by c.settingsSnapshot.collectAsStateWithLifecycle()
+            if (s.wakeEnabled) Text(
+                when { w.listening -> "● Listening for \"${c.config.app.wakeDisplay}\" — say it to report"; w.error != null -> "Wake word unavailable: ${w.error}"; !w.loaded -> "Wake word loading…"; else -> "Say \"${c.config.app.wakeDisplay}\" to report" },
+                style = MaterialTheme.typography.labelLarge, color = if (w.listening) FilledGreen else MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center,
+            )
+            if (s.showDebug && s.wakeEnabled) Text("heard: ${w.lastHeard.ifBlank { "—" }} · ${w.strategy}", style = MaterialTheme.typography.labelSmall, color = Color.Gray, textAlign = TextAlign.Center)
+        }
         Text("English or Hinglish · hold the device about 20 cm from your mouth", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
         notice?.let { Spacer(Modifier.height(8.dp)); Text(it, color = MaterialTheme.colorScheme.error, textAlign = TextAlign.Center) }
         TextButton(onClick = onTypeInstead) { Text("Type instead") }
