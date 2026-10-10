@@ -8,12 +8,23 @@ Running log of what happened, what was decided, and where things stand. `PRD.md`
 |---|---|
 | Spec | `PRD.md` v1.0 written (≈ 3.4k lines). Single source of truth. |
 | Board | SM8750P (Snapdragon 8 Elite, HTP V79), Android 15 userdebug, 15.5 GB RAM. `/data/local/tmp` wiped → 29 GB free. Clock still wrong (2024, GMT) — fix at H0 (PRD §26.3). |
-| Laptop | Caches + old WSL artifacts cleaned (C: 7.6 → ~14 GB free). **Pending:** WSL VHDX compaction by the user (admin, PRD Appendix H) → ~120 GB free. |
+| Laptop | Caches + old WSL artifacts cleaned (C: 7.6 → ~14 GB free). **Pending:** VHDX compaction — sparse flag removed after diskpart error; user re-runs diskpart as admin → ~120 GB free. |
 | Models | None exported yet (hackathon rule: nothing built before the clock). Base Llama 3.2 3B weights + qai-hub-models 0.63.0 + AI Hub token already in WSL. |
 | Code | None yet. Repo has docs + `qidk/` reference + `_board_runtime_backup/` (QAIRT 2.47 V79 runtime pulled from the board). |
 | Architecture | Plan A (in-app JNI) vs Plan B (shell-user server) undecided until the probe APK runs (PRD §26.6, ~H3). |
 
 ## 2. Log
+
+### 2026-10-10 (later) — Branch workflow + VHDX compaction error
+
+**Branch workflow (from user + updated CLAUDE.md):** all ML work commits go to `Saarthak`; separate branches will own Android and Web/Dashboard. Main carries `HANDBOOK.md`, `CHANGE.md` (cross-branch change announcements), `STATUS.md` (what exists now); each branch keeps `handover_<branch>.md`. Created `CHANGE.md`, `STATUS.md`, `handover_Saarthak.md`. PRD v1.0 was pushed to `main` and `Saarthak` as `8ff065e`.
+
+**Open question logged in CHANGE.md:** PRD D-44 puts the dashboard inside the Android app, but the team now has a Web/Dashboard branch → team must decide and PRD §23 gets updated.
+
+**Error:** user ran the VHDX compaction (PRD Appendix H); diskpart failed:
+`DiskPart has encountered an error: The requested operation could not be completed due to a virtual disk system limitation. Virtual hard disk files must be uncompressed and unencrypted and must not be sparse.`
+**Cause:** during cleanup I had enabled sparse VHD (`wsl --manage Ubuntu --set-sparse true`); diskpart cannot compact sparse VHDX files. The sparse flag alone did not return space to Windows (C: stayed ~14 GB free).
+**Fix:** `wsl --shutdown; wsl --manage Ubuntu --set-sparse false` (succeeded), then re-run `diskpart /s $env:TEMP\compact.txt` as admin. **Lesson:** use one method — either sparse + fstrim, or non-sparse + diskpart compact; never mix.
 
 ### 2026-10-10 — Discovery, clarification, PRD
 

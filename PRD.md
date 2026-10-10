@@ -3377,7 +3377,7 @@ adb shell 'cd /data/local/tmp/iv && LD_LIBRARY_PATH=$PWD/lib ADSP_LIBRARY_PATH="
 
 **Done on the board:** pulled the leftover QAIRT 2.47 V79 runtime to `_board_runtime_backup/` (genie-t2t-run, libGenie, libQnnHtp, libQnnHtpPrepare, libQnnHtpV79Stub/Skel/CalculatorStub, libQnnSystem, libc++_shared, qnn-net-run, qnn-platform-validator); deleted **all** of `/data/local/tmp` (27 GB of another project's files) → **29 GB free**. Installed apps were kept (eSpeak is our TTS engine).
 
-**Done on the laptop:** deleted superseded WSL artifacts from the previous project (`~/gptq_out` 8.7 GB, `~/qaihm_work/ftgptq16_ckpt` 14 GB, `~/smartcity_runs` 6.6 GB, Go build cache), pip caches (WSL + Windows), npm/uv/pnpm caches, puppeteer cache, Windows `%TEMP%`; enabled sparse VHD for WSL Ubuntu and ran `fstrim`. Kept: Hugging Face Llama 3.2 3B weights, `~/venvs/{qaihm,train,kg}`, AI Hub token, `Desktop\qidk` project, Docker. C: free went from 7.6 GB to ~14 GB.
+**Done on the laptop:** deleted superseded WSL artifacts from the previous project (`~/gptq_out` 8.7 GB, `~/qaihm_work/ftgptq16_ckpt` 14 GB, `~/smartcity_runs` 6.6 GB, Go build cache), pip caches (WSL + Windows), npm/uv/pnpm caches, puppeteer cache, Windows `%TEMP%`; ran `fstrim` (sparse VHD was briefly enabled, then disabled because diskpart cannot compact sparse VHDX files). Kept: Hugging Face Llama 3.2 3B weights, `~/venvs/{qaihm,train,kg}`, AI Hub token, `Desktop\qidk` project, Docker. C: free went from 7.6 GB to ~14 GB.
 
 **Your step (needs an Administrator PowerShell, ~5–15 min, reclaims ~110 GB):**
 ```powershell
