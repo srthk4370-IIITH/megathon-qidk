@@ -19,7 +19,15 @@ push_if_changed(){ # local remote_dir
   local ls rs; ls=$(stat -c %s "$f"); rs=$(ash stat -c %s "$d/$n" 2>/dev/null)
   if [ "$ls" = "$rs" ] && [ "$ls" -gt 100000000 ]; then return 0; fi
   if [ "$ls" = "$rs" ] && [ "$(md5sum "$f" | cut -c1-32)" = "$(ash md5sum "$d/$n" | cut -c1-32)" ]; then return 0; fi
-  adbx push "$(w "$f")" "$d/" | tail -1; ash chmod 755 "$d/$n" >/dev/null
+  # timeout scaled to size (≥5 MB/s over USB) + one retry: interop adb occasionally hangs
+  local to=$(( 60 + ls / 5000000 ))
+  for try in 1 2; do
+    if timeout "$to" "$ADB" push "$(w "$f")" "$d/" < /dev/null 2>&1 | tr -d '\r' | tail -1 | grep -q "pushed"; then
+      ash chmod 755 "$d/$n" >/dev/null; return 0
+    fi
+    echo "push retry $try: $n"
+  done
+  status "WARNING push failed twice: $n"; return 1
 }
 mark_done(){ touch "$ST/$JOB.done"; rm -f "$ST/$JOB.pid"; status "DONE"; }
 mark_failed(){ touch "$ST/$JOB.failed"; rm -f "$ST/$JOB.pid"; status "GAVE UP: $*  (rm ~/iv/state/$JOB.failed to retry)"; exit 1; }
