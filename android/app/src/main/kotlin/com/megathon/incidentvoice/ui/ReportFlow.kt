@@ -17,6 +17,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.megathon.incidentvoice.AppContainer
+import kotlinx.coroutines.launch
 import com.megathon.incidentvoice.orchestrator.ConvState
 import com.megathon.incidentvoice.orchestrator.UiEvent
 import com.megathon.incidentvoice.ui.components.SeverityChip
@@ -46,22 +47,44 @@ fun ReportFlow(c: AppContainer, onOpenDetail: (String) -> Unit, onGoDashboard: (
         if (settings.useMic && !granted) permLauncher.launch(Manifest.permission.RECORD_AUDIO) else o.onMicTapped()
     }
 
+    // First launch: ask for the reporter profile once (PRD §20.8, D-25)
+    val stored by c.settings.flow.collectAsStateWithLifecycle(initialValue = null)
+    var profileDismissed by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    if (stored != null && stored!!.reporterName.isBlank() && !profileDismissed && ui.state == ConvState.IDLE) {
+        var name by remember { mutableStateOf("") }
+        var emp by remember { mutableStateOf("") }
+        AlertDialog(
+            onDismissRequest = { profileDismissed = true },
+            title = { Text("Who is reporting?") },
+            text = {
+                Column {
+                    Text("Saved on this device and attached to every report.", style = MaterialTheme.typography.bodySmall)
+                    OutlinedTextField(name, { name = it }, label = { Text("Name") }, singleLine = true)
+                    OutlinedTextField(emp, { emp = it }, label = { Text("Employee ID") }, singleLine = true)
+                }
+            },
+            confirmButton = { TextButton({ scope.launch { c.settings.update { it.copy(reporterName = name.trim(), reporterEmpId = emp.trim()) } }; profileDismissed = true }, enabled = name.isNotBlank()) { Text("Save") } },
+            dismissButton = { TextButton({ profileDismissed = true }) { Text("Later") } },
+        )
+    }
+
     CompositionLocalProvider(LocalOrchestrator provides o) {
         when (ui.state) {
             ConvState.IDLE, ConvState.ERROR_AUDIO ->
                 if (ui.state == ConvState.ERROR_AUDIO) ConversationScreen(ui, c.config.taxonomy, o, settings.showDebug)
                 else HomeScreen(c, onMic = onMic, onTypeInstead = o::onTypeInsteadRequested, notice = ui.notice, onOpen = onOpenDetail)
             ConvState.MANUAL_FILL, ConvState.RECOMMENDING, ConvState.REVIEW -> ReviewScreen(ui, c.config, o)
-            ConvState.SUBMITTED -> SubmittedScreen(ui.submittedRef.orEmpty(), ui.form.str("severity"), ui.otherIncidents, o::onReportAnother, onGoDashboard)
+            ConvState.SUBMITTED -> SubmittedScreen(ui.submittedRef.orEmpty(), ui.form.str("severity"), ui.otherIncidents, ui.editingExisting, o::onReportAnother, onGoDashboard)
             else -> ConversationScreen(ui, c.config.taxonomy, o, settings.showDebug)
         }
     }
 }
 
 @Composable
-private fun SubmittedScreen(ref: String, severity: String?, others: List<String>, onAnother: (String?) -> Unit, onDashboard: () -> Unit) {
+private fun SubmittedScreen(ref: String, severity: String?, others: List<String>, updated: Boolean, onAnother: (String?) -> Unit, onDashboard: () -> Unit) {
     Column(Modifier.fillMaxSize().padding(24.dp), Arrangement.Center, Alignment.CenterHorizontally) {
-        Text("Report saved", style = MaterialTheme.typography.headlineMedium)
+        Text(if (updated) "Report updated" else "Report saved", style = MaterialTheme.typography.headlineMedium)
         Spacer(Modifier.height(8.dp))
         Text(ref, style = MaterialTheme.typography.titleLarge)
         Spacer(Modifier.height(8.dp)); SeverityChip(severity)

@@ -6,6 +6,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -25,7 +26,7 @@ import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun DetailScreen(id: String, repo: IncidentRepository, tx: Taxonomy, disclaimer: String, onBack: () -> Unit, onDeleted: () -> Unit) {
+fun DetailScreen(id: String, repo: IncidentRepository, tx: Taxonomy, disclaimer: String, onBack: () -> Unit, onDeleted: () -> Unit, onEdit: (String) -> Unit) {
     val detail by remember(id) { repo.observeDetail(id) }.collectAsState(initial = null)
     val scope = rememberCoroutineScope()
     var confirmDelete by remember { mutableStateOf(false) }
@@ -34,7 +35,10 @@ fun DetailScreen(id: String, repo: IncidentRepository, tx: Taxonomy, disclaimer:
         TopAppBar(
             title = { Text(detail?.meta?.refNo ?: "Incident") },
             navigationIcon = { IconButton(onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } },
-            actions = { IconButton({ confirmDelete = true }) { Icon(Icons.Default.Delete, "Delete") } },
+            actions = {
+                IconButton({ onEdit(id) }) { Icon(Icons.Default.Edit, "Edit") }
+                IconButton({ confirmDelete = true }) { Icon(Icons.Default.Delete, "Delete") }
+            },
         )
     }) { pad ->
         val d = detail

@@ -44,6 +44,8 @@ data class ConversationUiState(
     val submittedRef: String? = null,
     val otherIncidents: List<String> = emptyList(),
     val notice: String? = null,
+    /** True when the review screen is editing an already submitted incident (Detail → Edit). */
+    val editingExisting: Boolean = false,
     val debug: DebugInfo = DebugInfo(),
 ) {
     val canSubmit: Boolean get() = validation?.complete == true && (state == ConvState.REVIEW || state == ConvState.MANUAL_FILL)

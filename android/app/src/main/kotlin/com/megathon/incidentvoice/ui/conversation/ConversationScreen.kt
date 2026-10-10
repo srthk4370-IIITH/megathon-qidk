@@ -114,7 +114,9 @@ private fun Controls(ui: ConversationUiState, o: ConversationOrchestrator, typed
                 Row(verticalAlignment = Alignment.CenterVertically) { CircularProgressIndicator(Modifier.size(20.dp)); Spacer(Modifier.width(8.dp)); Text(if (ui.state == ConvState.EXTRACTING) "Filling the form…" else "Updating the form…") }
             ConvState.ASKING -> Row(verticalAlignment = Alignment.CenterVertically) { Icon(Icons.AutoMirrored.Filled.VolumeUp, null); Spacer(Modifier.width(8.dp)); Text("Asking…") }
             ConvState.TYPING -> Row(verticalAlignment = Alignment.CenterVertically) {
-                OutlinedTextField(typed, onTyped, Modifier.weight(1f), label = { Text("Type here") })
+                OutlinedTextField(typed, onTyped, Modifier.weight(1f), label = { Text(if (ui.question != null) "Type your answer" else "Describe the incident") },
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Send),
+                    keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSend = { if (typed.isNotBlank()) o.onTypeInstead(typed) }))
                 Spacer(Modifier.width(8.dp)); Button({ o.onTypeInstead(typed) }, enabled = typed.isNotBlank()) { Text("Send") }
             }
             ConvState.ERROR_ENGINE, ConvState.ERROR_PARSE, ConvState.ERROR_AUDIO -> Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)) {
@@ -122,14 +124,24 @@ private fun Controls(ui: ConversationUiState, o: ConversationOrchestrator, typed
                     Text(ui.error ?: "Something went wrong.", color = MaterialTheme.colorScheme.onErrorContainer)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 8.dp)) {
                         if (ui.retryable) Button(o::onRetry) { Text("Retry") }
-                        if (ui.state == ConvState.ERROR_AUDIO) Button(o::onMicTapped) { Text("Try mic again") }
+                        if (ui.state == ConvState.ERROR_AUDIO) {
+                            Button(o::onMicTapped) { Text("Try mic again") }
+                            val ctx = androidx.compose.ui.platform.LocalContext.current
+                            OutlinedButton({
+                                ctx.startActivity(android.content.Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                                    android.net.Uri.parse("package:" + ctx.packageName)).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+                            }) { Text("Open settings") }
+                        }
                         OutlinedButton(o::onManualFallback) { Text("Fill manually") }
                     }
                 }
             }
             else -> {}
         }
-        if (showDebug) Text("asr ${ui.debug.asrMs} ms · llm ${ui.debug.llmMs} ms · ${"%.1f".format(ui.debug.decodeTps)} tok/s · ${ui.debug.lastTask}", style = MaterialTheme.typography.labelSmall, color = Grey)
+        if (showDebug) {
+            Text("asr ${ui.debug.asrMs} ms · llm ${ui.debug.llmMs} ms · ${ui.debug.tokensOut} tok · ${"%.1f".format(ui.debug.decodeTps)} tok/s · ${ui.debug.lastTask} · round ${ui.round}", style = MaterialTheme.typography.labelSmall, color = Grey)
+            if (ui.debug.lastToolJson.isNotBlank()) Text(ui.debug.lastToolJson.take(400), style = MaterialTheme.typography.labelSmall, color = Grey, maxLines = 6)
+        }
         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             if (ui.state != ConvState.TYPING) TextButton(o::onTypeInsteadRequested) { Text("Type instead") }
             TextButton(o::onReviewNow) { Text("Review now") }

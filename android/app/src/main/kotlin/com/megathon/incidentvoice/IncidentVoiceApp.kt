@@ -10,5 +10,6 @@ class IncidentVoiceApp : Application() {
         super.onCreate()
         container = AppContainer(this)
         container.startEngine()
+        container.housekeeping()
     }
 }

@@ -3,7 +3,12 @@ package com.megathon.incidentvoice
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.unit.dp
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.Mic
@@ -26,13 +31,24 @@ import com.megathon.incidentvoice.ui.detail.DetailScreen
 import com.megathon.incidentvoice.ui.ReportFlow
 import com.megathon.incidentvoice.ui.settings.SettingsScreen
 import com.megathon.incidentvoice.ui.theme.IncidentVoiceTheme
+import android.view.WindowManager
+import androidx.lifecycle.lifecycleScope
+import com.megathon.incidentvoice.orchestrator.ConvState
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val container = (application as IncidentVoiceApp).container
+        // keep the screen on while a report is in progress (PRD §20.2)
+        lifecycleScope.launch {
+            container.orchestrator.ui.map { it.state != ConvState.IDLE && it.state != ConvState.SUBMITTED }.distinctUntilChanged().collect { busy ->
+                if (busy) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            }
+        }
         setContent { IncidentVoiceTheme { AppRoot(container) } }
     }
 }
@@ -59,7 +75,8 @@ private fun AppRoot(c: AppContainer) {
             }
         }
     }) { pad ->
-        NavHost(nav, startDestination = "home", modifier = Modifier.padding(pad)) {
+        Box(Modifier.padding(pad).fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+        NavHost(nav, startDestination = "home", modifier = Modifier.widthIn(max = 720.dp).fillMaxSize()) {
             composable("home") { ReportFlow(c, onOpenDetail = { nav.navigate("detail/$it") }, onGoDashboard = { nav.navigate("dashboard") { launchSingleTop = true } }) }
             composable("dashboard") {
                 DashboardScreen(dashVm, c.config.taxonomy, onOpen = { nav.navigate("detail/$it") },
@@ -67,9 +84,11 @@ private fun AppRoot(c: AppContainer) {
             }
             composable("detail/{id}") { be ->
                 DetailScreen(be.arguments!!.getString("id")!!, c.repository, c.config.taxonomy, c.config.sop.disclaimer,
-                    onBack = { nav.popBackStack() }, onDeleted = { nav.popBackStack() })
+                    onBack = { nav.popBackStack() }, onDeleted = { nav.popBackStack() },
+                    onEdit = { id -> c.orchestrator.openForEdit(id); nav.navigate("home") { popUpTo(nav.graph.findStartDestination().id); launchSingleTop = true } })
             }
             composable("settings") { SettingsScreen(c) }
+        }
         }
     }
 }

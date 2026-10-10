@@ -54,6 +54,7 @@ class ConversationOrchestrator(
     private var edited = false
     private var cont: CompletableDeferred<Unit>? = null
     private var spokeComplete = false
+    private var editingRef: String? = null
 
     // =========================================================================================
     // UI API (§22.2)
@@ -117,6 +118,21 @@ class ConversationOrchestrator(
         scope.launch { repo.saveRecommendations(id, list) }
     }
 
+    /** Detail → Edit (PRD §23.2): load a saved incident into the review screen. Saving keeps its reference number. */
+    fun openForEdit(id: String) {
+        cancelAll(); audio.cancel(); tts.stop(); reset()
+        step {
+            val d = repo.load(id) ?: return@step
+            incidentId = id; form = d.form; rounds = d.meta.followupRounds; emergencyFlag = d.meta.emergencyFlag
+            editingRef = d.meta.refNo
+            d.turns.filter { it.role == "USER" }.forEach { userTexts.append(it.text).append(' ') }
+            update {
+                it.copy(state = ConvState.REVIEW, incidentId = id, form = form, validation = Validator.validate(form, tx, clock()),
+                    recommendations = d.recommendations.map { r -> Recommendation(r.sopId, r.text, r.immediate, r.source, r.done) }, editingExisting = editingRef != null)
+            }
+        }
+    }
+
     fun onSubmit() {
         val id = incidentId ?: return
         step {
@@ -126,7 +142,8 @@ class ConversationOrchestrator(
                 return@step
             }
             repo.saveForm(id, form, Actor.User(settings().reporter.empId), rounds, emergencyFlag)
-            val ref = repo.submit(id, Actor.User(settings().reporter.empId))
+            repo.saveRecommendations(id, ui.value.recommendations)
+            val ref = editingRef ?: repo.submit(id, Actor.User(settings().reporter.empId))
             update { it.copy(state = ConvState.SUBMITTED, submittedRef = ref, otherIncidents = form.otherIncidents, notice = null) }
         }
     }
@@ -290,9 +307,8 @@ class ConversationOrchestrator(
 
     private suspend fun speakThenListen(text: String) {
         update { it.copy(state = ConvState.ASKING) }
-        if (settings().speakQuestions) {
-            if (tts.ready.value) tts.speak(text, form.lang) else delay(400) // short pause instead of speech
-        }
+        // If TTS is not ready the speaker plays a short chime and returns at once (PRD §17.2); the question stays on screen.
+        if (settings().speakQuestions) tts.speak(text, form.lang)
         markSpeakingDone()
         delay(conv.ttsPostGapMs.toLong()) // never open the mic while TTS is speaking
         listenFollowup()
@@ -503,7 +519,7 @@ class ConversationOrchestrator(
 
     private fun reset() {
         form = IncidentForm(); incidentId = null; rounds = 0; emergencyFlag = false; question = null; lastAskedFields = emptyList()
-        repromptedNoSpeech = false; retryAction = null; userTexts.clear(); narrationText = ""; spokeComplete = false; bubbleSeq = 0
+        repromptedNoSpeech = false; retryAction = null; userTexts.clear(); narrationText = ""; spokeComplete = false; bubbleSeq = 0; editingRef = null
         _ui.value = ConversationUiState()
     }
 }

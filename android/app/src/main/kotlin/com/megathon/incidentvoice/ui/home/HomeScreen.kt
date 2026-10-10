@@ -31,10 +31,18 @@ fun HomeScreen(c: AppContainer, onMic: () -> Unit, onTypeInstead: () -> Unit, no
             modifier = Modifier.fillMaxWidth().background(SevCritical).padding(8.dp), textAlign = TextAlign.Center)
         Spacer(Modifier.height(16.dp))
         EnginePill(status)
+        (status as? EngineStatus.Error)?.let { e ->
+            Text(e.error.message.take(160), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error, textAlign = TextAlign.Center)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TextButton({ c.selectEngine(c.settingsSnapshot.value.engineMode) }) { Text("Retry engine") }
+                TextButton({ c.selectEngine("MOCK") }) { Text("Use mock engine") }
+            }
+            Text("You can still type a report and fill the form by hand.", style = MaterialTheme.typography.bodySmall)
+        }
         Spacer(Modifier.weight(1f))
         MicButton(listening = false, level = 0f, enabled = status is EngineStatus.Ready, onClick = onMic)
         Text("Tap and describe the incident", style = MaterialTheme.typography.titleMedium)
-        Text("English or Hinglish", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("English or Hinglish · hold the device about 20 cm from your mouth", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
         notice?.let { Spacer(Modifier.height(8.dp)); Text(it, color = MaterialTheme.colorScheme.error, textAlign = TextAlign.Center) }
         TextButton(onClick = onTypeInstead) { Text("Type instead") }
         Spacer(Modifier.weight(1f))

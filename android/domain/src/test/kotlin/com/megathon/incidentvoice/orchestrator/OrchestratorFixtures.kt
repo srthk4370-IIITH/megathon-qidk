@@ -27,7 +27,7 @@ class InMemoryRepo(private val now: () -> Long = { Fx.now.toEpochMilli() }) : In
     override fun observeList(filter: DashboardFilter, limit: Int): Flow<List<IncidentListItem>> = flowOf(emptyList())
     override fun search(text: String, filter: DashboardFilter, limit: Int): Flow<List<IncidentListItem>> = flowOf(emptyList())
     override fun observeDetail(id: String): Flow<IncidentDetail?> = flowOf(null)
-    override suspend fun load(id: String): IncidentDetail? = store[id]?.let { IncidentDetail(it.meta, it.form, it.turns, emptyList()) }
+    override suspend fun load(id: String): IncidentDetail? = store[id]?.let { r -> IncidentDetail(r.meta, r.form, r.turns, r.recs.mapIndexed { i, x -> RecRow(i.toLong(), x.sopId, x.text, x.immediate, x.source, x.done) }) }
     override fun observeCounts(): Flow<DashboardCounts> = flowOf(DashboardCounts())
     override suspend fun latestDraft(maxAgeMs: Long): String? = null
     override suspend fun purgeOldDrafts(maxAgeMs: Long): Int = 0
@@ -37,7 +37,7 @@ class InMemoryRepo(private val now: () -> Long = { Fx.now.toEpochMilli() }) : In
 class FakeTts(ready: Boolean = true) : TtsSpeaker {
     val spoken = mutableListOf<String>()
     override val ready = MutableStateFlow(ready)
-    override suspend fun speak(text: String, lang: String): SpeakResult { spoken += text; return SpeakResult.DONE }
+    override suspend fun speak(text: String, lang: String): SpeakResult { if (!ready.value) return SpeakResult.SKIPPED; spoken += text; return SpeakResult.DONE }
     override fun stop() {}
 }
 

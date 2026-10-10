@@ -132,9 +132,9 @@ fun ReviewScreen(ui: ConversationUiState, cfg: AppConfigBundle, o: ConversationO
             Section("Reporter")
             Text("Taken from the device profile (Settings).", style = MaterialTheme.typography.bodySmall, color = Grey)
             Spacer(Modifier.height(8.dp))
-            Button(onClick = o::onSubmit, enabled = ui.canSubmit, modifier = Modifier.fillMaxWidth().height(52.dp)) { Text("Submit report") }
+            Button(onClick = o::onSubmit, enabled = ui.canSubmit, modifier = Modifier.fillMaxWidth().height(52.dp)) { Text(if (ui.editingExisting) "Save changes" else "Submit report") }
             Spacer(Modifier.height(4.dp))
-            TextButton(o::onCancel, Modifier.fillMaxWidth()) { Text("Discard (keeps a draft)") }
+            TextButton(o::onCancel, Modifier.fillMaxWidth()) { Text(if (ui.editingExisting) "Close without saving further" else "Discard (keeps a draft)") }
         }
     }
 

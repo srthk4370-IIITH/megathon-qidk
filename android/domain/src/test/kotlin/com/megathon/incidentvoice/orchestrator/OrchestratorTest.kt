@@ -230,6 +230,19 @@ class OrchestratorTest {
         assertEquals(emptyList(), r.o.ui.value.otherIncidents)
     }
 
+    @Test fun editSubmittedIncident_keepsReference_andSavesChanges() = runTest {
+        val r = rig()
+        r.o.startNew(); r.o.onMicTapped(); advanceUntilIdle(); r.o.onSubmit(); advanceUntilIdle()
+        val id = r.repo.store.keys.first()
+        r.o.onReportAnother(); assertEquals(ConvState.IDLE, r.o.ui.value.state)
+        r.o.openForEdit(id); advanceUntilIdle()
+        assertEquals(ConvState.REVIEW, r.o.ui.value.state); assertTrue(r.o.ui.value.editingExisting); assertTrue(r.o.ui.value.recommendations.isNotEmpty())
+        r.o.onFieldEdited("severity", JsonPrimitive("MEDIUM")); advanceUntilIdle()
+        r.o.onSubmit(); advanceUntilIdle()
+        assertEquals("INC-20261010-0001", r.o.ui.value.submittedRef)              // same reference, not a new one
+        assertEquals("MEDIUM", r.repo.store[id]!!.form.str("severity")); assertEquals(1, r.repo.store.size)
+    }
+
     @Test fun ttsNotReady_stillAsksAndListens() = runTest {
         val r = rig(ready = false)
         r.o.startNew(); r.o.onMicTapped(); advanceUntilIdle()

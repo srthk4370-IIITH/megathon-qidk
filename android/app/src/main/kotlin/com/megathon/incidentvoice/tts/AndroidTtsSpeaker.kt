@@ -2,6 +2,9 @@ package com.megathon.incidentvoice.tts
 
 import android.content.Context
 import android.media.AudioAttributes
+import android.media.AudioManager
+import android.media.ToneGenerator
+import kotlinx.coroutines.delay
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import com.megathon.incidentvoice.orchestrator.SpeakResult
@@ -44,7 +47,15 @@ class AndroidTtsSpeaker(context: Context, private val enginePackage: String = "c
 
     override suspend fun speak(text: String, lang: String): SpeakResult {
         val t = tts
-        if (!_ready.value || t == null || text.isBlank()) return SpeakResult.SKIPPED
+        if (text.isBlank()) return SpeakResult.SKIPPED
+        if (!_ready.value || t == null) {
+            // PRD §17.2: no TTS → short chime; the question is shown on screen and listening starts anyway
+            runCatching {
+                val tone = ToneGenerator(AudioManager.STREAM_NOTIFICATION, 70)
+                tone.startTone(ToneGenerator.TONE_PROP_BEEP, 180); delay(350); tone.release()
+            }
+            return SpeakResult.SKIPPED
+        }
         val id = UUID.randomUUID().toString()
         val d = CompletableDeferred<SpeakResult>()
         pending[id] = d
