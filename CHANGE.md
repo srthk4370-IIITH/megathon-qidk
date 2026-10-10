@@ -64,6 +64,7 @@ Only two branches: **App** and **ML**. No separate web/dashboard branch.
 - Who is affected: App branch.
 - Action needed: `include(":engine")`, `implementation(project(":engine"))`, construct `JniInferenceEngine(applicationContext, llmFallback = MockInferenceEngine())`, call `init()` off the main thread at startup. Manifest gets `<uses-native-library libcdsprpc.so>` from the engine module automatically.
 
+
 ## 2026-10-10 — renny (App) — `config/` created verbatim from PRD
 - What changed: App branch created `config/` straight from the PRD with no edits to keys/enums: `taxonomy.json` (App. A), `site_registry.json` (A.3), `sop.json` (App. B), `app_config.json` (§22.5), `prompts/*` (App. C.1–C.9; `warmup.user.txt` = C.9). Extracted by script and JSON-validated.
 - Who is affected: ML branch (`Saarthak`) — PRD §22.5 / §34.1.
@@ -101,3 +102,10 @@ Only two branches: **App** and **ML**. No separate web/dashboard branch.
   4. Eval set: in 11 of the 50 follow-up cases the eval asks `severity` although PRD §10.6 says a rule-derived severity (`INFERRED`) counts as filled — the app (and ML's Kotlin `:core`) do not ask. Not a bug; just a difference between the eval generator and the dialogue.
   5. PRD text to fix when convenient: FTS4 query syntax is `tok*` (not `"tok"*`), manifest must not force portrait (HDMI monitor is landscape), no `@Upsert` on FTS tables.
 - **Action needed by others:** run `bash scripts/app_device_check.sh` on the machine with the board (see `handover_app.md`); `MOCK=1` keeps the app off the NPU.
+
+## 2026-10-11 01:20 — renny (App) — `Saarthak` merged into `main` (ML files untouched)
+- What changed: `main` = `renny` + `origin/Saarthak` (`f24f674`). Every ML-owned path (`android/core`, `android/engine`, `config/`, `native/`, `ml/`, `eval/`, `scripts/` (ML jobs), `server-go/`, `android-probe/`, `android/build.gradle.kts`, `android/gradle.properties`, Gradle wrapper) is **byte-identical to `Saarthak`**.
+- Conflict resolutions: `android/build.gradle.kts` and `android/gradle.properties` → ML's version. `android/settings.gradle.kts` → ML's version plus, at the hook ML left ("The App team adds include(":app") here"), `include(":domain", ":app")` and the Compose/KSP plugin versions in `pluginManagement`. `.gitignore` → ML's plus the Silero asset exception, `.DS_Store`, `.kotlin/`. `CHANGE.md` → both sides kept.
+- **This supersedes the earlier note "take renny's root Gradle files".** The App build now uses ML's gate: `gradle -PwithAndroid=true :app:assembleDebug` (without the flag only `:core` is configured, exactly as before for ML).
+- Verified on the merged tree: `:core` 190, `:domain` 119, `:app` 12 tests green; debug APK builds.
+- Action needed by ML: none. Keep merging `Saarthak` → `main`; no App file lives under an ML path.

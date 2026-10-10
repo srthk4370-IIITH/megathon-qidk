@@ -1,0 +1,16 @@
+# ML pipeline status (auto-written by scripts/auto_pipeline.sh)
+- 16:00 pipeline started
+- 16:18 toolchains ready (NDK r27c, whisper.cpp, QAIRT 2.50.0.260828)
+- 16:19 native build FAILED — see ~/iv/logs/pipeline.log; fix and re-run
+- 10 22:58 [export_llama] creating pinned venv /home/hp_srthk4370/venvs/qaihm_pin
+- 10 22:58 [build_native] native build OK
+- 10 22:58 [build_native] DONE
+- 10 23:24 [export_llama] creating pinned venv /home/hp_srthk4370/venvs/qaihm_pin
+- 10 23:29 [export_llama] venv /home/hp_srthk4370/venvs/qaihm_pin: torch 2.10.0+cpu transformers 4.45.0 
+- 10 23:29 [export_llama] export start: llama_v3_2_3b_instruct (expect 3–5 h: local ONNX export, upload, cloud compile, download)
+- 11 00:01 [deploy_runtime] ASR smoke jfk.wav: {"backend":"cpu-whispercpp","chunks":[{"end_ms":30000,"lang":"en","start_ms":-1007280,"text":"And so, my fellow Americans, ask not what your country can do for you, ask what you can do for your country."}],"lang":"en","text":"And so, my fellow Americans, ask not what your country can do for you, ask what you can do for your country.","timings":{"dec_ms":3410.080832,"enc_ms":0.0,"mel_ms":0.0,"tokens":27,"total_ms":3410.168905}}
+- 11 00:01 [deploy_runtime] DONE
+- 11 00:08 [export_llama] venv /home/hp_srthk4370/venvs/qaihm_pin: torch 2.10.0+cpu transformers 4.45.0 
+- 11 00:08 [export_llama] export start: llama_v3_2_3b_instruct (expect 3–5 h: local ONNX export, upload, cloud compile, download)
+- 11 00:14 [build_native] native build OK
+- 11 00:14 [build_native] DONE

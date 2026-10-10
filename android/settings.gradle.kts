@@ -4,6 +4,11 @@ pluginManagement {
         mavenCentral()
         gradlePluginPortal()
     }
+    // Versions for the plugins only :app applies (kept here so the root build.gradle.kts stays as the ML branch wrote it).
+    plugins {
+        id("org.jetbrains.kotlin.plugin.compose") version "2.0.21"
+        id("com.google.devtools.ksp") version "2.0.21-1.0.28"
+    }
 }
 
 dependencyResolutionManagement {
@@ -16,16 +21,15 @@ dependencyResolutionManagement {
 
 rootProject.name = "IncidentVoice"
 
-// :core   = ML branch's pure-Kotlin library (validator, parser, prompt builder, …) + golden prompt tests.
-// :domain = App branch's pure-Kotlin domain layer (form model, validator, merger, prompts, orchestrator state machine).
-// Both are JVM-only and always built.
-include(":core", ":domain")
+// :core = pure-Kotlin domain library (validator, parser, prompt builder, normalisers, SOPs). JVM-only, always built.
+include(":core")
 
-// Android modules need the Android SDK. They are included when -PwithAndroid=true is passed, or automatically when an
-// SDK is configured (local.properties or ANDROID_HOME), so a JVM-only machine can still run `gradle :core:test :domain:test`.
-val withAndroid = providers.gradleProperty("withAndroid").orNull == "true" ||
-    file("local.properties").exists() || System.getenv("ANDROID_HOME") != null || System.getenv("ANDROID_SDK_ROOT") != null
+// Android modules need the Android SDK (local.properties / ANDROID_HOME). They are only included when the build is
+// run with -PwithAndroid=true (or withAndroid=true in gradle.properties / ~/.gradle/gradle.properties), so a
+// JVM-only machine can still run `gradle :core:test`.
+val withAndroid = providers.gradleProperty("withAndroid").orNull == "true"
 if (withAndroid) {
-    include(":engine") // ML branch: InferenceEngine + JNI/HTTP engines + prebuilt native libs
-    include(":app")    // App branch: Compose UI, Room, audio, TTS
+    include(":engine")
+    // App branch: :domain = app's pure-Kotlin layer (form, validator, orchestrator; JVM tests), :app = Compose UI.
+    include(":domain", ":app")
 }

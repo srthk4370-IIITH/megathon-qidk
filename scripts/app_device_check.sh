@@ -49,7 +49,7 @@ sh_ ls /dev/fastrpc-cdsp | grep -q fastrpc && ok "/dev/fastrpc-cdsp exists" || w
 sh_ pm list packages | grep -q -E 'dialer|com.android.phone' && ok "a dialer/phone package exists (Call ERT opens it)" || wn "no dialer: 'Call ERT' shows a toast with the number instead"
 
 echo "== 2. install + start =="
-if [ ! -f "$APK" ]; then bad "APK not found at $APK (build: cd android && gradle :app:assembleDebug)"; else
+if [ ! -f "$APK" ]; then bad "APK not found at $APK (build: cd android && gradle -PwithAndroid=true :app:assembleDebug)"; else
   if "$ADB" install -r -g "$APK" </dev/null 2>&1 | tr -d '\r' | tail -1 | grep -q Success; then ok "installed $APK"; else bad "adb install failed"; fi
 fi
 sh_ pm grant $PKG android.permission.RECORD_AUDIO

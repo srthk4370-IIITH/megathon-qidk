@@ -43,8 +43,9 @@ All P0 app features are built, tested (321 tests) and exercised on an Android 15
 ```
 export JAVA_HOME=$(/usr/libexec/java_home -v 17) ANDROID_HOME=/opt/homebrew/share/android-commandlinetools
 cd android
-~/tools/gradle-8.10.2/bin/gradle :core:test :domain:test :app:testDebugUnitTest   # 190 + 119 + 12
-~/tools/gradle-8.10.2/bin/gradle :app:assembleDebug                               # app/build/outputs/apk/debug/app-debug.apk
+# -PwithAndroid=true is required for :engine, :domain and :app (ML's settings.gradle.kts gate; without it only :core is built)
+~/tools/gradle-8.10.2/bin/gradle -PwithAndroid=true :core:test :domain:test :app:testDebugUnitTest   # 190 + 119 + 12
+~/tools/gradle-8.10.2/bin/gradle -PwithAndroid=true :app:assembleDebug                               # app/build/outputs/apk/debug/app-debug.apk
 ```
 The wrapper's own download times out on this network (`~/tools/gradle-8.10.2` is a manual copy); Robolectric jars are in `~/tools/robolectric-jars`. Emulator: AVD `iv_test` (`$ANDROID_HOME/emulator/emulator -avd iv_test`).
 
@@ -58,7 +59,7 @@ It checks ABI / page size / clock / eSpeak / `libcdsprpc.so`, installs, grants t
 
 ## Gotchas to remember
 
-- Do not edit `android/core`, `android/engine`, `config/` on this branch (they must stay identical to ML's for a clean merge). Take renny's root Gradle files when merging.
+- Do not edit `android/core`, `android/engine`, `config/`, `android/build.gradle.kts`, `android/gradle.properties` (ML-owned, identical to `Saarthak`). The only shared build file the App touches is `android/settings.gradle.kts` (adds `:domain`, `:app` and the Compose/KSP plugin versions).
 - App package for the engine port is `com.megathon.incidentvoice.domain.engine`; ML's is `com.megathon.incidentvoice.engine`. Only `MlEngineAdapter` imports both.
 - No `INTERNET` permission (D-54). `extractNativeLibs=true` + legacy jniLibs packaging are required for the QNN stubs.
 - FTS is Room `@Fts4` with `tok*` queries; replace FTS rows with delete + insert (no `@Upsert`).
