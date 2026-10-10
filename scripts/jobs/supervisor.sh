@@ -19,7 +19,7 @@ done_(){ [ -f "$ST/$1.done" ]; }
 start(){
   local job=$1
   done_ "$job" || alive "$job" || [ -f "$ST/$job.failed" ] || {
-    setsid nohup bash "$JD/$job.sh" >> "$HOME/iv/logs/$job.log" 2>&1 < /dev/null &
+    setsid nohup bash "$JD/$job.sh" >> "$HOME/iv/logs/$job.log" 2>&1 < /dev/null 9>&- &
     echo $! > "$ST/$job.pid"
     echo "$(date '+%F %T') started $job pid $!" >> "$HOME/iv/logs/supervisor.log"
   }

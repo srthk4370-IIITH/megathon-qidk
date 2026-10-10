@@ -8,6 +8,8 @@ if [ ! -x "$V/bin/qai-hub-models" ]; then
   status "creating pinned venv $V"
   "$HOME/.pyenv/versions/3.11.9/bin/python" -m venv "$V" || python3 -m venv "$V"
   "$V/bin/pip" install -q -U pip
+  # CPU torch first so the recipe's torch==2.10.0 pin doesn't pull multi-GB CUDA wheels
+  "$V/bin/pip" install -q torch==2.10.0 torchvision==0.25.0 --index-url https://download.pytorch.org/whl/cpu
   "$V/bin/pip" install -q "qai-hub-models[llama-v3-2-3b-instruct]==0.63.0" || status "pinned install failed; using ~/venvs/qaihm"
 fi
 [ -x "$V/bin/qai-hub-models" ] || V=$HOME/venvs/qaihm
