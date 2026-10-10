@@ -80,3 +80,9 @@ Cut per rev 1.1 (not built): draft-resume UI, charts, status lifecycle beyond SU
 - Then in the app: Settings → Engine → Reload (or force-stop + reopen) → LLM runs on the Hexagon NPU.
 **Building the app on the second laptop:** `cd android && ./gradlew -PwithAndroid=true :app:assembleDebug` (JDK 17, Android SDK 35); native libs are prebuilt in `android/engine/src/main/jniLibs/arm64-v8a` (no NDK/QAIRT needed). See `handover_app.md`.
 **ML laptop keeps working on:** Llama 3.2 3B V79 export (upload now ~2.5 MB/s with 48 S3 connections; resumable), prompt accuracy (English first), device eval once the bundle is on the board.
+
+### 02:45 — App installed on QIDK; app work moves to the second laptop
+- Debug APK built on the ML laptop and installed on the QIDK at 02:38 (`com.megathon.incidentvoice` v0.1, launches to MainActivity). Same APK: `deliverables/app-debug.apk`.
+- Models are on the board (whisper + dsp); eSpeak default TTS. Llama `llama/` still empty → app uses the mock LLM.
+- ML side stopped all app testing/fixes; the in-progress engine/app fixes made during on-device testing are committed (see git log "handoff:"). One last uncommitted edit (`AppContainer.kt`) is committed with this note. App team continues on the second laptop from `main`.
+- ML laptop now works only on the Llama V79 export, prompt accuracy and device eval.

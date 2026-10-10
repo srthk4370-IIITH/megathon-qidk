@@ -41,7 +41,16 @@ class AppContainer(val context: Context) {
 
     val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
-    val modelsDir: File by lazy { File(context.getExternalFilesDir(null), "models") }
+    // The app creates the model folders itself so they are owned by the app uid: folders created by `adb push`
+    // are owned by `shell` (drwxrws--- shell:ext_data_rw) and the app process cannot even list them (Android 15).
+    // adb then only pushes FILES into these folders (files land as shell-owned 0666/0755, which the app can read).
+    val modelsDir: File by lazy {
+        File(context.getExternalFilesDir(null), "models").also { m ->
+            listOf("whisper", "dsp", "llama", "vad").forEach { runCatching { File(m, it).mkdirs() } }
+            runCatching { File(context.getExternalFilesDir(null), "inject").mkdirs() }
+            android.util.Log.i("IV", "modelsDir=$m whisper=${File(m, "whisper").list()?.toList()} canRead=${File(m, "whisper").canRead()}")
+        }
+    }
 
     private val mockEngine: InferenceEngine by lazy { MockInferenceEngine(config.taxonomy) }
 
@@ -78,7 +87,9 @@ class AppContainer(val context: Context) {
         engineKind.value = if (useJni) "JNI" else "MOCK"
         llmBackend.value = ""
         appScope.launch {
-            val ok = runCatching { engine.init() }.isSuccess
+            val r = runCatching { engine.init() }
+            val ok = r.isSuccess
+            android.util.Log.i("IV", "selectEngine mode=$mode useJni=$useJni forceMock=$forceMock init=${r.getOrNull() ?: r.exceptionOrNull()} status=${engine.status.value}")
             if (useJni && ok) llmBackend.value = if (jni.llmOnNpu()) "NPU" else "FALLBACK"
             runCatching { engine.warmup() }
             if (useJni && ok && !jni.llmOnNpu()) watchForLlama()
