@@ -119,11 +119,44 @@ class AudioCapture(
 }
 
 /** Chooses mic vs. mock audio at call time (Settings → "Use microphone"). */
-class SwitchableAudioInput(private val mic: AudioCapture, private val mock: AudioInput, private val useMic: () -> Boolean) : AudioInput {
+class SwitchableAudioInput(
+    private val mic: AudioCapture,
+    private val mock: AudioInput,
+    private val injectDir: File? = null,
+    private val useMic: () -> Boolean,
+) : AudioInput {
     private var active: AudioInput = mock
     override suspend fun listen(kind: ListenKind, maxMs: Long, endSilenceMs: Int, incidentId: String, onProgress: (Float, Long) -> Unit): ListenResult {
+        // Test/demo hook: `adb push clip.wav <externalFilesDir>/inject/01.wav` -> the next listen() returns that clip
+        // (16-bit PCM WAV) instead of the mic/mock; the file is consumed (renamed *.used). Lowest name first.
+        val f = injectDir?.listFiles { x -> x.isFile && x.name.endsWith(".wav") }?.minByOrNull { it.name }
+        if (f != null) {
+            val pcm = withContext(Dispatchers.IO) { runCatching { readWav16k(f) }.getOrNull().also { f.renameTo(File(f.parentFile, f.name + ".used")) } }
+            if (pcm != null && pcm.isNotEmpty()) {
+                android.util.Log.i("IV", "inject: ${f.name} ${pcm.size} samples")
+                onProgress(0.6f, pcm.size / 16L)
+                return ListenResult.Speech(pcm, pcm.size / 16L)
+            }
+        }
         active = if (useMic()) mic else mock
         return active.listen(kind, maxMs, endSilenceMs, incidentId, onProgress)
+    }
+
+    private fun readWav16k(f: File): ShortArray {
+        val b = java.nio.ByteBuffer.wrap(f.readBytes()).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+        var pos = 12; var channels = 1; var rate = 16_000
+        while (pos + 8 <= b.limit()) {
+            val id = String(ByteArray(4) { b.get(pos + it) }, Charsets.US_ASCII); val len = b.getInt(pos + 4)
+            if (id == "fmt ") { channels = b.getShort(pos + 10).toInt().coerceAtLeast(1); rate = b.getInt(pos + 12) }
+            if (id == "data") {
+                val n = minOf(len, b.limit() - pos - 8) / 2 / channels
+                val raw = ShortArray(n) { b.getShort(pos + 8 + it * 2 * channels) }
+                if (rate == 16_000 || n == 0) return raw
+                return ShortArray((n.toLong() * 16_000 / rate).toInt()) { raw[(it.toLong() * rate / 16_000).toInt().coerceAtMost(n - 1)] }
+            }
+            pos += 8 + len + (len and 1)
+        }
+        return ShortArray(0)
     }
     override fun stop() = active.stop()
     override fun cancel() = active.cancel()

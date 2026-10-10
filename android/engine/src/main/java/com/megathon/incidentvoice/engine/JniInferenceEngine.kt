@@ -39,6 +39,7 @@ class JniInferenceEngine(
 ) : InferenceEngine {
 
     @Volatile private var llmLoaded = false
+    @Volatile private var nativeInited = false
 
     private val _status = MutableStateFlow<EngineStatus>(EngineStatus.NotStarted)
     override val status: StateFlow<EngineStatus> = _status
@@ -54,7 +55,8 @@ class JniInferenceEngine(
         }
         val hasLlm = File(modelsDir, "llama/genie_config.json").exists()
         if (!hasLlm && llmFallback != null) llmFallback.init()
-        if (llmLoaded) NativeBridge.release() // re-init (e.g. bundle just arrived)
+        if (nativeInited) { llmLoaded = false; NativeBridge.release() } // re-init (e.g. bundle just arrived): free whisper + Genie first
+        nativeInited = true
         val cfg = """{"asr_threads":$asrThreads,"whisper_model":"$whisperModel","load_llm":$hasLlm}"""
         val raw = NativeBridge.init(modelsDir.absolutePath, context.applicationInfo.nativeLibraryDir, cfg)
         val e = parseError(raw)
