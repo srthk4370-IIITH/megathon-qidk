@@ -357,6 +357,12 @@ def fmtv(x, p=True):
     return str(x)
 
 
+def fmtn(x):
+    if x is None:
+        return "—"
+    return f"{x:.0f}" if abs(x) >= 100 else f"{x:.2f}"
+
+
 def report_md(m, title):
     L = [f"# {title}", "", f"Cases scored: **{m['n_cases']}** (missing predictions: {m['missing_predictions']})", "",
          "| Metric | Value | Target (§29.6) |", "|---|---|---|",
@@ -378,13 +384,13 @@ def report_md(m, title):
     if m.get("asr"):
         L += ["## ASR", "", "| Lang | n | WER | CER | ASR p50 ms | p90 ms |", "|---|---|---|---|---|---|"]
         for lang, a in m["asr"].items():
-            L.append(f"| {lang} | {a['n']} | {fmtv(a['wer'])} | {fmtv(a['cer'])} | {fmtv(a['asr_ms_p50'])} | {fmtv(a['asr_ms_p90'])} |")
+            L.append(f"| {lang} | {a['n']} | {fmtv(a['wer'])} | {fmtv(a['cer'])} | {fmtn(a['asr_ms_p50'])} | {fmtn(a['asr_ms_p90'])} |")
         L.append("")
     if m["latency"]:
         L += ["## Latency (from GenStats)", "", "| Task | metric | p50 | p90 | n |", "|---|---|---|---|---|"]
         for t, ms in m["latency"].items():
             for k, v in ms.items():
-                L.append(f"| {t} | {k} | {fmtv(v['p50'])} | {fmtv(v['p90'])} | {v['n']} |")
+                L.append(f"| {t} | {k} | {fmtn(v['p50'])} | {fmtn(v['p90'])} | {v['n']} |")
         L.append("")
     L += ["## Breakdown", "", "| Group | n | Type acc | Field F1 |", "|---|---|---|---|"]
     for g, v in m["groups"].items():
@@ -488,16 +494,28 @@ def self_test(cases_path: Path, out_dir: Path):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--cases", default=str(ROOT / "eval" / "text_cases.jsonl"))
+    ap.add_argument("--cases", help="default: <run>/run_info.json 'cases', else eval/text_cases.jsonl")
     ap.add_argument("--run", help="run dir containing predictions.jsonl (and optionally asr.jsonl)")
     ap.add_argument("--pred", help="predictions.jsonl (default <run>/predictions.jsonl)")
     ap.add_argument("--asr", help="asr.jsonl (default <run>/asr.jsonl if present)")
     ap.add_argument("--self-test", action="store_true")
     a = ap.parse_args()
     if a.self_test:
-        sys.exit(self_test(Path(a.cases), ROOT / "eval" / "results"))
+        sys.exit(self_test(Path(a.cases or ROOT / "eval" / "text_cases.jsonl"), ROOT / "eval" / "results"))
+    if not a.run:
+        ap.error("--run is required")
     run = Path(a.run)
-    cases = load_jsonl(a.cases)
+    cases_path = a.cases
+    if not cases_path and (run / "run_info.json").exists():
+        try:
+            cp = json.loads((run / "run_info.json").read_text(encoding="utf-8")).get("cases")
+            if cp:
+                cases_path = str(cp if Path(cp).is_absolute() else ROOT / cp)
+        except Exception:
+            pass
+    cases_path = cases_path or str(ROOT / "eval" / "text_cases.jsonl")
+    print(f"[score] cases: {cases_path}", file=sys.stderr)
+    cases = load_jsonl(cases_path)
     pred_path = Path(a.pred) if a.pred else run / "predictions.jsonl"
     preds = load_jsonl(pred_path) if pred_path.exists() else []
     asr_path = Path(a.asr) if a.asr else run / "asr.jsonl"

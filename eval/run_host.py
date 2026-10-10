@@ -62,7 +62,6 @@ class HostLLM:
         torch.cuda.synchronize()
         t0 = time.time()
         with torch.no_grad():
-            # prefill timing (TTFT ≈ prefill + first step)
             out = self.model.generate(x, attention_mask=torch.ones_like(x), max_new_tokens=max_tokens, do_sample=False,
                                       num_beams=1, eos_token_id=STOP_IDS, pad_token_id=STOP_IDS[0],
                                       temperature=None, top_p=None, top_k=None)

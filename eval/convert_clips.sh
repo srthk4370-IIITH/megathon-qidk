@@ -32,7 +32,8 @@ for f in "$RAW"/clip_*.*; do
     continue
   fi
   "$FFMPEG" -hide_banner -loglevel error -y -i "$f" -ac 1 -ar 16000 -c:a pcm_s16le -map_metadata -1 "$OUT/$id.wav"
-  dur="$("$FFMPEG" -hide_banner -i "$OUT/$id.wav" 2>&1 | sed -n 's/.*Duration: \([0-9:.]*\).*/\1/p')"
+  # `ffmpeg -i` without an output exits 1 by design; don't let pipefail/set -e kill the loop
+  dur="$( { "$FFMPEG" -hide_banner -i "$OUT/$id.wav" 2>&1 || true; } | sed -n 's/.*Duration: \([0-9:.]*\).*/\1/p')"
   echo "$id.wav  $dur"
   n=$((n + 1))
 done
