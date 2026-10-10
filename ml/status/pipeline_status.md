@@ -47,3 +47,17 @@
 - 11 01:11 [asr_eval] ASR default language mode chosen: en (see eval/results/asr_*/report.md)
 - 11 01:11 [asr_eval] DONE
 - 11 01:13 [deploy_app_models] app models: whisper+dsp pushed to /sdcard/Android/data/com.megathon.incidentvoice/files/models (llama follows when exported)
+- 11 01:52 [kaggle_fetch] kaggle kernel failed: srthk4370/iv-llama-v79-export has status "KernelWorkerStatus.ERROR" (logs: kaggle kernels output srthk4370/iv-llama-v79-export)
+- 11 01:52 [kaggle_fetch] GAVE UP: kernel srthk4370/iv-llama-v79-export has status "KernelWorkerStatus.ERROR"  (rm ~/iv/state/kaggle_fetch.failed to retry)
+- 11 02:11 [kaggle_fetch] kaggle kernel failed: srthk4370/iv-llama-v79-export has status "KernelWorkerStatus.ERROR" (logs: kaggle kernels output srthk4370/iv-llama-v79-export)
+- 11 02:11 [kaggle_fetch] GAVE UP: kernel srthk4370/iv-llama-v79-export has status "KernelWorkerStatus.ERROR"  (rm ~/iv/state/kaggle_fetch.failed to retry)
+- 11 02:16 [export_llama] patched qai_hub S3 upload: 16 MiB × 48 (per-connection ~30 kB/s, aggregate scales), standard retries, timeouts
+- 11 02:16 [export_llama] venv /home/hp_srthk4370/venvs/qaihm_pin: torch 2.10.0+cpu transformers 4.45.0 
+- 11 02:16 [export_llama] export start: llama_v3_2_3b_instruct (expect 3–5 h: local ONNX export, upload, cloud compile, download)
+- 11 02:29 [deploy_app_models] WARNING push failed twice: libQnnHexagonSkel_dspApp.so
+- 11 02:29 [deploy_app_models] WARNING push failed twice: libQnnHtpNetRunExtensions.so
+- 11 02:31 [deploy_app_models] WARNING push failed twice: libQnnHtpV79.so
+- 11 02:31 [deploy_app_models] WARNING push failed twice: libQnnHtpV79Skel.so
+- 11 02:32 [deploy_app_models] WARNING push failed twice: libQnnNetRunDirectV79Skel.so
+- 11 02:36 [deploy_app_models] WARNING push failed twice: libQnnSystem.so
+- 11 02:36 [deploy_app_models] WARNING push failed twice: libSnpeHtpV79Skel.so

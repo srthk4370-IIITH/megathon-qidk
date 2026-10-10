@@ -81,6 +81,25 @@ class AppContainer(val context: Context) {
             val ok = runCatching { engine.init() }.isSuccess
             if (useJni && ok) llmBackend.value = if (jni.llmOnNpu()) "NPU" else "FALLBACK"
             runCatching { engine.warmup() }
+            if (useJni && ok && !jni.llmOnNpu()) watchForLlama()
+        }
+    }
+
+    private var llamaWatcher: kotlinx.coroutines.Job? = null
+
+    /** FALLBACK mode: poll for the Llama bundle (pushed later by adb) and re-init the on-device engine when it lands. */
+    private fun watchForLlama() {
+        if (llamaWatcher?.isActive == true) return
+        llamaWatcher = appScope.launch {
+            while (engineKind.value == "JNI" && !jni.llmOnNpu()) {
+                kotlinx.coroutines.delay(15_000)
+                if (!llamaPresent() || engineKind.value != "JNI" || engine.delegate !== jniEngine) continue
+                kotlinx.coroutines.delay(10_000) // let an in-progress adb push finish
+                android.util.Log.i("IV", "llama bundle appeared -> re-init on-device engine")
+                runCatching { engine.init() }
+                llmBackend.value = if (jni.llmOnNpu()) "NPU" else "FALLBACK"
+                if (jni.llmOnNpu()) runCatching { engine.warmup() } else break
+            }
         }
     }
 
@@ -88,7 +107,7 @@ class AppContainer(val context: Context) {
     val micCapture: AudioCapture by lazy {
         AudioCapture(context, audioRoot, { config.app.vad }) { SileroVad.create(context) ?: EnergyVadAdapter() }
     }
-    val audio: AudioInput by lazy { SwitchableAudioInput(micCapture, MockAudioInput()) { settingsSnapshot.value.useMic } }
+    val audio: AudioInput by lazy { SwitchableAudioInput(micCapture, MockAudioInput(), File(context.getExternalFilesDir(null), "inject")) { settingsSnapshot.value.useMic } }
 
     /** Latest settings snapshot for the orchestrator (kept fresh by a collector). */
     val settingsSnapshot = MutableStateFlow(com.megathon.incidentvoice.data.AppSettings())
