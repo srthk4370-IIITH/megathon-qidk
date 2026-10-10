@@ -53,6 +53,8 @@ data class IncidentEntity(
     @ColumnInfo(name = "submitted_at") val submittedAt: Long?,
     @ColumnInfo(name = "model_versions_json") val modelVersionsJson: String,
     @ColumnInfo(name = "sync_state") val syncState: String = "LOCAL_ONLY",
+    /** Extra 1 (DB v3): when the response clock started; null = never. */
+    @ColumnInfo(name = "response_started_at") val responseStartedAt: Long? = null,
 )
 
 private const val FK = "incident_id"
@@ -139,6 +141,17 @@ data class AuditEntity(
     val field: String?,
     @ColumnInfo(name = "old_value") val oldValue: String?,
     @ColumnInfo(name = "new_value") val newValue: String?,
+)
+
+/** Extra 1 (DB v3): a response-clock step that was carried out, with its time. Survives report deletion like the audit log does not need to. */
+@Entity(tableName = "response_actions", indices = [Index(value = ["incident_id"], name = "idx_response_incident")])
+data class ResponseActionEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    @ColumnInfo(name = "incident_id") val incidentId: String,
+    @ColumnInfo(name = "step_id") val stepId: String,
+    val label: String,
+    @ColumnInfo(name = "done_at") val doneAt: Long,
+    val source: String,
 )
 
 /**

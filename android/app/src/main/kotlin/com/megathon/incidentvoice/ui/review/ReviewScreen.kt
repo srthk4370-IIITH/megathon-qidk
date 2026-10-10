@@ -43,14 +43,17 @@ fun ReviewScreen(ui: ConversationUiState, cfg: AppConfigBundle, o: ConversationO
     var showOptional by remember { mutableStateOf(false) }
     fun visible(key: String) = showOptional || key in missing || (f.state(key)?.status ?: FieldStatus.MISSING) != FieldStatus.MISSING
 
-    LazyColumn(Modifier.fillMaxSize().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(vertical = 8.dp)) {
+    Column(Modifier.fillMaxSize()) {
+    // Extra 1: the response clock stays pinned while the form scrolls underneath
+    ui.response?.let { com.megathon.incidentvoice.ui.components.ResponseClockCard(it, o::onResponseStep, Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp)) }
+    LazyColumn(Modifier.weight(1f).fillMaxWidth().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(vertical = 8.dp)) {
         item {
             if (missing.isNotEmpty()) {
                 Text("${missing.size} ${if (missing.size > 1) "fields need" else "field needs"} attention: ${missing.take(3).joinToString { tx.label(it) }}${if (missing.size > 3) "…" else ""}",
                     color = androidx.compose.ui.graphics.Color.White, modifier = Modifier.fillMaxWidth().background(SevCritical, RoundedCornerShape(8.dp)).padding(10.dp))
             } else Text("All required fields complete.", color = FilledGreen, fontWeight = FontWeight.Bold)
             ui.notice?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
-            ui.emergency?.let { Spacer(Modifier.height(8.dp)); EmergencyBannerView(it, o::onEmergencyCall, o::onEmergencyDismiss) }
+            ui.emergency?.takeIf { ui.response == null }?.let { Spacer(Modifier.height(8.dp)); EmergencyBannerView(it, o::onEmergencyCall, o::onEmergencyDismiss) }
         }
 
         // ---- Summary
@@ -142,6 +145,8 @@ fun ReviewScreen(ui: ConversationUiState, cfg: AppConfigBundle, o: ConversationO
             Spacer(Modifier.height(4.dp))
             TextButton(o::onCancel, Modifier.fillMaxWidth()) { Text(if (ui.editingExisting) "Close without saving further" else "Discard (keeps a draft)") }
         }
+    }
+
     }
 
     editing?.let { key ->

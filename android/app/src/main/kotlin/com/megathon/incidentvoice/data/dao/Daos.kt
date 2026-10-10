@@ -82,6 +82,14 @@ interface IncidentDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun insertSearch(s: IncidentSearchEntity)
     @Query("DELETE FROM incident_search WHERE incident_id = :id") suspend fun deleteSearch(id: String)
 
+    // response clock (Extra 1)
+    @Query("UPDATE incidents SET response_started_at = :at WHERE id = :id AND response_started_at IS NULL") suspend fun setResponseStart(id: String, at: Long)
+    @Insert suspend fun insertResponseAction(a: ResponseActionEntity)
+    @Query("SELECT * FROM response_actions WHERE incident_id = :id ORDER BY done_at") suspend fun responseActions(id: String): List<ResponseActionEntity>
+    @Query("SELECT * FROM response_actions WHERE incident_id = :id ORDER BY done_at") fun observeResponseActions(id: String): Flow<List<ResponseActionEntity>>
+    @Query("DELETE FROM response_actions WHERE incident_id = :id") suspend fun deleteResponseActions(id: String)
+    @Query("SELECT id FROM incidents WHERE status = 'DRAFT' AND response_started_at >= :since ORDER BY response_started_at DESC LIMIT 1") suspend fun activeResponseDraft(since: Long): String?
+
     // vector index
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsertVector(v: IncidentVectorEntity)
     @Query("SELECT * FROM incident_vectors WHERE model = :model") suspend fun vectors(model: String): List<IncidentVectorEntity>

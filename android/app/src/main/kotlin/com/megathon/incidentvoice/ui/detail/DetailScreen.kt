@@ -101,6 +101,13 @@ private fun DetailBody(d: IncidentDetail, tx: Taxonomy, disclaimer: String, modi
                 Text((if (t.role == "ASSISTANT") "Assistant: " else "Reporter: ") + t.text, style = MaterialTheme.typography.bodyMedium)
             }
         }
+        d.meta.responseStartedAt?.let { start ->
+            item {
+                SectionTitle("Response timeline")
+                Text(com.megathon.incidentvoice.core.ResponseClock.timeline(start, d.responseActions))
+                Text("Clock started ${fmtDateTime(start)} · ${d.responseActions.size} step${if (d.responseActions.size != 1) "s" else ""} logged", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
         if (similarHits.isNotEmpty()) {
             item { SectionTitle("Similar incidents") }
             items(similarHits, key = { "s${it.id}" }) { h -> com.megathon.incidentvoice.ui.ask.HitCard(h, tx, false, onOpen) }

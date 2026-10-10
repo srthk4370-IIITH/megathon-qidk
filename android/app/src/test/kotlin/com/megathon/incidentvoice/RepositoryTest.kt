@@ -59,6 +59,21 @@ class RepositoryTest {
         }
     }
 
+    /** Extra 1: response clock storage. */
+    @Test fun responseClock_startIsSetOnce_actionsStored_andActiveDraftFound() = runBlocking {
+        val id = repo.createDraft(reporter)
+        repo.setResponseStart(id, now - 60_000); repo.setResponseStart(id, now)            // second call must not move the start
+        repo.addResponseAction(id, ResponseAction(ResponseClock.ERT, "Call ERT (112)", now - 30_000))
+        repo.addResponseAction(id, ResponseAction("FIRE-02", "Evacuate everyone from the area by the nearest safe exit to the assembly point.", now - 5_000))
+        repo.saveForm(id, IncidentForm().with(FieldState("description", kotlinx.serialization.json.JsonPrimitive("fire"), FieldStatus.FILLED)), Actor.Llm)   // a save must keep the start
+        val d = repo.load(id)!!
+        assertEquals(now - 60_000, d.meta.responseStartedAt); assertEquals(listOf(ResponseClock.ERT, "FIRE-02"), d.responseActions.map { it.stepId })
+        assertEquals("Alarm 00:00 → ERT called 00:30 → Evacuate everyone 00:55", ResponseClock.timeline(d.meta.responseStartedAt!!, d.responseActions))
+        assertEquals(id, repo.activeResponseDraft(now - 3600_000)); assertNull(repo.activeResponseDraft(now))
+        repo.submit(id); assertNull(repo.activeResponseDraft(now - 3600_000))               // submitted reports are not resumed
+        repo.delete(id, Actor.System); assertTrue(db.dao().responseActions(id).isEmpty())
+    }
+
     @Test fun refNumbers_areUniqueAndSequentialPerDay() = runBlocking {
         val a = repo.createDraft(reporter); val b = repo.createDraft(reporter)
         val r1 = repo.submit(a); val r2 = repo.submit(b)

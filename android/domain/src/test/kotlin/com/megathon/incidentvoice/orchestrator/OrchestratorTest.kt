@@ -254,6 +254,78 @@ class OrchestratorTest {
         assertEquals("MEDIUM", r.repo.store[id]!!.form.str("severity")); assertEquals(1, r.repo.store.size)
     }
 
+    // ---- Extra 1: response clock ------------------------------------------------------------
+
+    @Test fun responseClock_startsOnEmergency_stepsComeFromSop_andTapsAreLogged() = runTest {
+        val r = rig("fire spreading in the panel room, someone is unconscious")
+        r.engine.enqueue("yes someone is hurt, very serious, life in danger")
+        r.o.startNew(); r.o.onMicTapped(); advanceUntilIdle()
+        val rc = r.o.ui.value.response!!
+        assertEquals(Fx.now.toEpochMilli(), rc.startedAtMs); assertEquals(Fx.now.toEpochMilli(), r.inc.meta.responseStartedAt)
+        assertEquals(ResponseClock.ERT, rc.steps.first().id)
+        val sopImmediate = Fx.sop.categories["FIRE"]!!.filter { it.immediate }.map { it.id }
+        assertEquals(sopImmediate, rc.steps.drop(1).map { it.id })                      // only SOP steps, in SOP order
+        val events = mutableListOf<UiEvent>(); launchCollect(r.o, events); testScheduler.runCurrent()
+        r.o.onResponseStep(ResponseClock.ERT); r.o.onResponseStep(sopImmediate[1]); advanceUntilIdle()
+        assertEquals(listOf<UiEvent>(UiEvent.Dial("112")), events)
+        assertEquals(listOf(ResponseClock.ERT, sopImmediate[1]), r.inc.actions.map { it.stepId }); assertTrue(r.inc.actions.all { it.source == "TAP" })
+        val taken = r.o.ui.value.form.value("actions_taken").toString()
+        assertTrue(taken.contains("Called the emergency team (ERT)") && taken.contains("Evacuate everyone"), taken)
+        assertTrue(r.o.ui.value.response!!.steps.first().done)
+        r.o.onResponseStep(sopImmediate[1]); advanceUntilIdle(); assertEquals(2, r.inc.actions.size)   // a second tap does not log twice
+    }
+
+    @Test fun responseClock_remindsOnceWhenErtNotCalled() = runTest {
+        val r = rig("fire spreading in the panel room, someone is unconscious")
+        r.engine.enqueue("yes someone is hurt, very serious, life in danger")
+        r.o.startNew(); r.o.onMicTapped(); testScheduler.advanceTimeBy(100_000); testScheduler.runCurrent()
+        assertFalse(r.o.ui.value.response!!.reminder)
+        testScheduler.advanceTimeBy(30_000); testScheduler.runCurrent()
+        assertTrue(r.o.ui.value.response!!.reminder); assertEquals(1, r.tts.spoken.count { it == ResponseClock.REMINDER })
+        r.o.onResponseStep(ResponseClock.ERT); advanceUntilIdle(); assertFalse(r.o.ui.value.response!!.reminder)
+    }
+
+    @Test fun responseClock_noReminderWhenErtWasCalled_andNotForOrdinaryIncidents() = runTest {
+        val r = rig("fire spreading in the panel room, someone is unconscious")
+        r.engine.enqueue("yes, life in danger")
+        r.o.startNew(); r.o.onMicTapped(); testScheduler.advanceTimeBy(20_000); testScheduler.runCurrent()
+        r.o.onResponseStep(ResponseClock.ERT); testScheduler.advanceTimeBy(200_000); testScheduler.runCurrent()
+        assertEquals(0, r.tts.spoken.count { it == ResponseClock.REMINDER })
+        val w = rig(); w.o.startNew(); w.o.onMicTapped(); advanceUntilIdle()
+        assertNull(w.o.ui.value.response)                                                    // a minor water leak has no response clock
+    }
+
+    @Test fun responseClock_medicalStartsWithoutBanner_andSurvivesRestart() = runTest {
+        val r = rig("Ramesh slipped on the wet floor near the pantry and hurt his ankle", "he is conscious", "yes first aid was given, no ambulance needed", "it is minor")
+        r.o.startNew(); r.o.onMicTapped(); advanceUntilIdle()
+        assertNull(r.o.ui.value.emergency); assertNotNull(r.o.ui.value.response)
+        assertEquals(Fx.sop.categories["MEDICAL"]!!.filter { it.immediate }.map { it.id }, r.o.ui.value.response!!.steps.drop(1).map { it.id })
+        r.o.onResponseStep(ResponseClock.ERT); advanceUntilIdle()
+        // "restart": a fresh orchestrator on the same storage picks the draft and its clock up
+        val o2 = ConversationOrchestrator(this, cfg, r.engine, r.repo, r.tts, r.audio, { OrchestratorSettings(Reporter("Asha", "E100")) }, clock = { Fx.now.plusSeconds(90) }, retryDelaysMs = emptyList())
+        o2.resumeActiveResponse(); advanceUntilIdle()
+        val rc = o2.ui.value.response!!
+        assertEquals(Fx.now.toEpochMilli(), rc.startedAtMs); assertTrue(rc.steps.first().done); assertNotEquals(ConvState.IDLE, o2.ui.value.state)
+    }
+
+    @Test fun responseClock_flagOff() = runTest {
+        val off = AppConfigBundle(cfg.taxonomy, cfg.registry, cfg.sop, cfg.templates, cfg.app.copy(features = cfg.app.features.copy(responseClock = false)))
+        val engine = MockInferenceEngine(off.taxonomy, asrDelayMs = 0, tokensPerSecond = 0.0, utterances = listOf("fire spreading in the panel room, someone is unconscious", "yes life in danger"), registry = off.registry)
+        val o = ConversationOrchestrator(this, off, engine, InMemoryRepo(), FakeTts(), FakeAudio(), { OrchestratorSettings() }, clock = { Fx.now }, retryDelaysMs = emptyList())
+        o.startNew(); o.onMicTapped(); advanceUntilIdle()
+        assertNull(o.ui.value.response); assertNotNull(o.ui.value.emergency)
+    }
+
+    @Test fun responseClock_rulesAndTimeline() {
+        assertTrue(ResponseClock.shouldStart(Fx.form("incident_type" to "HAZMAT"), false)); assertFalse(ResponseClock.shouldStart(Fx.form("incident_type" to "WATER"), false))
+        assertTrue(ResponseClock.shouldStart(Fx.form("incident_type" to "ELECTRICAL", "electrical_hazard" to "SHOCK"), false))
+        assertFalse(ResponseClock.shouldStart(Fx.form("incident_type" to "ELECTRICAL", "electrical_hazard" to "SPARKING"), false))
+        assertTrue(ResponseClock.shouldStart(Fx.form("incident_type" to "WATER"), emergencyBanner = true)); assertTrue(ResponseClock.shouldStart(Fx.form("incident_type" to "WATER", "severity" to "CRITICAL"), false))
+        assertEquals("01:12", ResponseClock.mmss(72_400)); assertEquals("00:00", ResponseClock.mmss(-5))
+        val tl = ResponseClock.timeline(1000, listOf(ResponseAction("FIRE-02", "Evacuate everyone from the area by the nearest safe exit to the assembly point.", 221_000), ResponseAction(ResponseClock.ERT, "Call ERT (112)", 73_000)))
+        assertEquals("Alarm 00:00 → ERT called 01:12 → Evacuate everyone 03:40", tl)
+    }
+
     @Test fun ttsNotReady_stillAsksAndListens() = runTest {
         val r = rig(ready = false)
         r.o.startNew(); r.o.onMicTapped(); advanceUntilIdle()

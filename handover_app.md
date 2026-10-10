@@ -64,6 +64,11 @@ It checks ABI / page size / clock / eSpeak / `libcdsprpc.so`, installs, grants t
 - Stand-in LLM: `android/domain/.../domain/engine/RuleBasedLlm.kt`; its score on the eval set is printed by `MockLlmEvalTest`.
 - Board helpers: `adb logcat -s IV IVNative`; push a 16 kHz WAV to `<externalFilesDir>/inject/01.wav` and the next mic tap uses it; `touch <externalFilesDir>/force_mock` forces the Mock engine.
 
+## Extras (see HANDBOOK "Extra optional work")
+
+- Flags live in `config/app_config.json` → `features`; parsed in `AppConfig.Features`.
+- Extra 1, response clock: `core/ResponseClock.kt`, orchestrator `onResponseStep` / `resumeActiveResponse`, `ui/components/ResponseClockCard.kt`, DB v3 (`response_actions`, `incidents.response_started_at`).
+
 ## Gotchas to remember
 
 - Do not edit `android/core`, `android/engine`, `config/`, `android/build.gradle.kts`, `android/gradle.properties` (ML-owned, identical to the ML branch). The only shared build file the App touches is `android/settings.gradle.kts` (adds `:domain`, `:app` and the Compose/KSP plugin versions).
