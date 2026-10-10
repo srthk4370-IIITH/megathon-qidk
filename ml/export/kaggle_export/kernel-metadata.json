@@ -6,6 +6,8 @@
   "kernel_type": "script",
   "is_private": true,
   "enable_gpu": false,
+  "enable_tpu": true,
+  "machine_shape": "Tpu1VmV38",
   "enable_internet": true,
   "dataset_sources": ["srthk4370/iv-secrets"],
   "competition_sources": [],

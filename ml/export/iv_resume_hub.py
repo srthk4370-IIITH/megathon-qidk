@@ -66,7 +66,10 @@ def _install():
     def _upload_model_if_needed(self, model, model_type, name=None, project=None):
         if isinstance(model, (str, _Path)) and _os.path.exists(_os.path.expanduser(str(model))):
             path = _os.path.expanduser(str(model))
-            key = f"{_os.path.basename(path.rstrip('/'))}|{_size(path)}"
+            # qai_hub_models serializes part N to <tmp>/Llama3_2_3B_PartN_Of_3_w4a16.aimet (dir);
+            # a pre-uploaded zip of the same part is "<same>.zip" → same key
+            base = _os.path.basename(path.rstrip("/"))
+            key = "part:" + (base[:-4] if base.endswith(".zip") else base)
             cache = _load()
             mid = cache["models"].get(key)
             if mid:

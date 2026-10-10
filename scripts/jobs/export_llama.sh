@@ -15,11 +15,11 @@ fi
 [ -x "$V/bin/qai-hub-models" ] || V=$HOME/venvs/qaihm
 # Upload speed: each S3 connection gets ~40 kB/s on this network; qai_hub defaults to 4 × 256 MiB parts (~170 kB/s).
 S3T=$(ls "$V"/lib/python3.*/site-packages/qai_hub/s3_transfer.py 2>/dev/null | head -1)
-if [ -n "$S3T" ] && ! grep -q "IV patch2" "$S3T"; then
+if [ -n "$S3T" ] && ! grep -q "IV patch3" "$S3T"; then
   # 64 MiB parts × 8 connections; 'adaptive' retries throttle to ~0 after S3 SlowDown (seen: upload froze at 51%),
   # so use 'standard' retries with explicit timeouts.
-  sed -i -E 's/^_MULTIPART_CHUNK_SIZE = [0-9]+ \* 1024 \* 1024.*/_MULTIPART_CHUNK_SIZE = 64 * 1024 * 1024  # IV patch2/; s/    max_request_concurrency=[0-9]+,.*/    max_request_concurrency=8,  # IV patch2/; s/retries=\{"max_attempts": 10, "mode": "adaptive"\},/retries={"max_attempts": 10, "mode": "standard"}, connect_timeout=30, read_timeout=120,  # IV patch2/' "$S3T"
-  status "patched qai_hub S3 upload: 64 MiB × 8, standard retries, timeouts"
+  sed -i -E 's/^_MULTIPART_CHUNK_SIZE = [0-9]+ \* 1024 \* 1024.*/_MULTIPART_CHUNK_SIZE = 16 * 1024 * 1024  # IV patch3/; s/    max_request_concurrency=[0-9]+,.*/    max_request_concurrency=48,  # IV patch3/; s/retries=\{"max_attempts": 10, "mode": "adaptive"\},/retries={"max_attempts": 10, "mode": "standard"}, connect_timeout=30, read_timeout=120,  # IV patch3/' "$S3T"
+  status "patched qai_hub S3 upload: 16 MiB × 48 (per-connection ~30 kB/s, aggregate scales), standard retries, timeouts"
 fi
 # Resumable export: reuse finished uploads / jobs after a crash (ml/export/iv_resume_hub.py → sitecustomize)
 cp "$REPO/ml/export/iv_resume_hub.py" "$(ls -d "$V"/lib/python3.*/site-packages)/sitecustomize.py"
