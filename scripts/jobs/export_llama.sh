@@ -23,6 +23,7 @@ if [ -n "$S3T" ] && ! grep -q "IV patch2" "$S3T"; then
 fi
 status "venv $V: $($V/bin/pip list 2>/dev/null | grep -E '^(transformers|torch) ' | tr -s ' ' | tr '\n' ' ')"
 export HF_TOKEN=$(cat ~/.cache/huggingface/token)
+export HF_HUB_OFFLINE=1   # weights cached locally; avoids flaky-network HEAD requests
 for model in llama_v3_2_3b_instruct llama_v3_2_3b_instruct llama_v3_2_3b_instruct llama_v3_2_1b_instruct; do
   dir=$OUT/${model}_v79
   if find "$dir" -name genie_config.json 2>/dev/null | grep -q .; then
