@@ -43,6 +43,18 @@ Only two branches: **App** and **ML**. No separate web/dashboard branch.
 - Action needed: App follows PRD v1.1 §4.0; nothing else in the contracts (taxonomy, tool schemas, DTOs) changed.
 - Commit: (this commit)
 
+## 2026-10-10 22:05 — Saarthak — ML deliverables the App branch consumes
+- What changed:
+  - **`config/`** is real now (taxonomy, sop, site_registry, app_config, prompts, schemas). Copy `config/` into app assets (PRD §20.10); never hard-code field names.
+  - **`android/engine`** (Android library, namespace `com.megathon.incidentvoice.engine`): `InferenceEngine` interface + `JniInferenceEngine` (Plan A), `HttpInferenceEngine` (Plan B), `MockInferenceEngine` (slide-example script for UI work). Prebuilt `.so` files land in `android/engine/src/main/jniLibs/arm64-v8a/` once the native build finishes. Include with `include(":engine")` and `implementation(project(":engine"))`. Requires plugins `com.android.library`, `org.jetbrains.kotlin.android`, `org.jetbrains.kotlin.plugin.serialization` declared in the root build (App branch owns AGP version; ML assumes AGP 8.7.x, Kotlin 2.0.21).
+  - **`android/core`** (pure Kotlin, in progress): validator, parser, prompt builder, normalisers, SOP templates, emergency detector. API in `android/core/README.md` when done.
+  - **Deviations from PRD §18.6 / §19.2:** `NativeBridge.llmGenerate(prompt, task, sampler, maxTokens, cb)` has an extra `task` arg; Plan B streaming is **NDJSON** (`?stream=1`, lines `{"tok"}` then `{"done","text","stats"}`), not SSE.
+  - **Model files (Plan A):** `getExternalFilesDir(null)/models/{llama,whisper,dsp}` = `/sdcard/Android/data/com.megathon.incidentvoice/files/models/`. ML pushes them; app only reads.
+  - **ASR in P0 is whisper.cpp on CPU** inside `libiv_native.so` — same `transcribe()` API; later NPU upgrade is invisible to the app.
+- Who is affected: App branch.
+- Action needed: build UI against `MockInferenceEngine` now; switch to `JniInferenceEngine` when STATUS.md says the board is ready.
+- Commit: c20214b
+
 ## 2026-10-10 — renny (App) — `config/` created verbatim from PRD
 - What changed: App branch created `config/` straight from the PRD with no edits to keys/enums: `taxonomy.json` (App. A), `site_registry.json` (A.3), `sop.json` (App. B), `app_config.json` (§22.5), `prompts/*` (App. C.1–C.9; `warmup.user.txt` = C.9). Extracted by script and JSON-validated.
 - Who is affected: ML branch (`Saarthak`) — PRD §22.5 / §34.1.
