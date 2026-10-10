@@ -61,4 +61,10 @@ dependencies {
 
 tasks.withType<Test>().configureEach {
     systemProperty("iv.configDir", rootProject.projectDir.parentFile.resolve("config").absolutePath)
+    // optional offline Robolectric android-all jars (pre-downloaded with curl; the JVM downloader hangs on some networks)
+    val jars = File(System.getProperty("user.home"), "tools/robolectric-jars")
+    if (jars.isDirectory && (jars.listFiles()?.any { it.name.endsWith(".jar") } == true)) {
+        systemProperty("robolectric.offline", "true")
+        systemProperty("robolectric.dependency.dir", jars.absolutePath)
+    }
 }

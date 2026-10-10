@@ -23,7 +23,7 @@ import com.megathon.incidentvoice.data.DemoSeeder
 import com.megathon.incidentvoice.ui.dashboard.DashboardScreen
 import com.megathon.incidentvoice.ui.dashboard.DashboardViewModel
 import com.megathon.incidentvoice.ui.detail.DetailScreen
-import com.megathon.incidentvoice.ui.home.HomeScreen
+import com.megathon.incidentvoice.ui.ReportFlow
 import com.megathon.incidentvoice.ui.settings.SettingsScreen
 import com.megathon.incidentvoice.ui.theme.IncidentVoiceTheme
 import kotlinx.coroutines.flow.first
@@ -48,8 +48,10 @@ private fun AppRoot(c: AppContainer) {
     val scope = rememberCoroutineScope()
     val dashVm: DashboardViewModel = viewModel(factory = viewModelFactory { initializer { DashboardViewModel(c.repository) } })
 
+    val conv by c.orchestrator.ui.collectAsState()
+    val inConversation = route == "home" && conv.state != com.megathon.incidentvoice.orchestrator.ConvState.IDLE
     Scaffold(bottomBar = {
-        if (route in tabs.map { it.route }) NavigationBar {
+        if (route in tabs.map { it.route } && !inConversation) NavigationBar {
             tabs.forEach { t ->
                 NavigationBarItem(selected = route == t.route, onClick = {
                     nav.navigate(t.route) { popUpTo(nav.graph.findStartDestination().id) { saveState = true }; launchSingleTop = true; restoreState = true }
@@ -58,7 +60,7 @@ private fun AppRoot(c: AppContainer) {
         }
     }) { pad ->
         NavHost(nav, startDestination = "home", modifier = Modifier.padding(pad)) {
-            composable("home") { HomeScreen(c) }
+            composable("home") { ReportFlow(c, onOpenDetail = { nav.navigate("detail/$it") }, onGoDashboard = { nav.navigate("dashboard") { launchSingleTop = true } }) }
             composable("dashboard") {
                 DashboardScreen(dashVm, c.config.taxonomy, onOpen = { nav.navigate("detail/$it") },
                     onSeed = { scope.launch { DemoSeeder(c.config, c.repository).seed(c.settings.flow.first().reporter) } })
