@@ -1,0 +1,33 @@
+{
+  "name": "update_incident_fields",
+  "description": "Update form fields from the answer.",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "lang": {
+        "type": "string",
+        "enum": [
+          "en",
+          "hinglish",
+          "hi"
+        ]
+      },
+      "set": {
+        "type": "object",
+        "description": "field key -> new value (common or category field keys; 'time' for the time phrase)"
+      },
+      "unknown": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "skipped": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "set"
+    ]
+  }
+}

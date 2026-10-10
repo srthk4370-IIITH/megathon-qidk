@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <!-- Vendor FastRPC library needed for the Hexagon NPU (targetSdk >= 31, PRD §20.9). Merged into the app manifest. -->
+        <uses-native-library android:name="libcdsprpc.so" android:required="false" />
+    </application>
+</manifest>

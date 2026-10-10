@@ -1,0 +1,32 @@
+{
+  "name": "propose_actions",
+  "description": "Recommended follow-up actions.",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "actions": {
+        "type": "array",
+        "maxItems": 6,
+        "items": {
+          "type": "object",
+          "properties": {
+            "sop": {
+              "type": "string",
+              "description": "SOP id from the candidate list, or CUSTOM"
+            },
+            "text": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "sop",
+            "text"
+          ]
+        }
+      }
+    },
+    "required": [
+      "actions"
+    ]
+  }
+}
