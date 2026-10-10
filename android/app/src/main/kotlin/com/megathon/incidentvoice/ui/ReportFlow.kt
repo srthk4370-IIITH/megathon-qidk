@@ -2,6 +2,11 @@ package com.megathon.incidentvoice.ui
 
 import android.content.Intent
 import android.net.Uri
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -34,11 +39,18 @@ fun ReportFlow(c: AppContainer, onOpenDetail: (String) -> Unit, onGoDashboard: (
         }
     }
 
+    // RECORD_AUDIO is requested on the first mic tap (PRD §16.2); denial → ERROR_AUDIO card via AudioCapture
+    val permLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { o.onMicTapped() }
+    val onMic: () -> Unit = {
+        val granted = ContextCompat.checkSelfPermission(ctx, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+        if (settings.useMic && !granted) permLauncher.launch(Manifest.permission.RECORD_AUDIO) else o.onMicTapped()
+    }
+
     CompositionLocalProvider(LocalOrchestrator provides o) {
         when (ui.state) {
             ConvState.IDLE, ConvState.ERROR_AUDIO ->
                 if (ui.state == ConvState.ERROR_AUDIO) ConversationScreen(ui, c.config.taxonomy, o, settings.showDebug)
-                else HomeScreen(c, onMic = o::onMicTapped, onTypeInstead = o::onTypeInsteadRequested, notice = ui.notice, onOpen = onOpenDetail)
+                else HomeScreen(c, onMic = onMic, onTypeInstead = o::onTypeInsteadRequested, notice = ui.notice, onOpen = onOpenDetail)
             ConvState.MANUAL_FILL, ConvState.RECOMMENDING, ConvState.REVIEW -> ReviewScreen(ui, c.config, o)
             ConvState.SUBMITTED -> SubmittedScreen(ui.submittedRef.orEmpty(), ui.form.str("severity"), ui.otherIncidents, o::onReportAnother, onGoDashboard)
             else -> ConversationScreen(ui, c.config.taxonomy, o, settings.showDebug)

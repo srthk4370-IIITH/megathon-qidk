@@ -1,6 +1,7 @@
 # Model artifacts and runtime binaries (never committed — see PRD §25.5, §34.3)
 *.bin
 *.onnx
+!android/app/src/main/assets/models/silero_vad.onnx
 *.onnx.data
 *.data
 *.safetensors

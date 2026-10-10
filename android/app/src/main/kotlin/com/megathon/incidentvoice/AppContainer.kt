@@ -7,7 +7,11 @@ import com.megathon.incidentvoice.data.IncidentRepository
 import com.megathon.incidentvoice.data.RoomIncidentRepository
 import com.megathon.incidentvoice.data.SettingsStore
 import com.megathon.incidentvoice.data.db.IncidentDb
+import com.megathon.incidentvoice.audio.AudioCapture
+import com.megathon.incidentvoice.audio.EnergyVadAdapter
 import com.megathon.incidentvoice.audio.MockAudioInput
+import com.megathon.incidentvoice.audio.SileroVad
+import com.megathon.incidentvoice.audio.SwitchableAudioInput
 import com.megathon.incidentvoice.engine.InferenceEngine
 import com.megathon.incidentvoice.engine.MockInferenceEngine
 import com.megathon.incidentvoice.orchestrator.AudioInput
@@ -35,7 +39,10 @@ class AppContainer(val context: Context) {
     /** Stage C: Mock engine only. Real JNI/HTTP engines plug in here behind the same interface. */
     val engine: InferenceEngine by lazy { MockInferenceEngine(config.taxonomy) }
     val tts: TtsSpeaker by lazy { AndroidTtsSpeaker(context) }
-    var audio: AudioInput = MockAudioInput()
+    val micCapture: AudioCapture by lazy {
+        AudioCapture(context, audioRoot, { config.app.vad }) { SileroVad.create(context) ?: EnergyVadAdapter() }
+    }
+    val audio: AudioInput by lazy { SwitchableAudioInput(micCapture, MockAudioInput()) { settingsSnapshot.value.useMic } }
 
     /** Latest settings snapshot for the orchestrator (kept fresh by a collector). */
     val settingsSnapshot = MutableStateFlow(com.megathon.incidentvoice.data.AppSettings())
