@@ -67,3 +67,16 @@ Legend: ✅ built + verified by test and by running the APK on an Android 15 arm
 | — | On-device engine inside the app (Plan A) | 🟡 | ML engine `d69713a` wired: `JniInferenceEngine(llmFallback = app mock)`. In the APK on Android 15: `libiv_native`, `libGenie`, `libQnnSystem`, `libQnnHtp` load; `libQnnHtpV79Stub` needs the board's `libcdsprpc.so`. Whisper missing → clean `IV-E603`; Whisper present → real ASR, LLM on the fallback until the Llama bundle is pushed (orange pill), then Settings → Engine → Auto reloads onto the NPU. |
 
 Cut per rev 1.1 (not built): draft-resume UI, charts, status lifecycle beyond SUBMITTED, PDF/JSON export, 3-min chunking, LLM-tailored recommendations, per-field mic.
+
+## QIDK handoff — 2026-10-11 02:35 (App team works on the board from the second laptop)
+**What is on the QIDK now (persists when moved to another laptop):**
+- App `com.megathon.incidentvoice` (debug APK installed from this laptop; latest APK also in `deliverables/app-debug.apk`). Reinstall with `adb install -r` only — **never uninstall** (Android wipes the model folder).
+- Models in `/sdcard/Android/data/com.megathon.incidentvoice/files/models/`: `whisper/ggml-small-q5_1.bin` (Whisper small q5_1, whisper.cpp CPU) + `dsp/` (12 QAIRT 2.50 Hexagon V79 libs). `llama/` is **empty** until the Llama NPU bundle is exported.
+- TTS: eSpeak NG (`com.reecedunn.espeak`) installed and set as default (`settings put secure tts_default_synth com.reecedunn.espeak`).
+**How the app runs without the Llama bundle:** `JniInferenceEngine(llmFallback = mock)` → speech-to-text is REAL (on-device Whisper, English mode, ~1.5–2 s per 10–15 s narration, EN WER 7 % on our 30 clips); form extraction / follow-ups / recommendations come from the mock LLM. Settings → Engine shows which LLM is active. Use English narration (Hinglish ASR is weak: CER ~70 %).
+**When the Llama bundle is ready (ETA ~04:30–05:00, announced in CHANGE.md + here):**
+- Option A (preferred): reconnect the QIDK to the ML laptop for ~15 min; the ML supervisor pushes `llama/` automatically (`deploy_app_models` job) and runs the NPU smoke test.
+- Option B: copy the bundle folder to the second laptop, then `bash scripts/push_models_to_board.sh <dir-with-llama/>` (needs adb in PATH or `ADB=...`).
+- Then in the app: Settings → Engine → Reload (or force-stop + reopen) → LLM runs on the Hexagon NPU.
+**Building the app on the second laptop:** `cd android && ./gradlew -PwithAndroid=true :app:assembleDebug` (JDK 17, Android SDK 35); native libs are prebuilt in `android/engine/src/main/jniLibs/arm64-v8a` (no NDK/QAIRT needed). See `handover_app.md`.
+**ML laptop keeps working on:** Llama 3.2 3B V79 export (upload now ~2.5 MB/s with 48 S3 connections; resumable), prompt accuracy (English first), device eval once the bundle is on the board.

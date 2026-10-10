@@ -122,3 +122,10 @@ Running log of what happened, what was decided, and where things stand. `PRD.md`
 - Demo seed data used an enum value that is not in the taxonomy (`UNAUTHORISED_ENTRY`) and missed a mandatory field; a new test asserts every demo incident validates.
 
 **Still unverified (needs the board):** real microphones + noise with the VAD thresholds, eSpeak voice, `libcdsprpc.so` visibility from the app (Plan A), Genie/whisper.cpp load inside the app, end-to-end latency. `scripts/app_device_check.sh` automates the checkable parts.
+
+### 2026-10-11 02:35 IST — Saarthak/ML: board handoff, export speed-up
+- Hotspot upload: one S3 connection gets ~30 kB/s, 12 parallel connections 1.2 MB/s aggregate (latency-bound, not bandwidth-bound). qai_hub patched to 16 MiB parts × 48 connections → Part 1 (820 MB) uploaded in ~5 min (was ~200 kB/s, ETA 6 AM). Export restarted with resume hook keyed by part name (`part:Llama3_2_3B_PartN_Of_3_w4a16.aimet`), so finished parts are never re-uploaded.
+- Kaggle export attempt failed: CPU box 31 GB RAM, no swap allowed → torch export OOM-killed; TPU v3-8 shape is retired (falls back to CPU). Kaggle path abandoned; private dataset `srthk4370/iv-secrets` (tokens) to be deleted.
+- Local fine-tuning rejected for now: it does not remove the export/upload bottleneck.
+- ASR decision: force_en (EN WER 7.0 %, 1.9 s/clip on QIDK; Hinglish CER 70 %+ in every mode).
+- QIDK moves to the second laptop for app testing with real Whisper + mock LLM; see STATUS.md "QIDK handoff".
