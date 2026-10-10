@@ -61,3 +61,14 @@
 - 11 02:32 [deploy_app_models] WARNING push failed twice: libQnnNetRunDirectV79Skel.so
 - 11 02:36 [deploy_app_models] WARNING push failed twice: libQnnSystem.so
 - 11 02:36 [deploy_app_models] WARNING push failed twice: libSnpeHtpV79Skel.so
+- 11 03:13 [export_llama] venv /home/hp_srthk4370/venvs/qaihm_pin: torch 2.10.0+cpu transformers 4.45.0 
+- 11 03:13 [export_llama] export start: llama_v3_2_3b_instruct (expect 3–5 h: local ONNX export, upload, cloud compile, download)
+- 11 03:31 [export_llama] export FAILED rc=143 for llama_v3_2_3b_instruct (see ~/iv/logs/export_llama.log); retrying/falling back
+- 11 03:31 [export_llama] patched qai_hub S3 upload: 16 MiB × 48 (per-connection ~30 kB/s, aggregate scales), standard retries, timeouts
+- 11 03:31 [export_llama] venv /home/hp_srthk4370/venvs/qaihm_pin: torch 2.10.0+cpu transformers 4.45.0 
+- 11 03:31 [export_llama] export start: llama_v3_2_3b_instruct (expect 3–5 h: local ONNX export, upload, cloud compile, download)
+- 11 03:31 [export_llama] export FAILED rc=137 for llama_v3_2_3b_instruct (see ~/iv/logs/export_llama.log); retrying/falling back
+- 11 03:31 [export_llama] export start: llama_v3_2_3b_instruct (expect 3–5 h: local ONNX export, upload, cloud compile, download)
+- 11 03:31 [export_llama] export start: llama_v3_2_3b_instruct (expect 3–5 h: local ONNX export, upload, cloud compile, download)
+- 11 03:33 [export_llama] venv /home/hp_srthk4370/venvs/qaihm_pin: torch 2.10.0+cpu transformers 4.45.0 
+- 11 03:33 [export_llama] export start: llama_v3_2_3b_instruct (expect 3–5 h: local ONNX export, upload, cloud compile, download)
