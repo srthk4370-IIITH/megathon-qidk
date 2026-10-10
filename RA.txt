@@ -1,0 +1,24 @@
+Requirement Analysis:
+Once a speech in inputted, the model transcribes it, then translates(filters it) and give proper english output… 
+Use that output to do the following:
+Understand the type of incident. 
+Fill the form (see the questions for form)
+Give the output to validator, it validates if all the questions are answered
+If not then go to text to speech and ask for missing fields.
+If yes, Go to another model and get recommended steps.
+(Optional) Speak out the recommended steps)
+Ingest all the data to database locally
+(Optional : Have a conversational interface, to get data about certain interface locally) 
+There has to be a dashboard which will have all incident recency based and could be searched keyword wis.
+(Optiona;l: Cloud Data and conversational management  wit proper corresponding alerts)
+
+SRS:
+Define types of incidents.
+Define questions regarding each type of incident.
+Models we are using: 
+Whisper-base (fine-tune for hinglish) for STT and llama 3.2 3B instruct for Reasoning and Validator, for TTS we use Android In=--built or SuperTonic…. 
+How do we use Questions for incident types:
+Once we get incident type, We will fetch questions regarding each incident type, This incident type is not like the incident type given in example, this is a more general type, which will only serve to fetch the kind of questions we need and then validator will do the rest.
+Other Clarification;
+The validator is not model based, but regarding if all questions are answered, the model is only trained to extract information and put it regarding the corresponding question. 
+Optional things will be done later. But bare minimum has to be done. Conversational interface will have vector database right? But 

@@ -1,0 +1,39 @@
+# Model artifacts and runtime binaries (never committed — see PRD §25.5, §34.3)
+*.bin
+*.onnx
+*.onnx.data
+*.data
+*.safetensors
+*.gguf
+*.qnn
+*.zip
+iv_models/
+_board_runtime_backup/
+
+# Eval audio (shared via drive, PRD §29.1)
+eval/clips/*.wav
+eval/results/
+
+# Android / Gradle
+.gradle/
+build/
+local.properties
+*.apk
+*.aab
+.idea/
+*.iml
+.cxx/
+.externalNativeBuild/
+
+# Native / Go / Python
+build-*/
+server-go/iv-server
+__pycache__/
+*.pyc
+.venv/
+.ipynb_checkpoints/
+
+# Secrets
+.env
+*.token
+kaggle.json
