@@ -36,6 +36,7 @@ private:
     std::mutex mu_;
     double load_ms_ = 0;
     std::string model_path_;
+    std::string initial_prompt_;  // optional domain hint read from <model dir>/prompt.txt (biases decoding)
 };
 
 // Post-processing shared with tests (PRD §16.6 hallucination filter + repetition guard).
