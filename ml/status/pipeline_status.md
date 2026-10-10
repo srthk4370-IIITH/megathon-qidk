@@ -14,3 +14,36 @@
 - 11 00:08 [export_llama] export start: llama_v3_2_3b_instruct (expect 3–5 h: local ONNX export, upload, cloud compile, download)
 - 11 00:14 [build_native] native build OK
 - 11 00:14 [build_native] DONE
+- 11 00:19 [host_eval] host eval start (150 cases, laptop GPU 4-bit)
+- 11 00:19 [deploy_runtime] ASR smoke jfk.wav: {"backend":"cpu-whispercpp","chunks":[{"end_ms":11000,"lang":"en","start_ms":0,"text":"And so, my fellow Americans, ask not what your country can do for you, ask what you can do for your country."}],"lang":"en","text":"And so, my fellow Americans, ask not what your country can do for you, ask what you can do for your country.","timings":{"dec_ms":3446.208332,"enc_ms":0.0,"mel_ms":0.0,"tokens":27,"total_ms":3446.219321}}
+- 11 00:19 [deploy_runtime] DONE
+- 11 00:30 [deploy_runtime] ASR smoke jfk.wav: {"backend":"cpu-whispercpp","chunks":[{"end_ms":11000,"lang":"en","start_ms":0,"text":"And so my fellow Americans, ask not what your country can do for you, ask what you can do for your country."}],"lang":"en","text":"And so my fellow Americans, ask not what your country can do for you, ask what you can do for your country.","timings":{"dec_ms":1453.798801,"enc_ms":0.0,"mel_ms":0.0,"tokens":26,"total_ms":1453.810468}}
+- 11 00:30 [deploy_runtime] DONE
+- 11 00:34 [export_llama] patched qai_hub S3 upload: 64 MiB × 8, standard retries, timeouts
+- 11 00:34 [export_llama] venv /home/hp_srthk4370/venvs/qaihm_pin: torch 2.10.0+cpu transformers 4.45.0 
+- 11 00:34 [export_llama] export start: llama_v3_2_3b_instruct (expect 3–5 h: local ONNX export, upload, cloud compile, download)
+- 11 00:45 [asr_eval] run_device asr en non-zero
+- 11 00:45 [asr_eval] ASR en: 
+- 11 00:45 [asr_eval] run_device asr hi non-zero
+- 11 00:45 [asr_eval] ASR hi: 
+- 11 00:46 [asr_eval] run_device asr auto non-zero
+- 11 00:46 [asr_eval] ASR auto: 
+- 11 00:46 [asr_eval] ASR default language mode chosen: auto (see eval/results/asr_*/report.md)
+- 11 00:46 [asr_eval] DONE
+- 11 00:49 [asr_eval] ASR en: | Lang | n | WER | CER | ASR p50 ms | p90 ms | 
+-  [asr_eval] run_device asr hi non-zero
+-  [asr_eval] ASR hi: 
+-  [asr_eval] run_device asr auto non-zero
+-  [asr_eval] ASR auto: 
+- 11 00:51 [export_llama] venv /home/hp_srthk4370/venvs/qaihm_pin: torch 2.10.0+cpu transformers 4.45.0 
+- 11 00:51 [export_llama] export start: llama_v3_2_3b_instruct (expect 3–5 h: local ONNX export, upload, cloud compile, download)
+- 11 00:51 [host_eval] host eval start (150 cases, laptop GPU 4-bit)
+- 11 00:51 [asr_eval] ASR en: | Lang | n | WER | CER | ASR p50 ms | p90 ms | 
+- 11 00:53 [host_eval] run_host non-zero (resumable; supervisor will retry)
+- 11 00:53 [host_eval] host eval scored: | Type accuracy | 81.0 % | ≥ 90 % | | Per-field F1 (micro) | 0.611 (P 0.565 / R 0.666) | ≥ 0.80 | | Per-field F1 (macro) | 0.409 | — | | Mapping accuracy | 83.1 % | ≥ 95 % | 
+- 11 00:53 [host_eval] DONE
+- 11 01:05 [asr_eval] ASR hi: | Lang | n | WER | CER | ASR p50 ms | p90 ms | 
+- 11 01:11 [asr_eval] ASR auto: | Lang | n | WER | CER | ASR p50 ms | p90 ms | 
+- 11 01:11 [asr_eval] ASR default language mode chosen: en (see eval/results/asr_*/report.md)
+- 11 01:11 [asr_eval] DONE
+- 11 01:13 [deploy_app_models] app models: whisper+dsp pushed to /sdcard/Android/data/com.megathon.incidentvoice/files/models (llama follows when exported)
