@@ -86,3 +86,10 @@ Cut per rev 1.1 (not built): draft-resume UI, charts, status lifecycle beyond SU
 - Models are on the board (whisper + dsp); eSpeak default TTS. Llama `llama/` still empty → app uses the mock LLM.
 - ML side stopped all app testing/fixes; the in-progress engine/app fixes made during on-device testing are committed (see git log "handoff:"). One last uncommitted edit (`AppContainer.kt`) is committed with this note. App team continues on the second laptop from `main`.
 - ML laptop now works only on the Llama V79 export, prompt accuracy and device eval.
+
+### 02:58 — QIDK can leave the ML laptop (green light)
+- The Llama export needs NO board: it runs unattended under the `IV_Supervisor` scheduled task (every 5 min), restarts on crash, resumes without re-uploading finished parts, and has a hang guard.
+- When it finishes, `publish_bundle` (automatic) verifies the bundle, copies it to `C:\iv_models\llama`, and pushes `models_dist/llama_meta/` (genie_config, tokenizer, AI Hub link-job ids) to GitHub. Watch for the commit "models: Llama V79 bundle metadata".
+- **Get the bundle on any laptop:** `pip install qai-hub`, `qai-hub configure --api_token <same AI Hub token>`, `python scripts/fetch_llama_bundle.py models_dist/llama` (downloads ~2.4 GB from AI Hub), then `bash scripts/push_models_to_board.sh models_dist` → app Settings → Engine → Reload.
+- Or reconnect the QIDK to the ML laptop: `deploy_llama` → `deploy_app_models` → NPU smoke test → device eval run automatically.
+- Progress: `ml/status/pipeline_status.md` (ML laptop) ; jobs/logs `~/iv/state`, `~/iv/logs` in WSL.
