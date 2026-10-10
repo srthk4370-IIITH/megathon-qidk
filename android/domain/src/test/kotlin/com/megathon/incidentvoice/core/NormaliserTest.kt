@@ -71,4 +71,11 @@ class NormaliserTest {
         assertTrue(stopped.none { it.sopId == "WATER-01" }) // when: leak_status ONGOING/UNKNOWN
         assertTrue(sel.emergencySteps(Fx.form("incident_type" to "FIRE")).isNotEmpty())
     }
+
+    @Test fun asrPrompt_isShortAndNamesTopicsAndAnswers() {
+        val p = AsrPrompt.build(Fx.tx, Fx.registry)
+        assertTrue(p.length <= 600, p.length.toString())
+        for (w in listOf("water leak", "fire", "forklift", "Bay 4", "Conference Room 2", "it is minor", "stopped", "called")) assertTrue(p.contains(w), "$w missing in: $p")
+        println(p)
+    }
 }

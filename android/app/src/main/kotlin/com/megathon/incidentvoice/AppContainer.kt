@@ -18,6 +18,7 @@ import com.megathon.incidentvoice.engine.JniInferenceEngine
 import com.megathon.incidentvoice.engineglue.DomainToMlEngine
 import com.megathon.incidentvoice.engineglue.MlEngineAdapter
 import com.megathon.incidentvoice.engineglue.SwitchableEngine
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.first
 import com.megathon.incidentvoice.orchestrator.AudioInput
 import com.megathon.incidentvoice.orchestrator.ConversationOrchestrator
@@ -52,7 +53,7 @@ class AppContainer(val context: Context) {
         }
     }
 
-    private val mockEngine: InferenceEngine by lazy { MockInferenceEngine(config.taxonomy) }
+    private val mockEngine: InferenceEngine by lazy { MockInferenceEngine(config.taxonomy, registry = config.registry) }
 
     /** ML branch's in-process engine (Plan A): whisper.cpp + Genie on the HTP, via libiv_native.so. */
     private val jni: JniInferenceEngine by lazy {
@@ -79,6 +80,7 @@ class AppContainer(val context: Context) {
 
     /** AUTO → on-device engine when its model files are on the board, else Mock. */
     fun selectEngine(mode: String) {
+        writeAsrPrompt()
         // `adb shell touch <externalFilesDir>/force_mock` keeps AUTO on the Mock engine (so installing the app
         // never grabs the NPU while the ML owner is running jobs on the board).
         val forceMock = File(context.getExternalFilesDir(null), "force_mock").exists()
@@ -94,6 +96,18 @@ class AppContainer(val context: Context) {
             runCatching { engine.warmup() }
             if (useJni && ok && !jni.llmOnNpu()) watchForLlama()
         }
+    }
+
+    /**
+     * Writes the speech-recogniser hint next to the Whisper model (`models/whisper/prompt.txt`). The native engine
+     * reads it when it loads the model (see docs/proposals/asr_initial_prompt.patch); older native builds ignore it.
+     */
+    private fun writeAsrPrompt() {
+        runCatching {
+            val f = File(modelsDir, "${config.app.models.whisperDir}/prompt.txt")
+            val text = com.megathon.incidentvoice.core.AsrPrompt.build(config.taxonomy, config.registry)
+            if (!f.exists() || f.readText() != text) f.writeText(text)
+        }.onFailure { android.util.Log.w("IV", "could not write ASR prompt: ${it.message}") }
     }
 
     private var llamaWatcher: kotlinx.coroutines.Job? = null
@@ -132,6 +146,47 @@ class AppContainer(val context: Context) {
                 OrchestratorSettings(s.reporter, s.ertNumber, s.speakQuestions, s.vadEndSilenceMs)
             },
         )
+    }
+
+    // ---- Ask tab (PRD §37 O-2): vector index + conversational query over the local database
+    val embedder: com.megathon.incidentvoice.ask.Embedder? by lazy { com.megathon.incidentvoice.ask.OnnxMiniLmEmbedder.fromAssets(context) }
+    val askService: com.megathon.incidentvoice.ask.AskService by lazy {
+        com.megathon.incidentvoice.ask.AskService(
+            repository, com.megathon.incidentvoice.ask.RuleQueryParser(config.taxonomy, config.registry),
+            com.megathon.incidentvoice.ask.AnswerComposer(config.taxonomy), embedder,
+        )
+    }
+    val askController: com.megathon.incidentvoice.ask.AskController by lazy {
+        com.megathon.incidentvoice.ask.AskController(appScope, askService, engine, audio, tts, { settingsSnapshot.value.speakQuestions }, embedder != null)
+    }
+
+    /** Keeps the vector index in step with the reports: runs at start and ~2 s after any report changes. */
+    @OptIn(kotlinx.coroutines.FlowPreview::class)
+    fun startIndexing() {
+        appScope.launch {
+            repository.observeChanges().debounce(2000).collect {
+                val t0 = System.currentTimeMillis()
+                val n = runCatching { askService.syncIndex() }.getOrDefault(0)
+                if (n > 0) android.util.Log.i("IV", "vector index: embedded $n report(s) in ${System.currentTimeMillis() - t0} ms")
+            }
+        }
+    }
+
+    /** logcat trace of the conversation (tag IV): state changes, every bubble, timings. `adb logcat -s IV` during tests/demo. */
+    fun traceConversation() {
+        appScope.launch {
+            var lastState: Any? = null; var seen = 0; var lastDebug = ""
+            orchestrator.ui.collect { u ->
+                if (u.state != lastState) { android.util.Log.i("IV", "state ${lastState} -> ${u.state} round=${u.round} missing=${u.validation?.missing}"); lastState = u.state }
+                if (u.timeline.size < seen) seen = 0
+                u.timeline.drop(seen).forEach { android.util.Log.i("IV", "bubble ${it.role}: ${it.text}") }
+                seen = u.timeline.size
+                val d = "asr=${u.debug.asrMs}ms llm=${u.debug.llmMs}ms tok=${u.debug.tokensOut} task=${u.debug.lastTask}"
+                if (d != lastDebug && u.debug.lastTask.isNotBlank()) { android.util.Log.i("IV", "timing $d"); lastDebug = d }
+                u.error?.let { android.util.Log.w("IV", "error: $it") }
+                u.notice?.let { android.util.Log.i("IV", "notice: $it") }
+            }
+        }
     }
 
     fun startEngine() { appScope.launch { selectEngine(settings.flow.first().engineMode) } }

@@ -21,7 +21,14 @@ data class DashboardFilter(
     val statuses: Set<String> = emptySet(),
     val fromMs: Long? = null,
     val toMs: Long? = null,
+    /** Ask tab (O-2): site-registry ids and/or a spoken place; either may match. */
+    val locationIds: Set<String> = emptySet(),
+    val locationText: String? = null,
+    val injuries: String? = null,
 )
+
+/** Text that is embedded for one incident, with a hash so unchanged incidents are not re-embedded. */
+data class VectorSource(val incidentId: String, val text: String, val hash: String)
 
 data class IncidentListItem(
     val id: String, val refNo: String?, val title: String, val type: String?, val severity: String?, val status: String,
@@ -60,4 +67,16 @@ interface IncidentRepository {
     suspend fun latestDraft(maxAgeMs: Long): String?
     suspend fun purgeOldDrafts(maxAgeMs: Long): Int
     suspend fun countAll(): Int
+
+    // ---- Ask tab / vector index (PRD §37 O-2). Defaults keep simple fakes valid.
+    /** One-shot filtered list (not DRAFT), newest first. */
+    suspend fun listFiltered(filter: DashboardFilter, limit: Int = 500): List<IncidentListItem> = emptyList()
+    /** Ids of incidents whose search text matches the FTS expression. */
+    suspend fun keywordIds(ftsQuery: String): Set<String> = emptySet()
+    /** Incidents whose embedding is missing or stale for [modelId]. */
+    suspend fun staleVectorSources(modelId: String): List<VectorSource> = emptyList()
+    suspend fun saveVector(incidentId: String, modelId: String, hash: String, vector: FloatArray) {}
+    suspend fun vectors(modelId: String): Map<String, FloatArray> = emptyMap()
+    /** Emits whenever any incident changes (used to keep the vector index fresh). */
+    fun observeChanges(): Flow<Long> = kotlinx.coroutines.flow.emptyFlow()
 }

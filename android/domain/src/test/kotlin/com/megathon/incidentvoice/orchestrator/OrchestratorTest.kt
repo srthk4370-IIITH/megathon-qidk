@@ -20,7 +20,7 @@ class OrchestratorTest {
     }
 
     private class Rig(scope: TestScope, cfg: AppConfigBundle, utterances: List<String>, ready: Boolean = true) {
-        val engine = MockInferenceEngine(cfg.taxonomy, asrDelayMs = 0, tokensPerSecond = 0.0, utterances = utterances)
+        val engine = MockInferenceEngine(cfg.taxonomy, asrDelayMs = 0, tokensPerSecond = 0.0, utterances = utterances, registry = cfg.registry)
         val repo = InMemoryRepo()
         val tts = FakeTts(ready)
         val audio = FakeAudio()
@@ -74,6 +74,17 @@ class OrchestratorTest {
         advanceUntilIdle()
         val n = r.inc.turns.first { it.kind == "NARRATION" }
         assertEquals("water leak near the server room", n.textEdited); assertEquals("A-2-SRV", r.inc.form.locationId)
+    }
+
+    @Test fun transcriptFocused_holdsCountdown_untilContinue() = runTest {
+        val r = rig("virtual leap near the pantry", "nobody hurt minor", "pipe burst stopped")
+        r.o.startNew(); r.o.onMicTapped(); testScheduler.runCurrent(); testScheduler.advanceTimeBy(500)
+        r.o.onTranscriptFocus(true)
+        testScheduler.advanceTimeBy(20_000)                       // user takes their time fixing the word
+        assertEquals(ConvState.TRANSCRIPT_REVIEW, r.o.ui.value.state)
+        r.o.onTranscriptEdited("water leak near the pantry"); r.o.onContinue(); advanceUntilIdle()
+        assertEquals("WATER", r.o.ui.value.form.incidentType)
+        assertEquals("water leak near the pantry", r.inc.turns.first { it.kind == "NARRATION" }.textEdited)
     }
 
     @Test fun onContinue_skipsCountdown() = runTest {

@@ -56,6 +56,7 @@ class ConversationOrchestrator(
     private var spokeComplete = false
     private var editingRef: String? = null
     @Volatile private var generating = false
+    @Volatile private var transcriptFocused = false
 
     // =========================================================================================
     // UI API (§22.2)
@@ -94,6 +95,8 @@ class ConversationOrchestrator(
     }
 
     fun onTranscriptEdited(text: String) { narrationText = text; edited = true; update { it.copy(transcriptDraft = text) } }
+    /** While the transcript field has focus the auto-proceed countdown is held: the user is correcting a mis-heard word. */
+    fun onTranscriptFocus(focused: Boolean) { transcriptFocused = focused; if (focused) edited = true }
     fun onContinue() { cont?.complete(Unit) }
 
     fun onReviewNow() {
@@ -232,12 +235,12 @@ class ConversationOrchestrator(
         var finalText = text
         if (fromVoice) {
             // §8.2 TRANSCRIPT_REVIEW: editable, auto-proceed after 2 s without edits
-            edited = false; cont = CompletableDeferred()
+            edited = false; transcriptFocused = false; cont = CompletableDeferred()
             update { it.copy(state = ConvState.TRANSCRIPT_REVIEW, transcriptDraft = text, countdownMs = conv.transcriptAutoproceedMs) }
             var remaining = conv.transcriptAutoproceedMs
             while (remaining > 0 && cont?.isCompleted != true) {
                 delay(100)
-                if (edited) { edited = false; remaining = conv.transcriptAutoproceedMs } else remaining -= 100
+                if (edited || transcriptFocused) { edited = false; remaining = conv.transcriptAutoproceedMs } else remaining -= 100
                 update { it.copy(countdownMs = remaining.coerceAtLeast(0)) }
             }
             finalText = narrationText.trim().ifEmpty { text }

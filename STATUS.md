@@ -93,3 +93,21 @@ Cut per rev 1.1 (not built): draft-resume UI, charts, status lifecycle beyond SU
 - **Get the bundle on any laptop:** `pip install qai-hub`, `qai-hub configure --api_token <same AI Hub token>`, `python scripts/fetch_llama_bundle.py models_dist/llama` (downloads ~2.4 GB from AI Hub), then `bash scripts/push_models_to_board.sh models_dist` → app Settings → Engine → Reload.
 - Or reconnect the QIDK to the ML laptop: `deploy_llama` → `deploy_app_models` → NPU smoke test → device eval run automatically.
 - Progress: `ml/status/pipeline_status.md` (ML laptop) ; jobs/logs `~/iv/state`, `~/iv/logs` in WSL.
+
+## App branch — QIDK session results (2026-10-11 03:00–04:00)
+
+Run on the real board (SM8750P, Android 15) from the App laptop. Legend as above; ✅ here means verified **on the QIDK**.
+
+| Area | State on the QIDK | Notes |
+|---|---|---|
+| Install / signing | ✅ | Shared debug key in the repo; `adb install -r` works from any laptop. Models survive. |
+| Native engine in-app | ✅ (ASR) / ⏳ (LLM) | `libiv_native`, Genie and QNN libs incl. `libQnnHtpV79Stub` load; whisper.cpp loads in ~120 ms. Llama bundle not on the board yet → rule-based stand-in LLM. |
+| Mic + Silero VAD | ✅ | Auto-stop works; platform noise suppressor + echo canceller active. Recordings have ≈ 11 dB speech-to-noise. |
+| ASR accuracy | 🟡 | 5/9 live utterances exact with the current native lib; 8/9 with the domain hint (needs the ML patch + rebuild). ~0.8–1.7 s per utterance. |
+| Spoken follow-ups (eSpeak) | ✅ | Questions and the emergency warning are spoken; answers are heard and applied. |
+| Extraction / follow-ups without Llama | ✅ (stand-in) | `RuleBasedLlm`: 99 % type accuracy on the EN eval cases (tuned on them). Real accuracy comes with Llama. |
+| Emergency banner | ✅ | "fire spreading … unconscious" → banner, spoken warning, CRITICAL by rule. |
+| Database | ✅ | integrity ok; drafts, turns, audit, recommendations, FTS, vectors; v1→v2 migration ran on real data. |
+| Dashboard / detail / edit | ✅ | Demo data loaded on the board; search, filters, detail. |
+| Ask tab (O-2) | ✅ | Counts, place and time questions, meaning-based search ("toxic fumes" → ammonia leak), ~50 ms per question. Voice questions use the same mic/Whisper path. |
+| End-to-end latency (mock LLM) | ✅ | speech end → form ≈ 1.7 s ASR + 2 s review + mock LLM; real LLM timing pending the bundle. |

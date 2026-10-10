@@ -1,0 +1,49 @@
+--- a/native/src/asr_engine.h	2026-10-11 03:15:52
++++ b/native/src/asr_engine.h	2026-10-11 03:15:52
+@@ -36,6 +36,7 @@
+     std::mutex mu_;
+     double load_ms_ = 0;
+     std::string model_path_;
++    std::string initial_prompt_;  // optional domain hint read from <model dir>/prompt.txt (biases decoding)
+ };
+ 
+ // Post-processing shared with tests (PRD §16.6 hallucination filter + repetition guard).
+--- a/native/src/asr_engine.cpp	2026-10-11 03:15:52
++++ b/native/src/asr_engine.cpp	2026-10-11 03:15:52
+@@ -4,6 +4,7 @@
+ #include <cctype>
+ #include <cstring>
+ #include <chrono>
++#include <fstream>
+ #include <cmath>
+ #include <regex>
+ #include <sstream>
+@@ -79,6 +80,20 @@
+     if (!ctx_) throw std::runtime_error("IV-E202 whisper init failed: " + model_path);
+     threads_ = threads;
+     model_path_ = model_path;
++    // Optional decoder bias: a short domain hint in <model dir>/prompt.txt (written by the app from the taxonomy and
++    // site registry). Greedy small-q5_1 heard "virtual leap" for "water leak" on a board recording (SNR ~11 dB);
++    // with the hint it decodes "water leak" at no extra cost. Keep it short (well under Whisper's 224-token prompt limit); IV_ASR_PROMPT=0 disables.
++    initial_prompt_.clear();
++    const char* ip = getenv("IV_ASR_PROMPT");
++    if (!(ip && ip[0] == '0')) {
++        const auto slash = model_path.find_last_of('/');
++        std::ifstream pf((slash == std::string::npos ? std::string(".") : model_path.substr(0, slash)) + "/prompt.txt");
++        if (pf) {
++            std::stringstream ss; ss << pf.rdbuf();
++            initial_prompt_ = ss.str().substr(0, 800);
++            while (!initial_prompt_.empty() && (initial_prompt_.back() == '\n' || initial_prompt_.back() == '\r' || initial_prompt_.back() == ' ')) initial_prompt_.pop_back();
++        }
++    }
+     load_ms_ = ms_since(t0);
+     IV_LOGI("whisper.cpp loaded %s in %.0f ms (threads=%d flash=%d)", model_path.c_str(), load_ms_, threads, (int)cp.flash_attn);
+ }
+@@ -101,6 +116,7 @@
+     p.suppress_blank = true;
+     p.print_progress = p.print_realtime = p.print_special = p.print_timestamps = false;
+     p.temperature_inc = 0.0f;  // no temperature fallback: deterministic + faster
++    if (!initial_prompt_.empty()) p.initial_prompt = initial_prompt_.c_str();  // applied even with no_context
+     // Optional: shrink the encoder window for short clips (default on; IV_ASR_AUDIO_CTX=0 disables).
+     const char* ac = getenv("IV_ASR_AUDIO_CTX");
+     if (!(ac && ac[0] == '0')) {  // default ON: ~2x faster on short clips, same text on tests

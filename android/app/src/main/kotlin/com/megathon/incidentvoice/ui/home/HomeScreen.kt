@@ -68,7 +68,7 @@ fun EnginePill(s: EngineStatus, llm: String = "") {
     val (text, color) = when (s) {
         is EngineStatus.Ready -> when {
             s.info.backend == "MOCK" -> "Mock engine ready" to FilledGreen
-            llm == "FALLBACK" -> "On-device ASR ready · LLM mock (bundle pending)" to Color(0xFFEF6C00)
+            llm == "FALLBACK" -> "On-device speech ready · LLM: mock" to Color(0xFFEF6C00)
             else -> "NPU ready" to FilledGreen
         }
         is EngineStatus.Loading -> "Loading models… ${(s.progress * 100).toInt()} %" to Color(0xFFF9A825)
