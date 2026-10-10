@@ -47,4 +47,16 @@ done_ export_llama && start publish_bundle
 { done_ export_llama && done_ deploy_runtime; } && start deploy_llama
 done_ deploy_llama && start probe_planA
 { done_ deploy_llama && done_ probe_planA; } && start eval_device
+# ---- fine-tune pipeline (PRD §27; ft_*.sh). Heavy-RAM steps wait for the stock export's conversion to finish.
+stock_ready(){ done_ export_llama && return 0
+  pgrep -f 'bin/qai-hub-models export' >/dev/null || return 0
+  tac "$HOME/iv/logs/export_llama.log" 2>/dev/null | sed '/STATUS export start/q' | grep -qaE "(\[iv-resume\] (uploaded|reuse cached upload|reuse recent upload)|Uploading Llama3_2_3B).*Part3_Of_3"; }
+start ft_data
+done_ ft_data && start ft_kaggle_push
+done_ ft_kaggle_push && start ft_kaggle_fetch
+{ [ -f "$ST/ft_use_laptop" ] && stock_ready && [ ! -f "$HOME/iv_ft/adapter/adapter_config.json" ]; } && start ft_train_laptop
+{ [ -f "$HOME/iv_ft/adapter/adapter_config.json" ] && stock_ready; } && start ft_merge
+done_ ft_merge && start ft_gate
+{ done_ ft_gate && stock_ready; } && start ft_export
+{ done_ ft_gate && [ -f "$HOME/iv_ft/ft_ckpt_w4a16/SCALES_OK" ]; } && start ft_eval_full
 exit 0
