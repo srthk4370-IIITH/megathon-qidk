@@ -4,6 +4,8 @@
 JOB=kaggle_fetch; source $HOME/iv/jobs/common.sh
 K=$HOME/venvs/kaggle/bin/kaggle; KID=srthk4370/iv-llama-v79-export
 DST=$HOME/iv_exports/llama_v3_2_3b_instruct_v79/kaggle
+# wait for launch.sh (status of older kernel versions reads ERROR)
+until [ -f "$ST/kaggle_launched" ] && [ $(( $(date +%s) - $(stat -c %Y "$ST/kaggle_launched") )) -gt 120 ]; do sleep 30; done
 while true; do
   [ -f "$ST/export_llama.done" ] && { status "export already done elsewhere; stop"; mark_done; exit 0; }
   s=$($K kernels status $KID 2>&1 | tail -1)

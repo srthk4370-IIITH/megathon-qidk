@@ -22,16 +22,16 @@ D = os.path.dirname(S)
 os.makedirs(os.path.expanduser("~/.qai_hub"), exist_ok=True)
 shutil.copy(S, os.path.expanduser("~/.qai_hub/client.ini"))
 os.environ["HF_TOKEN"] = open(os.path.join(D, "hf_token")).read().strip()
-sh("free -g; nproc; df -h /kaggle/temp /kaggle/working | tail -2; python -V")
+sh("free -g; nproc; df -h / /tmp /kaggle/working; python -V")
 sh("pip install -q torch==2.10.0 torchvision==0.25.0 --index-url https://download.pytorch.org/whl/cpu")
 sh("pip install -q 'qai-hub-models[llama-v3-2-3b-instruct]==0.63.0'")
 sh("pip list 2>/dev/null | grep -E '^(torch|transformers|qai.hub) '")
-# the export recommends 80 GB RAM+swap
-sh("fallocate -l 48G /kaggle/temp/swap && chmod 600 /kaggle/temp/swap && mkswap /kaggle/temp/swap "
-   "&& swapon /kaggle/temp/swap; free -g")
-os.environ["TMPDIR"] = "/kaggle/temp/tmp"
-os.makedirs("/kaggle/temp/tmp", exist_ok=True)
-out = "/kaggle/temp/genie"
+# TPU VM (~330 GB RAM): no swap needed; the CPU box (31 GB, no swap allowed) OOM-kills the export
+W = "/kaggle/temp" if os.path.isdir("/kaggle/temp") else "/tmp/iv"
+os.makedirs(W, exist_ok=True)
+os.environ["TMPDIR"] = f"{W}/tmp"
+os.makedirs(f"{W}/tmp", exist_ok=True)
+out = f"{W}/genie"
 t = time.time()
 rc = sh("qai-hub-models export llama_v3_2_3b_instruct --device 'Samsung Galaxy S25 (Family)' "
         f"--target-runtime genie --skip-profiling --output-dir {out} 2>&1 "

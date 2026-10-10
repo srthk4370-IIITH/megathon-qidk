@@ -18,3 +18,4 @@ K2=~/iv/kaggle_kernel; rm -rf "$K2"; mkdir -p "$K2"
 cp "$HERE/export.py" "$HERE/kernel-metadata.json" "$K2/"; sed -i 's/\r$//' "$K2"/*
 $K kernels push -p "$K2"
 echo "started: https://www.kaggle.com/code/srthk4370/iv-llama-v79-export"
+touch ~/iv/state/kaggle_launched; rm -f ~/iv/state/kaggle_fetch.failed ~/iv/state/kaggle_fetch.done
