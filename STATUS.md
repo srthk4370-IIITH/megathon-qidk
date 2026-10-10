@@ -2,7 +2,7 @@
 
 Update this whenever something is built, breaks, or is decided. Feature IDs (F-xx) and milestones (M0–M4) refer to `PRD.md` §5 and §35.
 
-_Last updated: 2026-10-10 21:20 IST (Saarthak branch)_
+_Last updated: 2026-10-10 21:20 IST (ML branch)_
 
 ## Overall
 
@@ -32,8 +32,8 @@ _Last updated: 2026-10-10 21:20 IST (Saarthak branch)_
 
 | Branch | Area | Built so far |
 |---|---|---|
-| `Saarthak` | ML / NPU | Docs only. No models exported yet. |
-| `renny` (App) | App + dashboard | **All P0 app features built and run on Android 15 arm64 (emulator)**; 321 tests green (ML `:core` 190, app `:domain` 119, `:app` 12). ML's `:engine` (JNI, prebuilt libs) integrated behind an adapter; its native libs load inside the APK. **Not yet run on the QIDK** (board is on the ML machine) → `scripts/app_device_check.sh`. Details: section "App branch" below. |
+| the ML branch | ML / NPU | Docs only. No models exported yet. |
+| App branch | App + dashboard | **All P0 app features built and run on Android 15 arm64 (emulator)**; 321 tests green (ML `:core` 190, app `:domain` 119, `:app` 12). ML's `:engine` (JNI, prebuilt libs) integrated behind an adapter; its native libs load inside the APK. **Not yet run on the QIDK** (board is on the ML machine) → `scripts/app_device_check.sh`. Details: section "App branch" below. |
 
 ## Board / environment
 
@@ -45,7 +45,7 @@ _Last updated: 2026-10-10 21:20 IST (Saarthak branch)_
 | Whisper | P0 = whisper.cpp CPU (not started); NPU via ORT-QNN is P1 |
 | Plan A vs Plan B | Undecided (probe at ~H3) |
 
-## App branch (`renny`) — P0 feature status (2026-10-11 01:00)
+## App branch — P0 feature status (2026-10-11 01:00)
 
 Legend: ✅ built + verified by test and by running the APK on an Android 15 arm64 emulator · 🟡 built, needs the QIDK to verify · ⏳ waits for ML.
 

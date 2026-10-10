@@ -5,7 +5,7 @@ Purpose: announce any change on one branch that affects another branch (contract
 **Branches**
 | Branch | Area | Handover file |
 |---|---|---|
-| `Saarthak` | ML / NPU: models, export, native inference, prompts, taxonomy, eval | `handover_Saarthak.md` |
+| the ML branch | ML / NPU: models, export, native inference, prompts, taxonomy, eval | the ML handover file |
 | (Android branch, name TBD) | Android app, including the dashboard | `handover_<branch>.md` |
 
 Only two branches: **App** and **ML**. No separate web/dashboard branch.
@@ -21,18 +21,18 @@ Only two branches: **App** and **ML**. No separate web/dashboard branch.
 
 ---
 
-## 2026-10-10 — Saarthak — Project docs baseline
+## 2026-10-10 — ML branch — Project docs baseline
 - What changed: `PRD.md` v1.0 is the single source of truth. Shared contracts live in PRD Appendix A (`config/taxonomy.json`), B (`config/sop.json`), C (prompts), D (tool-call schemas + engine DTOs), E (SQL DDL).
 - Who is affected: all branches.
 - Action needed by others: any change to a field key, enum value, schema or DTO must be announced here **and** made in PRD.md in the same commit.
 - Commit: 8ff065e
 
-## 2026-10-10 — Saarthak — Decision: dashboard is app-only
+## 2026-10-10 — ML branch — Decision: dashboard is app-only
 - What changed: dashboard stays **inside the Android app** (PRD D-44 and §23 unchanged). No web dashboard, no Web branch. Branches are App + ML only.
 - Who is affected: Android branch (owns the dashboard: recency list, FTS search, filters, stats, detail view).
 - Action needed: none for ML; Android builds PRD §23 as specified.
 
-## 2026-10-10 21:20 — Saarthak — PRD rev 1.1 (affects App)
+## 2026-10-10 21:20 — ML branch — PRD rev 1.1 (affects App)
 - What changed (full list PRD §4.0 R1-01…R1-14):
   - **Search:** Room `@Fts4` instead of FTS5/bundled SQLite (PRD §21.4 note).
   - **Time:** if not spoken, `occurred_at` = report time, approximate, status `DEFAULTED` (amber in review), not asked.
@@ -43,7 +43,7 @@ Only two branches: **App** and **ML**. No separate web/dashboard branch.
 - Action needed: App follows PRD v1.1 §4.0; nothing else in the contracts (taxonomy, tool schemas, DTOs) changed.
 - Commit: (this commit)
 
-## 2026-10-10 22:05 — Saarthak — ML deliverables the App branch consumes
+## 2026-10-10 22:05 — ML branch — ML deliverables the App branch consumes
 - What changed:
   - **`config/`** is real now (taxonomy, sop, site_registry, app_config, prompts, schemas). Copy `config/` into app assets (PRD §20.10); never hard-code field names.
   - **`android/engine`** (Android library, namespace `com.megathon.incidentvoice.engine`): `InferenceEngine` interface + `JniInferenceEngine` (Plan A), `HttpInferenceEngine` (Plan B), `MockInferenceEngine` (slide-example script for UI work). Prebuilt `.so` files land in `android/engine/src/main/jniLibs/arm64-v8a/` once the native build finishes. Include with `include(":engine")` and `implementation(project(":engine"))`. Requires plugins `com.android.library`, `org.jetbrains.kotlin.android`, `org.jetbrains.kotlin.plugin.serialization` declared in the root build (App branch owns AGP version; ML assumes AGP 8.7.x, Kotlin 2.0.21).
@@ -55,7 +55,7 @@ Only two branches: **App** and **ML**. No separate web/dashboard branch.
 - Action needed: build UI against `MockInferenceEngine` now; switch to `JniInferenceEngine` when STATUS.md says the board is ready.
 - Commit: c20214b
 
-## 2026-10-11 00:50 — Saarthak — App can wire the REAL engine now (ASR live, LLM auto-switches)
+## 2026-10-11 00:50 — ML branch — App can wire the REAL engine now (ASR live, LLM auto-switches)
 - What changed:
   - `JniInferenceEngine(context, llmFallback = MockInferenceEngine())`: on-device **Whisper ASR works now** (whisper.cpp small, ~1.5 s for 11 s audio on the QIDK). Until the Llama V79 bundle is on the device, `generate()` is served by `llmFallback`. When the bundle arrives, call `engine.init()` again (e.g. on app start / a "Reload models" button) → `generate()` runs on the Hexagon NPU. `engine.llmOnNpu()` tells which is active (show it in the debug overlay).
   - ML pushes model files into the app dir automatically (`scripts/jobs/deploy_app_models.sh`): `/sdcard/Android/data/com.megathon.incidentvoice/files/models/{whisper,dsp,llama}`. **App package must be `com.megathon.incidentvoice`** (tell ML in CHANGE.md if different: set `IV_APP_PKG`).
@@ -64,12 +64,12 @@ Only two branches: **App** and **ML**. No separate web/dashboard branch.
 - Who is affected: App branch.
 - Action needed: `include(":engine")`, `implementation(project(":engine"))`, construct `JniInferenceEngine(applicationContext, llmFallback = MockInferenceEngine())`, call `init()` off the main thread at startup. Manifest gets `<uses-native-library libcdsprpc.so>` from the engine module automatically.
 
-## 2026-10-11 01:15 — Saarthak — ASR language decision: English mode
+## 2026-10-11 01:15 — ML branch — ASR language decision: English mode
 - What changed: measured on the team's 30 recorded clips on the QIDK (whisper.cpp small, CPU): **`en` mode → English WER 7.0 %, ~1.9 s per clip**; `auto` is 3× slower with no English gain; Hinglish is weak in every mode (Whisper-small translates/garbles code-mix). `config/app_config.json` → `asr.language_mode = force_en`.
 - Who is affected: App.
 - Action needed: call `transcribe(pcm, mode = LangMode.FORCE_EN)`. Hinglish speech still works end-to-end (the LLM gets an English-ish transcript), just less accurately.
 
-## 2026-10-11 03:45 — renny (App) — QIDK session: app on the board, ASR fix for ML to apply, shared signing key
+## 2026-10-11 03:45 — App branch — QIDK session: app on the board, ASR fix for ML to apply, shared signing key
 - **Board state (app side):** app reinstalled from this laptop (the ML-laptop build could not be updated: different debug key). Models were moved aside and restored; `models/{whisper,dsp,llama,vad}` are now app-owned folders. On the board: native libs load in-app incl. `libQnnHtpV79Stub.so` (so `libcdsprpc.so` is reachable → Plan A prerequisite OK), whisper.cpp loads in ~120 ms, mic + Silero VAD + eSpeak work, full spoken conversation completes.
 - **Shared debug key:** `android/app/debug.keystore` is committed and used by the debug build. **Every laptop now produces the same signature → `adb install -r` works across laptops; never uninstall.** (One-time: the ML laptop's old build is already replaced on the board.)
 - **ACTION FOR ML — ASR accuracy (ready patch):** on a live board recording (speech/noise ≈ 11 dB) greedy `small-q5_1` heard "virtual leap" for "water leak" and (offline, same audio) "it's my love" for "it's minor". A short Whisper `initial_prompt` fixes both at no decoding cost (beam 5 also fixes the first, beam 2 does not, peak-normalising does not).
@@ -80,7 +80,7 @@ Only two branches: **App** and **ML**. No separate web/dashboard branch.
 - **Earlier App entries were dropped from this file by a merge** (config provenance, FTS4 `tok*` syntax, no forced portrait, module layout `android/domain`, `-PwithAndroid=true`). They are in git history (`7173767:CHANGE.md`) and summarised in `handover_app.md`.
 - `adb logcat -s IV IVNative` now traces every conversation (state changes, transcripts, timings).
 
-## 2026-10-11 04:00 — renny (App) — Ask tab (O-2): conversational query + vector index; ASR hint v2
+## 2026-10-11 04:00 — App branch — Ask tab (O-2): conversational query + vector index; ASR hint v2
 - **New (app only, optional feature O-2):** fourth tab "Ask". A typed or spoken question → `IncidentQuery` (rules: type, severity, place from the site registry, date range, "how many", "latest", "what happened") → SQL filters ∩ (vector similarity ∪ FTS4 keyword) → short spoken answer + result cards. "Similar incidents" on the detail screen uses the same index.
 - **Vector index:** `all-MiniLM-L6-v2` (quantized ONNX, 23 MB, 384-d) bundled in `android/app/src/main/assets/models/minilm/`, run with the ONNX Runtime already in the APK. Vectors live in a new Room table `incident_vectors` (DB **version 2**, migration 1→2 adds the table only; tested on the board's existing database). No SQLite extension. On the QIDK: 10 reports embedded in ~200 ms, a question takes ~50 ms. APK is now ~97 MB.
 - **Hook for Llama:** `QueryUnderstanding` is the single interface that produces `IncidentQuery`; today `RuleQueryParser`. When ML adds a `search_incidents` tool/prompt (PRD §37 O-2), an LLM implementation plugs in there and nothing else changes. Nothing is needed from ML for the current version.

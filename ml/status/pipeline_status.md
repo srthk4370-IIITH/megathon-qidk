@@ -72,3 +72,9 @@
 - 11 03:31 [export_llama] export start: llama_v3_2_3b_instruct (expect 3–5 h: local ONNX export, upload, cloud compile, download)
 - 11 03:33 [export_llama] venv /home/hp_srthk4370/venvs/qaihm_pin: torch 2.10.0+cpu transformers 4.45.0 
 - 11 03:33 [export_llama] export start: llama_v3_2_3b_instruct (expect 3–5 h: local ONNX export, upload, cloud compile, download)
+- 11 04:20 [ft_data] data: {"train_extract": 2000, "train_patch": 795, "dev": 160, "rejected": {"dup": 4, "near_eval": 7}, "lang": {"en": 1007, "hinglish": 993}, "noisy_frac": 0.457, "cat
+- 11 04:20 [ft_data] DONE
+- 11 04:28 [ft_kaggle_push] kaggle dataset srthk4370/iv-ft-data ready (private)
+- 11 04:29 [ft_kaggle_push] kaggle training kernel pushed: https://www.kaggle.com/code/srthk4370/iv-ft-train
+- 11 04:29 [ft_kaggle_push] DONE
+- 11 04:34 [ft_kaggle_fetch] GAVE UP: kaggle kernel finished without adapter: {"ok": false, "error": "inputs missing: model=meta-llama/Llama-3.2-3B-Instruct data=/kaggle/input/datasets/srthk4370/iv-ft-data"} → laptop fallback  (rm ~/iv/state/ft_kaggle_fetch.failed to retry)

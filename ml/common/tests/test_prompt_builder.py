@@ -49,7 +49,7 @@ def test_field_catalogue_lines():
 
 
 def test_tool_schema_compact():
-    p = pb.render_extract("x", "ft")
+    p = pb.render_extract("x", "base")
     assert '{"name":"fill_incident_form","description":"Fill the incident report form from the transcript. Omit unknown fields.","parameters":{"type":"object"' in p
 
 
