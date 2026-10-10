@@ -63,3 +63,8 @@ Only two branches: **App** and **ML**. No separate web/dashboard branch.
   - Language: pass `LangMode.AUTO_EN_HI` for now (ASR eval on the 30 clips decides the default; will be posted here).
 - Who is affected: App branch.
 - Action needed: `include(":engine")`, `implementation(project(":engine"))`, construct `JniInferenceEngine(applicationContext, llmFallback = MockInferenceEngine())`, call `init()` off the main thread at startup. Manifest gets `<uses-native-library libcdsprpc.so>` from the engine module automatically.
+
+## 2026-10-11 01:15 — Saarthak — ASR language decision: English mode
+- What changed: measured on the team's 30 recorded clips on the QIDK (whisper.cpp small, CPU): **`en` mode → English WER 7.0 %, ~1.9 s per clip**; `auto` is 3× slower with no English gain; Hinglish is weak in every mode (Whisper-small translates/garbles code-mix). `config/app_config.json` → `asr.language_mode = force_en`.
+- Who is affected: App.
+- Action needed: call `transcribe(pcm, mode = LangMode.FORCE_EN)`. Hinglish speech still works end-to-end (the LLM gets an English-ish transcript), just less accurately.
