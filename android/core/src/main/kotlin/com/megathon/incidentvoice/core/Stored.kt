@@ -154,11 +154,11 @@ object FormMapper {
 
 /** PRD §21.4/§21.5 */
 object SearchQueryBuilder {
-    /** `water conf` → `"water"* "conf"*`; null when nothing searchable. */
+    /** `water conf` → `water* conf*` (FTS4 prefix syntax; tokens lower-cased so AND/OR/NOT are never operators); null when nothing searchable. */
     fun build(text: String): String? {
         val toks = text.split(Regex("[^\\p{L}\\p{N}]+")).filter { it.length >= 2 }
         if (toks.isEmpty()) return null
-        return toks.joinToString(" ") { "\"${it.replace("\"", "")}\"*" }
+        return toks.joinToString(" ") { it.lowercase() + "*" }
     }
 }
 

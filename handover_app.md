@@ -24,14 +24,29 @@ In: 30 s narration cap, Silero VAD, whisper.cpp via `transcribe()`, validator lo
 
 Out (P1+): chunked 3-min narration, draft-resume UI, multi-incident follow-through, status lifecycle beyond SUBMITTED, dashboard stats/charts, PDF/JSON export, prefix cache, LLM-tailored recs, per-field mic, fine-tuning.
 
-## Current state
+## Current state (2026-10-10 night)
 
-- 2026-10-10: nothing built yet. Plan under review (see the session summary). No `android/` directory exists.
+Done on the Mock engine: Stage A (`:core`), B (Room+FTS4, dashboard, detail), C (orchestrator, home/conversation/review/submitted). ~116 JVM/Robolectric tests green; debug APK builds. Pending: D (real mic + Silero VAD wiring on device), E (settings screen, debug overlay polish, emergency banner already in UI), real engine from ML.
+
+## How to build / test (this Mac)
+
+```
+export JAVA_HOME=$(/usr/libexec/java_home -v 17) ANDROID_HOME=/opt/homebrew/share/android-commandlinetools
+cd android
+~/tools/gradle-8.10.2/bin/gradle :core:test :app:testDebugUnitTest      # all unit tests
+~/tools/gradle-8.10.2/bin/gradle :app:assembleDebug                      # app/build/outputs/apk/debug/app-debug.apk
+```
+(The wrapper's download times out on this network; `~/tools/gradle-8.10.2` is a manual copy. Robolectric jars are in `~/tools/robolectric-jars`.)
+
+## Where things are
+
+- `android/core` — pure Kotlin: `Validator`, `TimeResolver`, `LocationMatcher`, `ToolCallParser`, `FormMerger`, `PromptBuilder`, `SopSelector`, `FormMapper`, `Endpointer`, `engine/` (interface + Mock), `orchestrator/` (state machine + ports `AudioInput`, `TtsSpeaker`).
+- `android/app` — Compose UI (`ui/`), Room (`data/`), `AppContainer` (DI; swap engine/audio there), `tts/AndroidTtsSpeaker`, `audio/MockAudioInput`.
 
 ## Gotchas to remember
 
-- `INTERNET` permission only in the `planB` flavour (D-54).
-- FTS is **Room `@Fts4`**, not FTS5/bundled driver (R1-07); PRD §20.12/§21.1 still mention the bundled driver — ignore.
+- `INTERNET` permission only in a future `planB` flavour (D-54); the single flavour has none.
+- FTS is **Room `@Fts4`** with `tok*` query syntax; no `@Upsert` on FTS tables.
 - Persist `DEFAULTED` time with `occurred_at_approx=1`; it satisfies the mandatory time field.
 - Skip ≠ unknown: "skip" leaves `MISSING`; only "I don't know" gives `UNKNOWN`.
 - User edits (`USER_EDITED`) are never overwritten by LLM patches.

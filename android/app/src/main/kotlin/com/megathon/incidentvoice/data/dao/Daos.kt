@@ -77,7 +77,7 @@ interface IncidentDao {
     @Query("SELECT * FROM audit_log WHERE incident_id = :id ORDER BY at") suspend fun audit(id: String): List<AuditEntity>
 
     // search index
-    @Upsert suspend fun upsertSearch(s: IncidentSearchEntity)
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun insertSearch(s: IncidentSearchEntity)
     @Query("DELETE FROM incident_search WHERE incident_id = :id") suspend fun deleteSearch(id: String)
 
     // dashboard (RawQuery for dynamic filters; observe both tables so the list refreshes on any change)

@@ -56,3 +56,11 @@ Only two branches: **App** and **ML**. No separate web/dashboard branch.
 - Draft resume UI cut (F-35); drafts still auto-saved.
 - Single build flavour with Mock engine for now (planA/planB split from §20.1 deferred); real engines plug in via `InferenceEngine`.
 - Model dir constant: `/sdcard/Android/data/com.megathon.incidentvoice/files/models/` (PRD §20.10), defined once in the app.
+
+## 2026-10-10 night — renny (App) — what ML needs to know for integration
+- **Interface to implement:** `com.megathon.incidentvoice.engine.InferenceEngine` (`android/core/src/main/kotlin/.../engine/Engine.kt`) — exactly PRD §22.1; DTOs (`EngineInfo`, `AsrResult`, `GenStats`, `EngineError`) carry the Appendix D.5 JSON field names via `@SerialName`. It lives in `:core` (pure Kotlin) so the orchestrator is JVM-tested; `JniInferenceEngine`/`HttpInferenceEngine` go in `:app` (`AppContainer.engine` is the one swap point).
+- **Prompts:** app renders prompts itself (`PromptBuilder`, PRD §13.3 byte format, no BOS) from `config/prompts/*`; engine receives the finished string in `GenRequest.prompt`. `LlmTask`/`SamplerName` per §22.1; app passes `max_tokens` from `config/app_config.json`.
+- **Empty generation** (0 tokens) is treated by the app as a retryable *engine* error, never a content failure (PRD §13.7).
+- **FTS:** `FTS5` query syntax in the PRD (`"tok"*`) does not work on FTS4; app uses `tok*`. PRD §21.4/§21.5 should say so.
+- **Model dir** constant: `ModelPaths.BASE` = `/sdcard/Android/data/com.megathon.incidentvoice/files/models` (PRD §20.10) in `android/app/.../config/ConfigLoader.kt`.
+- Build/test: `cd android && ~/tools/gradle-8.10.2/bin/gradle :core:test :app:testDebugUnitTest`; `:app:assembleDebug` for the APK (package `com.megathon.incidentvoice`, minSdk 31, arm64-v8a only, **no INTERNET permission**).

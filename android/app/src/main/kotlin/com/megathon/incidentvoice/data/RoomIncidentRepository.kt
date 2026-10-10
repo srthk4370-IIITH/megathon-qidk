@@ -206,7 +206,8 @@ class RoomIncidentRepository(
         val rowid = dao.rowidOf(id) ?: return
         val loc = d.form.locationId?.let { lid -> registry.locations.firstOrNull { it.id == lid }?.display }
         val body = SearchBody.build(d.form, d.meta, tx, loc, d.turns.map { it.text }.filter { it.isNotBlank() }, d.recommendations.map { it.text })
-        dao.upsertSearch(IncidentSearchEntity(rowid.toInt(), body, id))
+        dao.deleteSearch(id) // FTS4 has no reliable upsert: replace the row
+        dao.insertSearch(IncidentSearchEntity(rowid.toInt(), body, id))
     }
 
     private fun auditDiff(id: String, old: IncidentForm, new: IncidentForm, actor: Actor, now: Long): List<AuditEntity> {

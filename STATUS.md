@@ -33,7 +33,7 @@ _Last updated: 2026-10-10 21:20 IST (Saarthak branch)_
 | Branch | Area | Built so far |
 |---|---|---|
 | `Saarthak` | ML / NPU | Docs only. No models exported yet. |
-| `renny` (App) | App + dashboard | `config/` (verbatim from PRD), `handover_app.md`. No Android code yet — toolchain (JDK/SDK) not installed on this Mac. |
+| `renny` (App) | App + dashboard | **Stages A–C done on the Mock engine** (~116 tests green): `config/` verbatim from PRD; `:core` (validator, normalisers, parser, merger, prompts, SOP templates, orchestrator state machine); `:app` (Room+FTS4, dashboard, detail, home/conversation/review/submitted, eSpeak TTS). Debug APK builds. **Not yet on a device** (D: mic+VAD, E: banner/settings/debug overlay pending). Real engine = ML branch's `InferenceEngine`. |
 
 ## Board / environment
 

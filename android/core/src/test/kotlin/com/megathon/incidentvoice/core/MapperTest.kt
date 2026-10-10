@@ -32,8 +32,8 @@ class MapperTest {
         assertTrue(st.row.fieldMetaJson.contains("ambulance_called"))
     }
     @Test fun searchQuery() {
-        assertEquals("\"water\"* \"conf\"*", SearchQueryBuilder.build("water conf")); assertNull(SearchQueryBuilder.build("a ! ?"))
-        assertEquals("\"aag\"*", SearchQueryBuilder.build("aag!"))
+        assertEquals("water* conf*", SearchQueryBuilder.build("water conf")); assertNull(SearchQueryBuilder.build("a ! ?"))
+        assertEquals("aag*", SearchQueryBuilder.build("aag!")); assertEquals("or* and*", SearchQueryBuilder.build("OR AND"))
     }
     @Test fun searchBodyContainsCues() {
         val b = SearchBody.build(filled(), meta.copy(refNo = "INC-1"), Fx.tx, "Pantry · Block A", listOf("turn text"), listOf("rec"))
