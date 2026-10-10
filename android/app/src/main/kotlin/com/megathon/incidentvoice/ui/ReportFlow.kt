@@ -56,11 +56,11 @@ fun ReportFlow(c: AppContainer, onOpenDetail: (String) -> Unit, onGoDashboard: (
     val stored by c.settings.flow.collectAsStateWithLifecycle(initialValue = null)
     var profileDismissed by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
-    if (stored != null && stored!!.reporterName.isBlank() && !profileDismissed && ui.state == ConvState.IDLE) {
+    if (stored != null && stored!!.reporterName.isBlank() && !stored!!.profileAsked && !profileDismissed && ui.state == ConvState.IDLE) {
         var name by remember { mutableStateOf("") }
         var emp by remember { mutableStateOf("") }
         AlertDialog(
-            onDismissRequest = { profileDismissed = true },
+            onDismissRequest = { profileDismissed = true; scope.launch { c.settings.update { it.copy(profileAsked = true) } } },
             title = { Text("Who is reporting?") },
             text = {
                 Column {
@@ -69,8 +69,8 @@ fun ReportFlow(c: AppContainer, onOpenDetail: (String) -> Unit, onGoDashboard: (
                     OutlinedTextField(emp, { emp = it }, label = { Text("Employee ID") }, singleLine = true)
                 }
             },
-            confirmButton = { TextButton({ scope.launch { c.settings.update { it.copy(reporterName = name.trim(), reporterEmpId = emp.trim()) } }; profileDismissed = true }, enabled = name.isNotBlank()) { Text("Save") } },
-            dismissButton = { TextButton({ profileDismissed = true }) { Text("Later") } },
+            confirmButton = { TextButton({ scope.launch { c.settings.update { it.copy(reporterName = name.trim(), reporterEmpId = emp.trim(), profileAsked = true) } }; profileDismissed = true }, enabled = name.isNotBlank()) { Text("Save") } },
+            dismissButton = { TextButton({ profileDismissed = true; scope.launch { c.settings.update { it.copy(profileAsked = true) } } }) { Text("Later") } },
         )
     }
 

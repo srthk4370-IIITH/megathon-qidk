@@ -75,7 +75,7 @@ class RuleBasedLlm(private val tx: Taxonomy, private val registry: SiteRegistry?
         // ENVIRONMENTAL
         Cue("ENVIRONMENTAL", 6, "storm drain|into the drain|\\bdrain\\b|\\bnaal[ae]\\b|effluent|(into|onto|on) the soil|\\bsoil\\b|on(to)? the (open )?ground|waste drums|oil spill\\w*|diesel (spill\\w*|leak\\w*)|black smoke from the (boiler|chimney|stack)|chimney|emission|pollut\\w*|waste (dump\\w*|water)|mitti"),
         // VEHICLE
-        Cue("VEHICLE", 6, "forklift|\\btruck\\b|\\btanker\\b|\\bcar\\b|motorbike|\\bbike\\b|\\bvehicle\\w*|collided|collision|revers\\w+|takkar|takra\\w*|gaadi|\\bvan\\b|\\bbus\\b"),
+        Cue("VEHICLE", 6, "forklift|fork ?lift|fourth lift|four lift|fork left|foreclip|\\btruck\\b|\\btanker\\b|\\bcar\\b|motorbike|\\bbike\\b|\\bvehicle\\w*|collided|collision|revers\\w+|takkar|takra\\w*|gaadi|\\bvan\\b|\\bbus\\b"),
         // OTHER
         Cue("OTHER", 9, "false alarm|\\bsnake\\b|beehive|\\bbees\\b|madhumakhi|\\bmonkey\\w*|\\bdog\\b|stray (dog|animal)|\\bsaanp\\b"),
     )
@@ -144,8 +144,7 @@ class RuleBasedLlm(private val tx: Taxonomy, private val registry: SiteRegistry?
 
     /** Prefer a known site location (name or alias) found in the text; else the phrase after a place preposition. */
     private fun location(t: String): String? {
-        var norm = " $t "
-        for ((w, d) in numWords) norm = norm.replace(Regex("\\b$w\\b"), d)
+        var norm = com.megathon.incidentvoice.ask.SpokenPlaces.normalise(t, registry)
         var best: Pair<String, IntRange>? = null
         for (loc in registry?.locations.orEmpty()) {
             for (name in listOf(loc.name) + loc.aliases) {
@@ -275,7 +274,12 @@ class RuleBasedLlm(private val tx: Taxonomy, private val registry: SiteRegistry?
         "MEDIUM" to "moderate|medium|manageable|thoda serious",
         "HIGH" to "serious|severe|major|bad\\b|badi|kaafi|high|dangerous",
     )
-    private fun severity(text: String): String? = SEV.firstOrNull { has(text, "\\b(${it.second})") }?.first
+    private fun severity(text: String): String? {
+        // "No, nobody is in danger" answers the last part of the question with a no: not critical, and nothing worse was said
+        val t = rx("\\b(no ?one|nobody|no|not|none|isn'?t|aren'?t)\\b[^.;]{0,25}\\b(in danger|danger\\w*|critical|life[- ]threatening|khatra)").replace(text, " notdanger ")
+        SEV.firstOrNull { has(t, "\\b(${it.second})") }?.first?.let { return it }
+        return if (t.contains("notdanger")) "MEDIUM" else null
+    }
 
     private fun yesNo(text: String): String? {
         val no = has(text, "\\b(no|nope|nahi|nahin|not|never|none|nobody|no one|hasn'?t|haven'?t|didn'?t|wasn'?t)\\b")
@@ -318,7 +322,7 @@ class RuleBasedLlm(private val tx: Taxonomy, private val registry: SiteRegistry?
             if (def.type == "enum") enumByRules(def.key, def, t)?.let { details[def.key] = JsonPrimitive(it) }
         }
         if (c.primary == "VEHICLE" || "VEHICLE" in c.secondary) {
-            val v = rx("\\b(forklift|delivery truck|truck|tanker|car|motorbike|bike|van|bus)\\b").findAll(t).map { it.value }.distinct().toList()
+            val v = rx("\\b(forklift|fork ?lift|fourth lift|delivery truck|truck|tanker|car|motorbike|bike|van|bus)\\b").findAll(t).map { it.value }.distinct().toList()
             if (v.isNotEmpty()) details["vehicles_involved"] = JsonArray(v.map { JsonPrimitive(it) })
         }
         if (c.primary == "HAZMAT") rx("\\b(ammonia|chlorine|sulphuric acid|hydrochloric acid|acid|caustic soda|lpg|solvent|diesel|petrol)\\b").find(t)?.let { details["substance"] = JsonPrimitive(it.value) }

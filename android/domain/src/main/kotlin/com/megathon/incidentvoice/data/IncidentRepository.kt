@@ -79,4 +79,6 @@ interface IncidentRepository {
     suspend fun vectors(modelId: String): Map<String, FloatArray> = emptyMap()
     /** Emits whenever any incident changes (used to keep the vector index fresh). */
     fun observeChanges(): Flow<Long> = kotlinx.coroutines.flow.emptyFlow()
+    /** Demo reset: removes every report, draft and recording. Returns how many were deleted. */
+    suspend fun deleteAll(actor: Actor): Int = 0
 }

@@ -1,6 +1,6 @@
 # handover_app.md — Android app branch (incl. dashboard)
 
-Branch: `renny` (CHANGE.md calls it "Android branch, name TBD"). Spec: `PRD.md` v1.1 (§4.0 overrides older sections). History: `HANDBOOK.md`. Cross-branch changes: `CHANGE.md`.
+Branch: the App branch. Spec: `PRD.md` v1.1 (§4.0 overrides older sections). History: `HANDBOOK.md`. Cross-branch changes: `CHANGE.md`.
 
 ## Scope of this branch
 
@@ -10,7 +10,7 @@ PRD role P2 plus the in-app dashboard (D-44, app-only):
 - Audio capture + Silero VAD, TTS (eSpeak), Room + `@Fts4` DB (§21, App. E), screens (§20), dashboard (§23).
 - Engines behind `InferenceEngine` (§22.1): `MockInferenceEngine` first; real engine consumed from the ML branch.
 
-## Consumed from the ML branch (`Saarthak`)
+## Consumed from the ML branch (the ML branch)
 
 | Item | Source | State |
 |---|---|---|
@@ -32,7 +32,7 @@ All P0 app features plus the optional Ask tab (O-2) are built, tested (349 tests
 
 | Path | Owner | What |
 |---|---|---|
-| `android/core` | ML (verbatim from `origin/Saarthak`, do not edit here) | ML's pure-Kotlin library; used by app tests as a reference implementation |
+| `android/core` | ML (verbatim from the ML branch, do not edit here) | ML's pure-Kotlin library; used by app tests as a reference implementation |
 | `android/engine` | ML (verbatim) | `InferenceEngine`, `JniInferenceEngine`, prebuilt arm64 libs |
 | `android/domain` | App | form model, validator, normalisers, parser, merger, prompts, SOP, **orchestrator** (`orchestrator/`), engine port + mock (`domain/engine/`) |
 | `android/app` | App | Compose UI, Room + FTS4, audio (AudioRecord + Silero VAD), TTS, `engineglue/` (adapter + switchable engine), `AppContainer` |
@@ -66,7 +66,7 @@ It checks ABI / page size / clock / eSpeak / `libcdsprpc.so`, installs, grants t
 
 ## Gotchas to remember
 
-- Do not edit `android/core`, `android/engine`, `config/`, `android/build.gradle.kts`, `android/gradle.properties` (ML-owned, identical to `Saarthak`). The only shared build file the App touches is `android/settings.gradle.kts` (adds `:domain`, `:app` and the Compose/KSP plugin versions).
+- Do not edit `android/core`, `android/engine`, `config/`, `android/build.gradle.kts`, `android/gradle.properties` (ML-owned, identical to the ML branch). The only shared build file the App touches is `android/settings.gradle.kts` (adds `:domain`, `:app` and the Compose/KSP plugin versions).
 - App package for the engine port is `com.megathon.incidentvoice.domain.engine`; ML's is `com.megathon.incidentvoice.engine`. Only `MlEngineAdapter` imports both.
 - No `INTERNET` permission (D-54). `extractNativeLibs=true` + legacy jniLibs packaging are required for the QNN stubs.
 - FTS is Room `@Fts4` with `tok*` queries; replace FTS rows with delete + insert (no `@Upsert`).

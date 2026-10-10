@@ -24,6 +24,10 @@ class NormaliserTest {
         val m = lm.match("conference room 7")
         assertTrue(m.kind != MatchKind.AUTO, m.toString())
     }
+    @Test fun location_asHeardBySpeech() {
+        assertEquals("B-G-B4", lm.match("B4").location?.id); assertEquals(MatchKind.AUTO, lm.match("bay for").kind)
+        val near = lm.match("Bed 4"); assertEquals(MatchKind.SUGGEST, near.kind); assertEquals("B-G-B4", near.location?.id)   // suggestion chip, not a silent match
+    }
     @Test fun location_unknownIsNone() { assertEquals(MatchKind.NONE, lm.match("somewhere on the moon").kind); assertEquals(MatchKind.NONE, lm.match("").kind) }
     @Test fun jaroWinkler_basics() {
         assertEquals(1.0, LocationMatcher.jaroWinkler("abc", "abc")); assertTrue(LocationMatcher.jaroWinkler("martha", "marhta") > 0.95)

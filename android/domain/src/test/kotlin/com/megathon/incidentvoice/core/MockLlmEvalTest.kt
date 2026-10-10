@@ -115,6 +115,14 @@ class MockLlmEvalTest {
         kotlin.test.assertEquals("NO", str(set(listOf("injuries", "severity"), "No one is hurt, it's minor."), "injuries"))
         kotlin.test.assertEquals("LOW", str(set(listOf("injuries", "severity"), "No one is hurt, it's minor."), "severity"))
     }
+    /** Third live utterance, as the recogniser wrote it. */
+    @Test fun liveSession_misheardForkliftStillAVehicle_andNobodyInDangerIsNotCritical() {
+        val p = params(rules.extract("A fourth lift hit a rack in Bed 4 about half an hour ago, nobody was hurt."))
+        kotlin.test.assertEquals("VEHICLE", str(p, "incident_type")); kotlin.test.assertEquals("NO", str(p, "injuries"))
+        fun sev(a: String) = str(params(rules.patch(listOf("severity"), a))["set"]!!.jsonObject, "severity")
+        kotlin.test.assertEquals("MEDIUM", sev("No, nobody is in danger.")); kotlin.test.assertEquals("CRITICAL", sev("Yes, people are in danger"))
+        kotlin.test.assertEquals("LOW", sev("It's minor, nobody is in danger")); kotlin.test.assertEquals("HIGH", sev("it is quite serious"))
+    }
     @Test fun slideSentence() {
         val p = params(rules.extract("There was a water leak near Conference Room 2 around 10 AM. Maintenance has already isolated the area."))
         kotlin.test.assertEquals("WATER", str(p, "incident_type")); kotlin.test.assertEquals("near Conference Room 2", str(p, "location")); kotlin.test.assertEquals("around 10 am", str(p, "time"))

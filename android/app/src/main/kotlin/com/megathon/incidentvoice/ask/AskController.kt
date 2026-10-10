@@ -45,7 +45,7 @@ class AskController(
             val r = runCatching { service.ask(q) }
             _ui.update { u -> u.copy(thinking = false, exchanges = u.exchanges.map { if (it.id == id) it.copy(answer = r.getOrNull(), error = r.exceptionOrNull()?.message) else it }) }
             android.util.Log.i("IV", "ask \"$q\" -> ${r.getOrNull()?.let { "${it.total} hits in ${it.tookMs} ms [${it.mode}] ${it.query.copy(raw = "")}" } ?: r.exceptionOrNull()}")
-            r.getOrNull()?.let { if (speak()) { tts.stop(); tts.speak(it.text, "en") } }
+            r.getOrNull()?.let { if (speak()) { tts.stop(); tts.speak(it.spoken, "en") } }
         }
     }
 
