@@ -20,7 +20,7 @@ class OrchestratorTest {
     }
 
     private class Rig(scope: TestScope, cfg: AppConfigBundle, utterances: List<String>, ready: Boolean = true) {
-        val engine = MockInferenceEngine(cfg.taxonomy, asrDelayMs = 0, tokensPerSecond = 0.0, utterances = utterances)
+        val engine = MockInferenceEngine(cfg.taxonomy, asrDelayMs = 0, tokensPerSecond = 0.0, utterances = utterances, registry = cfg.registry)
         val repo = InMemoryRepo()
         val tts = FakeTts(ready)
         val audio = FakeAudio()

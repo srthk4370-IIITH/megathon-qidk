@@ -52,7 +52,7 @@ class AppContainer(val context: Context) {
         }
     }
 
-    private val mockEngine: InferenceEngine by lazy { MockInferenceEngine(config.taxonomy) }
+    private val mockEngine: InferenceEngine by lazy { MockInferenceEngine(config.taxonomy, registry = config.registry) }
 
     /** ML branch's in-process engine (Plan A): whisper.cpp + Genie on the HTP, via libiv_native.so. */
     private val jni: JniInferenceEngine by lazy {
