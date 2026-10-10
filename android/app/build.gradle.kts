@@ -18,6 +18,7 @@ android {
         ndk { abiFilters += "arm64-v8a" }
     }
     buildFeatures { compose = true }
+    testOptions { unitTests.isIncludeAndroidResources = true }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -52,5 +53,12 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
     implementation("com.microsoft.onnxruntime:onnxruntime-android:1.19.2")
     debugImplementation("androidx.compose.ui:ui-tooling")
-    testImplementation(kotlin("test"))
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.robolectric:robolectric:4.13")
+    testImplementation("androidx.test:core:1.6.1")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
+}
+
+tasks.withType<Test>().configureEach {
+    systemProperty("iv.configDir", rootProject.projectDir.parentFile.resolve("config").absolutePath)
 }
