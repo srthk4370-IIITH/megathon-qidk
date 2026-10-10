@@ -66,7 +66,11 @@ class LocationMatcher(private val registry: SiteRegistry) {
         return when {
             best != null && bestScore >= 0.85 -> LocationMatch(MatchKind.AUTO, best, bestScore, qualifier)
             best != null && bestScore >= 0.70 -> LocationMatch(MatchKind.SUGGEST, best, bestScore, qualifier)
-            else -> LocationMatch(MatchKind.NONE, null, bestScore, qualifier)
+            else -> {
+                // heard slightly wrong ("Bed 4")? offer the registry place as a suggestion, never as a silent match
+                val near = com.megathon.incidentvoice.ask.SpokenPlaces.nearMisses(spoken, registry).singleOrNull()?.let { n -> registry.locations.firstOrNull { it.name == n } }
+                if (near != null) LocationMatch(MatchKind.SUGGEST, near, 0.7, qualifier) else LocationMatch(MatchKind.NONE, null, bestScore, qualifier)
+            }
         }
     }
 

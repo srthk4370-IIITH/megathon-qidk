@@ -145,6 +145,9 @@ class RuleQueryParser(private val tx: Taxonomy, private val registry: SiteRegist
             val i = norm.indexOf(" $n ")
             if (i >= 0) { locIds += l.id; locLabel = l.name; norm = norm.replaceRange(i, i + n.length + 1, " "); break }
         }
+        if (locIds.isEmpty()) SpokenPlaces.nearMisses(norm, registry).singleOrNull()?.let { name ->
+            registry!!.locations.firstOrNull { it.name == name }?.let { l -> locIds += l.id; locLabel = l.name; norm = norm.replace(Regex("\\b[a-z]{2,6} ${l.name.substringAfterLast(' ')}\\b"), " ") }
+        }
         if (locIds.isEmpty()) {
             for (b in registry?.locations.orEmpty().map { it.building }.filter { it.isNotBlank() }.distinct()) {
                 val i = norm.indexOf(" ${b.lowercase()} ")
@@ -190,6 +193,26 @@ object SpokenPlaces {
             if (cands.size == 1) cands.single() else m.value
         }
         return t
+    }
+
+    /**
+     * "Bed 4" for "Bay 4": a numbered place whose first word is one or two letters off a registry word with the same
+     * initial. Returns the registry names this could be (used as a *suggestion* in the report, as a filter in Ask).
+     */
+    fun nearMisses(text: String, registry: SiteRegistry?): List<String> {
+        val names = registry?.locations.orEmpty().map { it.name }
+        val out = ArrayList<String>()
+        for (m in Regex("\\b([a-z]{2,6}) (\\d{1,2})\\b").findAll(text.lowercase())) {
+            val (w, n) = m.destructured
+            for (name in names) {
+                val parts = name.lowercase().split(' ')
+                if (parts.size != 2 || parts[1] != n) continue
+                val head = parts[0]
+                if (head == w || head[0] != w[0] || kotlin.math.abs(head.length - w.length) > 1) continue
+                if (com.megathon.incidentvoice.core.LocationMatcher.levenshtein(head, w) <= 2) out += name
+            }
+        }
+        return out.distinct()
     }
 }
 

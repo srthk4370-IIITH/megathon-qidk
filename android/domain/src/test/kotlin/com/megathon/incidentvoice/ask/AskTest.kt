@@ -31,6 +31,8 @@ class AskTest {
         assertEquals("Bay 4", q("What happened in B4?").locationLabel)
         assertTrue(q("reports for the last 2 days").locationIds.isEmpty())                 // "for" stays a word when it is not after a place
         assertEquals("p-101", q("anything about p-101").freeText)
+        assertEquals(setOf("B-G-B4"), q("what happened in bed 4").locationIds)             // near miss of a numbered place
+        assertTrue(q("what happened to bus 44").locationIds.isEmpty())
     }
     @Test fun nothingUnderstood_saysSo() {
         val x = q("what happened")
