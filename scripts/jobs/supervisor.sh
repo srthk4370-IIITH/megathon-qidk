@@ -28,6 +28,7 @@ start(){
 start export_llama
 start build_native
 done_ build_native && start deploy_runtime
+done_ deploy_runtime && start asr_eval
 { done_ export_llama && done_ deploy_runtime; } && start deploy_llama
 done_ deploy_llama && start probe_planA
 { done_ deploy_llama && done_ probe_planA; } && start eval_device

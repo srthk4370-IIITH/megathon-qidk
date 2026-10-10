@@ -13,6 +13,12 @@ if [ ! -x "$V/bin/qai-hub-models" ]; then
   "$V/bin/pip" install -q "qai-hub-models[llama-v3-2-3b-instruct]==0.63.0" || status "pinned install failed; using ~/venvs/qaihm"
 fi
 [ -x "$V/bin/qai-hub-models" ] || V=$HOME/venvs/qaihm
+# Upload speed: each S3 connection gets ~40 kB/s on this network; qai_hub defaults to 4 × 256 MiB parts (~170 kB/s).
+S3T=$(ls "$V"/lib/python3.*/site-packages/qai_hub/s3_transfer.py 2>/dev/null | head -1)
+if [ -n "$S3T" ] && ! grep -q "IV patch" "$S3T"; then
+  sed -i 's/^_MULTIPART_CHUNK_SIZE = 256 \* 1024 \* 1024/_MULTIPART_CHUNK_SIZE = 64 * 1024 * 1024  # IV patch: was 256 MiB/; s/    max_request_concurrency=4,/    max_request_concurrency=16,  # IV patch: was 4/' "$S3T"
+  status "patched qai_hub S3 upload: 64 MiB parts × 16 connections"
+fi
 status "venv $V: $($V/bin/pip list 2>/dev/null | grep -E '^(transformers|torch) ' | tr -s ' ' | tr '\n' ' ')"
 export HF_TOKEN=$(cat ~/.cache/huggingface/token)
 for model in llama_v3_2_3b_instruct llama_v3_2_3b_instruct llama_v3_2_3b_instruct llama_v3_2_1b_instruct; do

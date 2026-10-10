@@ -21,6 +21,11 @@ public:
     bool loaded() const { return ctx_ != nullptr; }
     // pcm: mono float32 in [-1, 1] at 16 kHz.
     AsrResult transcribe(const std::vector<float>& pcm, LangMode mode);
+
+private:
+    int run_full(const std::vector<float>& pcm, const char* lang);
+
+public:
     void release();
     double load_ms() const { return load_ms_; }
     std::string model_path() const { return model_path_; }
