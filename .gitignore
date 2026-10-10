@@ -2,6 +2,7 @@
 *.bin
 *.onnx
 !android/app/src/main/assets/models/silero_vad.onnx
+!android/app/src/main/assets/models/minilm/model_quantized.onnx
 *.onnx.data
 *.data
 *.safetensors

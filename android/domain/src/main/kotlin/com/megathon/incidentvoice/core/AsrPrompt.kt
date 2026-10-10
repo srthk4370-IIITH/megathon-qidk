@@ -1,28 +1,30 @@
 package com.megathon.incidentvoice.core
 
 /**
- * Short domain hint for the speech recogniser (Whisper `initial_prompt`). Measured on a QIDK recording (SNR ~11 dB):
- * greedy Whisper-small heard "virtual leap" for "water leak" and "it's my love" for "it's minor"; with a hint that
- * names the incident topics **and** typical answer words both come out right, at no extra decoding cost.
- * A topics-only hint fixed the narration but not the short answers, so the answer words are part of it.
- * Generated from the taxonomy so it follows the configured categories. Kept under 400 characters.
+ * Short domain hint for the speech recogniser (Whisper `initial_prompt`). Measured on nine live QIDK recordings
+ * (speech/noise ≈ 11 dB): greedy Whisper-small heard "virtual leap" for "water leak", "it's my love" for "it's minor",
+ * "Bedford" for "Bay 4" and "caught" for "called". A hint that names incident topics, the site's places and typical
+ * answer words fixes all four at no decoding cost; topics alone fix only the first.
+ * Built from the taxonomy and the site registry so it follows the configuration. Kept under [maxChars].
  */
 object AsrPrompt {
-    private const val ANSWERS = "Answers: no one is hurt, someone is injured, it is minor, serious, stopped, still leaking, under control, I don't know."
+    private const val HEAD = "Workplace safety incident report. Topics: "
+    private const val ANSWERS = "Answers: no one is hurt, someone is injured, it is minor, serious, stopped, still leaking, under control, called, I don't know."
+    /** Generic EHS vocabulary that is easy to mis-hear; category words from the taxonomy are added in front. */
+    private val VOCAB = listOf("gas leak", "chemical spill", "electric shock", "forklift", "truck", "conveyor", "compressor", "theft", "ceiling", "drain")
 
-    fun build(tx: Taxonomy, maxChars: Int = 400): String {
+    fun build(tx: Taxonomy, registry: SiteRegistry? = null, maxChars: Int = 600): String {
         val topics = LinkedHashSet<String>()
-        for (c in tx.categories) {
-            if (c.code == "OTHER") continue
-            c.label.split("/").map { it.trim().lowercase() }.filter { it.isNotEmpty() }.take(2).forEach { topics += it }
+        for (c in tx.categories) if (c.code != "OTHER") c.label.split("/").firstOrNull()?.trim()?.lowercase()?.takeIf { it.isNotEmpty() }?.let { topics += it }
+        topics += VOCAB
+        val places = registry?.locations.orEmpty().map { it.name }.distinct()
+        val sb = StringBuilder(HEAD).append(topics.joinToString(", ")).append('.')
+        if (places.isNotEmpty()) {
+            val budget = maxChars - sb.length - ANSWERS.length - " Places: ".length - 2
+            val chosen = ArrayList<String>(); var used = 0
+            for (p in places) { if (used + p.length + 2 > budget) break; chosen += p; used += p.length + 2 }
+            if (chosen.isNotEmpty()) sb.append(" Places: ").append(chosen.joinToString(", ")).append('.')
         }
-        val head = "Workplace safety incident report: "
-        val sb = StringBuilder(head)
-        for (t in topics) {
-            val add = (if (sb.length > head.length) ", " else "") + t
-            if (sb.length + add.length + 2 + ANSWERS.length > maxChars) break
-            sb.append(add)
-        }
-        return sb.append(". ").append(ANSWERS).toString()
+        return sb.append(' ').append(ANSWERS).toString().take(maxChars)
     }
 }

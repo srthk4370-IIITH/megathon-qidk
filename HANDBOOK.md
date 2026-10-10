@@ -129,3 +129,18 @@ Running log of what happened, what was decided, and where things stand. `PRD.md`
 - Local fine-tuning rejected for now: it does not remove the export/upload bottleneck.
 - ASR decision: force_en (EN WER 7.0 %, 1.9 s/clip on QIDK; Hinglish CER 70 %+ in every mode).
 - QIDK moves to the second laptop for app testing with real Whisper + mock LLM; see STATUS.md "QIDK handoff".
+
+## App branch (`renny`) log — 2026-10-11 03:00–04:00 (first session on the QIDK, Ask tab)
+
+**Getting onto the board.** The app on the QIDK had been installed from the ML laptop; my build was rejected (`INSTALL_FAILED_UPDATE_INCOMPATIBLE`, different debug key). With the user's OK: moved `models/` to `/sdcard/iv_models_backup`, uninstalled, installed, let the app create its model folders (now app-owned), moved the files back. Added a shared `android/app/debug.keystore` so this cannot recur.
+
+**Live speech tests with the user** (trace: `adb logcat -s IV IVNative`): mic, VAD auto-stop, Whisper, eSpeak questions, patching, review, emergency banner all worked. Problems seen and what they turned out to be:
+- "water leak" → "virtual leap", "forklift … Bay 4" → "fourth lip … bed for": ASR, not the app. Pulled the WAVs off the board (`run-as`), measured ≈ 11 dB speech-to-noise, and reproduced the exact errors offline with whisper.cpp + the same model and greedy settings. Peak normalisation: no effect. Beam 5: fixes some. A domain `initial_prompt` (topics + site places + answer words): 8/9 utterances correct vs 5/9. The fix is in ML's native code → patch in `docs/proposals/`, app already writes the prompt file.
+- "Second question not asked" / "patient condition still required": the validator was right; the old mock LLM classified by a few keywords ("hurt" → MEDICAL) and could not map "Yes" to an enum. Replaced by `RuleBasedLlm` (negation-aware classification, per-field enum rules, yes/no semantics, clause-level "don't know"), scored on the ML eval set through the real prompts/parser: type 49 % → 99 % (EN), injuries 40 % → 92 %, follow-up patches 74 % → 100 %. Tuned on that set, so it is an upper bound.
+- Transcript review: the 2 s auto-proceed gave no time to fix a word → the countdown now holds while the field has focus.
+
+**Decisions (asked the user):** Ask feature = a tab in the same app (not a second APK); bundle MiniLM for embeddings; rule-based question understanding now, Llama tool call later.
+
+**Ask tab design.** Brute-force cosine over float32 BLOBs in SQLite instead of `sqlite-vec` (the platform SQLite cannot load extensions; at this scale the scan is ~1 ms). Only generic category nouns become hard type filters; specific things ("forklift", "ammonia") are matched by meaning/keyword because the same event can be filed under different types; type filters match primary **or** secondary type. Relevance: cosine ≥ 0.28, or all question words present, or one word + cosine ≥ 0.18 (calibrated on the quantized model: true matches 0.28–0.6, unrelated < 0.25). A whole question embeds better than its content words, so the raw question is embedded when no filter was extracted.
+
+**Not done / open:** Llama bundle (ML); ASR patch applied + rebuilt (ML); Ask by voice tried only via the shared audio path, not yet spoken live; drafts on the board from the live tests were never submitted (they are not shown in Dashboard/Ask by design).

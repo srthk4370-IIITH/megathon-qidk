@@ -12,5 +12,6 @@ class IncidentVoiceApp : Application() {
         container.startEngine()
         container.housekeeping()
         container.traceConversation()
+        container.startIndexing()
     }
 }

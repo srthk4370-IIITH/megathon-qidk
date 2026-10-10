@@ -141,6 +141,21 @@ data class AuditEntity(
     @ColumnInfo(name = "new_value") val newValue: String?,
 )
 
+/**
+ * Vector index (PRD §37 O-2): one embedding per incident, stored as little-endian float32 in the same SQLite file.
+ * Similarity is a brute-force dot product in Kotlin (unit vectors); at this scale (thousands × 384) that is ~1 ms and
+ * needs no SQLite extension, which the platform SQLite on the board cannot load anyway.
+ */
+@Entity(tableName = "incident_vectors")
+data class IncidentVectorEntity(
+    @PrimaryKey @ColumnInfo(name = "incident_id") val incidentId: String,
+    val model: String,
+    val dim: Int,
+    @ColumnInfo(name = "text_hash") val textHash: String,
+    @ColumnInfo(typeAffinity = ColumnInfo.BLOB) val vec: ByteArray,
+    @ColumnInfo(name = "updated_at") val updatedAt: Long,
+)
+
 /** R1-07: platform-SQLite FTS4. rowid = incidents.rowid_pk. */
 @Fts4
 @Entity(tableName = "incident_search")

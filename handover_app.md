@@ -26,7 +26,7 @@ Out (P1+): chunked 3-min narration, draft-resume UI, multi-incident follow-throu
 
 ## Current state (2026-10-11 01:00)
 
-All P0 app features are built, tested (321 tests) and exercised on an Android 15 arm64 emulator. ML's `:engine` is integrated behind `MlEngineAdapter`. **Never run on the QIDK yet.** Feature-by-feature status: `STATUS.md` → "App branch".
+All P0 app features plus the optional Ask tab (O-2) are built, tested (349 tests) and **running on the QIDK** with real Whisper ASR and a rule-based stand-in LLM (the Llama bundle is not on the board yet). Feature-by-feature status: `STATUS.md` → "App branch".
 
 ## Module map (after integrating the ML branch)
 
@@ -44,7 +44,7 @@ All P0 app features are built, tested (321 tests) and exercised on an Android 15
 export JAVA_HOME=$(/usr/libexec/java_home -v 17) ANDROID_HOME=/opt/homebrew/share/android-commandlinetools
 cd android
 # -PwithAndroid=true is required for :engine, :domain and :app (ML's settings.gradle.kts gate; without it only :core is built)
-~/tools/gradle-8.10.2/bin/gradle -PwithAndroid=true :core:test :domain:test :app:testDebugUnitTest   # 190 + 119 + 12
+~/tools/gradle-8.10.2/bin/gradle -PwithAndroid=true :core:test :domain:test :app:testDebugUnitTest   # 190 + 138 + 21
 ~/tools/gradle-8.10.2/bin/gradle -PwithAndroid=true :app:assembleDebug                               # app/build/outputs/apk/debug/app-debug.apk
 ```
 The wrapper's own download times out on this network (`~/tools/gradle-8.10.2` is a manual copy); Robolectric jars are in `~/tools/robolectric-jars`. Emulator: AVD `iv_test` (`$ANDROID_HOME/emulator/emulator -avd iv_test`).
@@ -56,6 +56,13 @@ bash scripts/app_device_check.sh path/to/app-debug.apk          # full check, Au
 MOCK=1 bash scripts/app_device_check.sh path/to/app-debug.apk   # never touches the NPU
 ```
 It checks ABI / page size / clock / eSpeak / `libcdsprpc.so`, installs, grants the mic, starts the app, verifies the native libs were extracted, reports whether models are present and what the engine logged. Then the 2-minute manual pass printed at the end. In the app: Settings → Engine shows the active engine and the exact model folder.
+
+## Ask tab (optional O-2) — where the code is
+
+- `android/domain/.../ask/`: `Ask.kt` (`IncidentQuery`, `RuleQueryParser`, `AnswerComposer`, `HybridRank`), `Embedding.kt` (WordPiece tokenizer, vector maths), `AskService.kt` (pipeline + index sync + similar incidents).
+- `android/app/.../ask/`: `OnnxMiniLmEmbedder` (model in `assets/models/minilm`), `AskController` (UI state, voice question). UI: `ui/ask/AskScreen.kt`. Table `incident_vectors`, DB version 2.
+- Stand-in LLM: `android/domain/.../domain/engine/RuleBasedLlm.kt`; its score on the eval set is printed by `MockLlmEvalTest`.
+- Board helpers: `adb logcat -s IV IVNative`; push a 16 kHz WAV to `<externalFilesDir>/inject/01.wav` and the next mic tap uses it; `touch <externalFilesDir>/force_mock` forces the Mock engine.
 
 ## Gotchas to remember
 

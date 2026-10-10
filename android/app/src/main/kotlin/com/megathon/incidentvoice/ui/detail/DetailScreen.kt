@@ -26,7 +26,12 @@ import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun DetailScreen(id: String, repo: IncidentRepository, tx: Taxonomy, disclaimer: String, onBack: () -> Unit, onDeleted: () -> Unit, onEdit: (String) -> Unit) {
+fun DetailScreen(
+    id: String, repo: IncidentRepository, tx: Taxonomy, disclaimer: String,
+    similar: suspend (String) -> List<com.megathon.incidentvoice.ask.AskHit> = { emptyList() }, onOpen: (String) -> Unit = {},
+    onBack: () -> Unit, onDeleted: () -> Unit, onEdit: (String) -> Unit,
+) {
+    val similarHits by produceState(initialValue = emptyList<com.megathon.incidentvoice.ask.AskHit>(), id) { value = similar(id) }
     val detail by remember(id) { repo.observeDetail(id) }.collectAsState(initial = null)
     val scope = rememberCoroutineScope()
     var confirmDelete by remember { mutableStateOf(false) }
@@ -45,7 +50,7 @@ fun DetailScreen(id: String, repo: IncidentRepository, tx: Taxonomy, disclaimer:
     }) { pad ->
         val d = detail
         if (d == null) { Box(Modifier.padding(pad).fillMaxSize(), Alignment.Center) { CircularProgressIndicator() }; return@Scaffold }
-        DetailBody(d, tx, disclaimer, Modifier.padding(pad)) { recId, done -> scope.launch { repo.setRecommendationDone(recId, done) } }
+        DetailBody(d, tx, disclaimer, Modifier.padding(pad), similarHits, onOpen) { recId, done -> scope.launch { repo.setRecommendationDone(recId, done) } }
     }
 
     if (confirmDelete) AlertDialog(
@@ -57,7 +62,7 @@ fun DetailScreen(id: String, repo: IncidentRepository, tx: Taxonomy, disclaimer:
 }
 
 @Composable
-private fun DetailBody(d: IncidentDetail, tx: Taxonomy, disclaimer: String, modifier: Modifier, onTick: (Long, Boolean) -> Unit) {
+private fun DetailBody(d: IncidentDetail, tx: Taxonomy, disclaimer: String, modifier: Modifier, similarHits: List<com.megathon.incidentvoice.ask.AskHit>, onOpen: (String) -> Unit, onTick: (Long, Boolean) -> Unit) {
     val f = d.form
     LazyColumn(modifier.fillMaxSize().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(vertical = 12.dp)) {
         item {
@@ -95,6 +100,10 @@ private fun DetailBody(d: IncidentDetail, tx: Taxonomy, disclaimer: String, modi
             items(d.turns, key = { "t${it.idx}" }) { t ->
                 Text((if (t.role == "ASSISTANT") "Assistant: " else "Reporter: ") + t.text, style = MaterialTheme.typography.bodyMedium)
             }
+        }
+        if (similarHits.isNotEmpty()) {
+            item { SectionTitle("Similar incidents") }
+            items(similarHits, key = { "s${it.id}" }) { h -> com.megathon.incidentvoice.ui.ask.HitCard(h, tx, false, onOpen) }
         }
         item {
             SectionTitle("Reporter")

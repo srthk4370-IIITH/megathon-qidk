@@ -18,6 +18,7 @@ import com.megathon.incidentvoice.engine.JniInferenceEngine
 import com.megathon.incidentvoice.engineglue.DomainToMlEngine
 import com.megathon.incidentvoice.engineglue.MlEngineAdapter
 import com.megathon.incidentvoice.engineglue.SwitchableEngine
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.first
 import com.megathon.incidentvoice.orchestrator.AudioInput
 import com.megathon.incidentvoice.orchestrator.ConversationOrchestrator
@@ -104,7 +105,7 @@ class AppContainer(val context: Context) {
     private fun writeAsrPrompt() {
         runCatching {
             val f = File(modelsDir, "${config.app.models.whisperDir}/prompt.txt")
-            val text = com.megathon.incidentvoice.core.AsrPrompt.build(config.taxonomy)
+            val text = com.megathon.incidentvoice.core.AsrPrompt.build(config.taxonomy, config.registry)
             if (!f.exists() || f.readText() != text) f.writeText(text)
         }.onFailure { android.util.Log.w("IV", "could not write ASR prompt: ${it.message}") }
     }
@@ -145,6 +146,30 @@ class AppContainer(val context: Context) {
                 OrchestratorSettings(s.reporter, s.ertNumber, s.speakQuestions, s.vadEndSilenceMs)
             },
         )
+    }
+
+    // ---- Ask tab (PRD §37 O-2): vector index + conversational query over the local database
+    val embedder: com.megathon.incidentvoice.ask.Embedder? by lazy { com.megathon.incidentvoice.ask.OnnxMiniLmEmbedder.fromAssets(context) }
+    val askService: com.megathon.incidentvoice.ask.AskService by lazy {
+        com.megathon.incidentvoice.ask.AskService(
+            repository, com.megathon.incidentvoice.ask.RuleQueryParser(config.taxonomy, config.registry),
+            com.megathon.incidentvoice.ask.AnswerComposer(config.taxonomy), embedder,
+        )
+    }
+    val askController: com.megathon.incidentvoice.ask.AskController by lazy {
+        com.megathon.incidentvoice.ask.AskController(appScope, askService, engine, audio, tts, { settingsSnapshot.value.speakQuestions }, embedder != null)
+    }
+
+    /** Keeps the vector index in step with the reports: runs at start and ~2 s after any report changes. */
+    @OptIn(kotlinx.coroutines.FlowPreview::class)
+    fun startIndexing() {
+        appScope.launch {
+            repository.observeChanges().debounce(2000).collect {
+                val t0 = System.currentTimeMillis()
+                val n = runCatching { askService.syncIndex() }.getOrDefault(0)
+                if (n > 0) android.util.Log.i("IV", "vector index: embedded $n report(s) in ${System.currentTimeMillis() - t0} ms")
+            }
+        }
     }
 
     /** logcat trace of the conversation (tag IV): state changes, every bubble, timings. `adb logcat -s IV` during tests/demo. */

@@ -11,6 +11,8 @@ import androidx.sqlite.db.SupportSQLiteQuery
 import com.megathon.incidentvoice.data.entity.*
 import kotlinx.coroutines.flow.Flow
 
+data class VectorHashRow(@ColumnInfo(name = "incident_id") val incidentId: String, @ColumnInfo(name = "text_hash") val textHash: String)
+
 /** Row returned by the dashboard list queries. */
 data class IncidentListRow(
     val id: String,
@@ -79,6 +81,16 @@ interface IncidentDao {
     // search index
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun insertSearch(s: IncidentSearchEntity)
     @Query("DELETE FROM incident_search WHERE incident_id = :id") suspend fun deleteSearch(id: String)
+
+    // vector index
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsertVector(v: IncidentVectorEntity)
+    @Query("SELECT * FROM incident_vectors WHERE model = :model") suspend fun vectors(model: String): List<IncidentVectorEntity>
+    @Query("SELECT incident_id, text_hash FROM incident_vectors WHERE model = :model") suspend fun vectorHashes(model: String): List<VectorHashRow>
+    @Query("DELETE FROM incident_vectors WHERE incident_id = :id") suspend fun deleteVector(id: String)
+    @Query("SELECT id FROM incidents") suspend fun allIds(): List<String>
+    @Query("SELECT MAX(updated_at) FROM incidents") fun observeMaxUpdated(): Flow<Long?>
+    @RawQuery suspend fun listOnce(q: SupportSQLiteQuery): List<IncidentListRow>
+    @Query("SELECT incident_id FROM incident_search WHERE incident_search MATCH :q") suspend fun searchIds(q: String): List<String>
 
     // dashboard (RawQuery for dynamic filters; observe both tables so the list refreshes on any change)
     @RawQuery(observedEntities = [IncidentEntity::class, IncidentSearchEntity::class])

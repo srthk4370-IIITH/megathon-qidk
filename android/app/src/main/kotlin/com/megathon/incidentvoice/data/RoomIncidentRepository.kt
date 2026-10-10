@@ -112,6 +112,7 @@ class RoomIncidentRepository(
     override suspend fun delete(id: String, actor: Actor) {
         db.withTransaction {
             dao.deleteSearch(id)
+            dao.deleteVector(id)
             dao.delete(id)
             dao.insertAudit(listOf(AuditEntity(incidentId = id, at = nowMs(), actor = actor.tag, action = "DELETE", field = null, oldValue = null, newValue = null)))
         }
@@ -156,6 +157,45 @@ class RoomIncidentRepository(
         dao.observeTotal(), dao.observeCritical(), dao.observeSince(nowMs() - 24L * 3600_000),
     ) { t, c, d -> DashboardCounts(t, c, d) }
 
+    // ---- Ask tab / vector index (PRD §37 O-2) -----------------------------------------------
+
+    override suspend fun listFiltered(filter: DashboardFilter, limit: Int): List<IncidentListItem> = dao.listOnce(listQuery(null, filter, limit)).map(::toItem)
+
+    override suspend fun keywordIds(ftsQuery: String): Set<String> = runCatching { dao.searchIds(ftsQuery).toSet() }.getOrDefault(emptySet())
+
+    override fun observeChanges(): Flow<Long> = dao.observeMaxUpdated().map { it ?: 0L }.distinctUntilChanged()
+
+    /** What gets embedded: the meaning of the report in a few sentences (not the whole search body). */
+    private fun vectorText(d: IncidentDetail): String {
+        val f = d.form
+        val detailText = f.fields.filterKeys { tx.field(it)?.isCommon == false }.mapNotNull { (k, st) -> (st.value as? kotlinx.serialization.json.JsonPrimitive)?.content?.let { v -> "${tx.label(k)}: ${v.lowercase().replace('_', ' ')}" } }
+        val actions = (f.value("actions_taken") as? kotlinx.serialization.json.JsonArray)?.mapNotNull { (it as? kotlinx.serialization.json.JsonPrimitive)?.content }.orEmpty()
+        return listOfNotNull(
+            f.str("title"), f.str("description"), f.str("location")?.let { "Location: $it" },
+            f.types.mapNotNull { tx.category(it)?.label }.takeIf { it.isNotEmpty() }?.joinToString(", ")?.let { "Type: $it" },
+            detailText.takeIf { it.isNotEmpty() }?.joinToString(". "), actions.takeIf { it.isNotEmpty() }?.joinToString(". "),
+        ).joinToString(". ").take(1200)
+    }
+
+    override suspend fun staleVectorSources(modelId: String): List<VectorSource> {
+        val have = dao.vectorHashes(modelId).associate { it.incidentId to it.textHash }
+        val out = ArrayList<VectorSource>()
+        for (id in dao.allIds()) {
+            val d = load(id) ?: continue
+            val text = vectorText(d)
+            if (text.isBlank()) continue
+            val hash = Integer.toHexString(text.hashCode())
+            if (have[id] != hash) out += VectorSource(id, text, hash)
+        }
+        return out
+    }
+
+    override suspend fun saveVector(incidentId: String, modelId: String, hash: String, vector: FloatArray) =
+        dao.upsertVector(IncidentVectorEntity(incidentId, modelId, vector.size, hash, com.megathon.incidentvoice.ask.Vectors.toBytes(vector), nowMs()))
+
+    override suspend fun vectors(modelId: String): Map<String, FloatArray> =
+        dao.vectors(modelId).associate { it.incidentId to com.megathon.incidentvoice.ask.Vectors.fromBytes(it.vec) }
+
     // ---- internals ------------------------------------------------------------------------
 
     private fun listQuery(match: String?, f: DashboardFilter, limit: Int): SimpleSQLiteQuery {
@@ -173,7 +213,18 @@ class RoomIncidentRepository(
             if (set.isEmpty()) return
             sb.append("AND $col IN (${set.joinToString(",") { "?" }}) "); args.addAll(set)
         }
-        inClause("i.incident_type", f.types); inClause("i.severity", f.severities); inClause("i.status", f.statuses)
+        if (f.types.isNotEmpty()) { // primary OR secondary type (a forklift injury is MEDICAL + VEHICLE)
+            val ph = f.types.joinToString(",") { "?" }
+            sb.append("AND (i.incident_type IN ($ph) OR i.id IN (SELECT incident_id FROM incident_secondary_types WHERE type IN ($ph))) "); args.addAll(f.types); args.addAll(f.types)
+        }
+        inClause("i.severity", f.severities); inClause("i.status", f.statuses)
+        if (f.locationIds.isNotEmpty() || !f.locationText.isNullOrBlank()) {
+            val parts = ArrayList<String>()
+            if (f.locationIds.isNotEmpty()) { parts += "i.location_id IN (${f.locationIds.joinToString(",") { "?" }})"; args.addAll(f.locationIds) }
+            if (!f.locationText.isNullOrBlank()) { parts += "i.location_text LIKE ?"; args.add("%${f.locationText}%") }
+            sb.append("AND (${parts.joinToString(" OR ")}) ")
+        }
+        f.injuries?.let { sb.append("AND i.injuries = ? "); args.add(it) }
         f.fromMs?.let { sb.append("AND i.created_at >= ? "); args.add(it) }
         f.toMs?.let { sb.append("AND i.created_at <= ? "); args.add(it) }
         sb.append("ORDER BY i.created_at DESC LIMIT ?"); args.add(limit)

@@ -73,9 +73,9 @@ class NormaliserTest {
     }
 
     @Test fun asrPrompt_isShortAndNamesTopicsAndAnswers() {
-        val p = AsrPrompt.build(Fx.tx)
-        assertTrue(p.length <= 400, p.length.toString())
-        for (w in listOf("water leak", "fire", "injury", "vehicle", "it is minor", "stopped")) assertTrue(p.contains(w), "$w missing in: $p")
+        val p = AsrPrompt.build(Fx.tx, Fx.registry)
+        assertTrue(p.length <= 600, p.length.toString())
+        for (w in listOf("water leak", "fire", "forklift", "Bay 4", "Conference Room 2", "it is minor", "stopped", "called")) assertTrue(p.contains(w), "$w missing in: $p")
         println(p)
     }
 }

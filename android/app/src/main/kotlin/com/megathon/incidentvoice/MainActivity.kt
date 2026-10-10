@@ -15,6 +15,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.QuestionAnswer
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -62,7 +63,7 @@ private data class Tab(val route: String, val label: String, val icon: androidx.
 @Composable
 private fun AppRoot(c: AppContainer) {
     val nav = rememberNavController()
-    val tabs = listOf(Tab("home", "Report", Icons.Default.Mic), Tab("dashboard", "Dashboard", Icons.Default.Dashboard), Tab("settings", "Settings", Icons.Default.Settings))
+    val tabs = listOf(Tab("home", "Report", Icons.Default.Mic), Tab("dashboard", "Dashboard", Icons.Default.Dashboard), Tab("ask", "Ask", Icons.Default.QuestionAnswer), Tab("settings", "Settings", Icons.Default.Settings))
     val entry by nav.currentBackStackEntryAsState()
     val route = entry?.destination?.route
     val scope = rememberCoroutineScope()
@@ -88,9 +89,18 @@ private fun AppRoot(c: AppContainer) {
                     onSeed = { scope.launch { DemoSeeder(c.config, c.repository).seed(c.settings.flow.first().reporter) } })
             }
             composable("detail/{id}") { be ->
-                DetailScreen(be.arguments!!.getString("id")!!, c.repository, c.config.taxonomy, c.config.sop.disclaimer,
+                DetailScreen(be.arguments!!.getString("id")!!, c.repository, c.config.taxonomy, c.config.sop.disclaimer, similar = { c.askController.similar(it) }, onOpen = { nav.navigate("detail/$it") },
                     onBack = { nav.popBackStack() }, onDeleted = { nav.popBackStack() },
                     onEdit = { id -> c.orchestrator.openForEdit(id); nav.navigate("home") { popUpTo(nav.graph.findStartDestination().id); launchSingleTop = true } })
+            }
+            composable("ask") {
+                val s by c.settingsSnapshot.collectAsState()
+                val ctx = androidx.compose.ui.platform.LocalContext.current
+                val perm = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestPermission()) { c.askController.askByVoice() }
+                com.megathon.incidentvoice.ui.ask.AskScreen(c.askController, c.config.taxonomy, s.showDebug, onOpen = { nav.navigate("detail/$it") }, onMic = {
+                    val granted = androidx.core.content.ContextCompat.checkSelfPermission(ctx, android.Manifest.permission.RECORD_AUDIO) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                    if (s.useMic && !granted) perm.launch(android.Manifest.permission.RECORD_AUDIO) else c.askController.askByVoice()
+                })
             }
             composable("settings") { SettingsScreen(c) }
         }
