@@ -115,19 +115,19 @@ class PromptBuilder(private val tx: Taxonomy, private val reader: (String) -> St
     fun renderField(f: FieldDef): String = when (f.type) {
         FieldTypes.ENUM -> "${f.key}(${f.enumValues.orEmpty().joinToString("|")})"
         FieldTypes.ENUM_CATEGORY -> "${f.key}(${tx.categoryCodes.joinToString("|")})"
-        FieldTypes.ENUM_CATEGORY_LIST -> "${f.key}:list of category codes"
+        FieldTypes.ENUM_CATEGORY_LIST -> "${f.key}:list of (${tx.categoryCodes.joinToString("|")})"
         FieldTypes.STRING -> "${f.key}:text"
         FieldTypes.STRING_LIST -> "${f.key}:list of text"
         FieldTypes.BOOL -> "${f.key}:true/false"
         FieldTypes.INT -> "${f.key}:number"
         FieldTypes.TIME_EXPRESSION -> "${f.promptKey}:text (time phrase as spoken)"
-        FieldTypes.PERSON_LIST -> "${f.key}:list of {name, role, injured, injury}"
-        FieldTypes.WITNESS_LIST -> "${f.key}:list of {name, contact}"
+        FieldTypes.PERSON_LIST -> "${f.key}:list of objects"
+        FieldTypes.WITNESS_LIST -> "${f.key}:list of objects"
         else -> "${f.key}:text"
     }
 
     fun fieldCatalogue(): String = tx.categories.filter { it.code != "OTHER" }.joinToString("\n") { c ->
-        val prefix = if (c.code == "EQUIPMENT") "EQUIPMENT (also fill equipment)" else c.code
+        val prefix = if (c.extraMandatoryCommon.isEmpty()) c.code else "${c.code} (also fill ${c.extraMandatoryCommon.joinToString(", ")})"
         "$prefix: " + c.fields.joinToString(", ") { renderField(it) }
     }
 

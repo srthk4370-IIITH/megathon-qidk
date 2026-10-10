@@ -166,7 +166,8 @@ class ToolCallParser(private val tx: Taxonomy) {
         // secondary_types must not repeat the primary.
         val primary = (out["incident_type"]?.value as? JsonPrimitive)?.content
         out["secondary_types"]?.let { sv ->
-            val list = (sv.value as JsonArray).filter { (it as JsonPrimitive).content != primary }
+            val cap = tx.field("secondary_types")?.maxItems ?: 2
+            val list = (sv.value as JsonArray).filter { (it as JsonPrimitive).content != primary }.take(cap)
             if (list.isEmpty()) out.remove("secondary_types") else out["secondary_types"] = sv.copy(value = JsonArray(list))
         }
         return ParsedCall(Tools.FILL, out, lang)
@@ -212,6 +213,10 @@ class ToolCallParser(private val tx: Taxonomy) {
             }
         }
         unknown.removeAll(out.keys)
+        out["secondary_types"]?.let { sv ->
+            val cap = tx.field("secondary_types")?.maxItems ?: 2
+            out["secondary_types"] = sv.copy(value = JsonArray((sv.value as JsonArray).take(cap)))
+        }
         return ParsedCall(Tools.UPDATE, out, lang, unknown.toList(), skipped)
     }
 
@@ -265,7 +270,7 @@ class ToolCallParser(private val tx: Taxonomy) {
         FieldTypes.ENUM -> normalizeEnum(v, def.enumValues.orEmpty())?.let { JsonPrimitive(it) }
         FieldTypes.ENUM_CATEGORY -> normalizeCategory(v)?.let { JsonPrimitive(it) }
         FieldTypes.ENUM_CATEGORY_LIST -> {
-            val items = asList(v).mapNotNull { normalizeCategory(it) }.distinct().take(def.maxItems ?: 2)
+            val items = asList(v).mapNotNull { normalizeCategory(it) }.distinct() // capped after primary removal
             if (items.isEmpty()) null else JsonArray(items.map { JsonPrimitive(it) })
         }
         FieldTypes.STRING, FieldTypes.TIME_EXPRESSION -> normalizeString(v, def.maxLen ?: MAX_STRING)?.let { JsonPrimitive(it) }

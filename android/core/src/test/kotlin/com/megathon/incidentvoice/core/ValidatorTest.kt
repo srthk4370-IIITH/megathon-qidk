@@ -116,7 +116,7 @@ class ValidatorTest {
     }
 
     @Test fun v10_hinglishTemplate() {
-        val f = slideForm(lang = "hinglish")
+        val f = slideForm().copy(lang = "hinglish")
         val r = Validator.validate(f, tx, T.NOW)
         val q = Validator.nextQuestion(r, f, tx, false)!!
         assertEquals("Kya kisi ko chot lagi, aur abhi situation kitni serious hai?", q.text(f.lang))

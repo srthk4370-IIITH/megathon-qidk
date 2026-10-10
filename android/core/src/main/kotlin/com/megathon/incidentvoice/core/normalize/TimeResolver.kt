@@ -48,7 +48,7 @@ class TimeResolver(val zone: ZoneId = ZoneId.of("Asia/Kolkata")) {
             """^(just now|right now|abhi abhi|abhi|abhi just|now|just|just happened|a moment ago|moments ago|this moment|turant|abhi turant|abhi kuch der pehle)$""",
         )
         private val T3_HALF = Regex("""\b(half an hour|half hour|half an hr|aadha ghanta|adha ghanta|aadhe ghante|aadha ghante)\s*(ago|back|pehle|pahle|before|earlier)\b""")
-        private val T3_WHILE = Regex("""\b(thodi der|thori der|thodi si der|kuch der|a while|a little while|little while|a short while|short while|some time|sometime)\s*(ago|back|pehle|pahle|before|earlier)\b""")
+        private val T3_WHILE = Regex("""\b(thodi der|thori der|thodi si der|kuch der|a few minutes|few minutes|kuch minute|a while|a little while|little while|a short while|short while|some time|sometime)\w*\s*(ago|back|pehle|pahle|before|earlier)\b""")
         private val T2 = Regex(
             """\b(\d+(?:\.\d+)?|an|a|couple of|a couple of|few|a few|dedh|dhai|dhaai|adhai)\s*(minutes?|mins?|mint|minat|hours?|hrs?|hr|ghanta|ghante|ghanton)\s*(and a half\s*)?(ago|back|pehle|pahle|before|earlier|hue|huye|ho gaye)\b""",
         )
@@ -81,7 +81,7 @@ class TimeResolver(val zone: ZoneId = ZoneId.of("Asia/Kolkata")) {
         private val DHAI = Regex("""\b(dhai|dhaai|adhai|dhaayi)\b""")
         private val BAJE = Regex("""\b(\d{1,2})\s*(baje|bajke|bajey|bje|oclock)\b""")
         private val AT_N = Regex("""\b(at|by|around|about|approx|approximately|lagbhag|kareeb|since|till|until)\s+(\d{1,2})\b(?!\s*(minutes?|mins?|hours?|hrs?|days?|din|ghant\w*|[/-]\d))""")
-        private val N_DAYPART = Regex("""\b(\d{1,2})\s+(in the\s+|at\s+|ko\s+)?(morning|evening|night|afternoon|subah|shaam|sham|raat|dopahar)\b""")
+        private val N_DAYPART = Regex("""\b(\d{1,2})\s+(in the\s+|at\s+|ko\s+)?(morning|evening|night|afternoon|noon|subah|shaam|sham|raat|dopahar)\b""")
         private val DAYPART_N = Regex("""\b(subah|shaam|sham|raat|dopahar|morning|evening|night|afternoon)\s+(ke\s+|ko\s+|at\s+)?(\d{1,2})\b""")
         private val ONLY_N = Regex("""^(\d{1,2})$""")
     }
