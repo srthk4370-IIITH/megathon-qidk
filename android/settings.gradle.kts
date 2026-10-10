@@ -4,6 +4,11 @@ pluginManagement {
         mavenCentral()
         gradlePluginPortal()
     }
+    // Versions for the plugins only :app applies (kept here so the root build.gradle.kts stays as the ML branch wrote it).
+    plugins {
+        id("org.jetbrains.kotlin.plugin.compose") version "2.0.21"
+        id("com.google.devtools.ksp") version "2.0.21-1.0.28"
+    }
 }
 
 dependencyResolutionManagement {
@@ -25,5 +30,6 @@ include(":core")
 val withAndroid = providers.gradleProperty("withAndroid").orNull == "true"
 if (withAndroid) {
     include(":engine")
-    // The App team adds include(":app") here.
+    // App branch: :domain = app's pure-Kotlin layer (form, validator, orchestrator; JVM tests), :app = Compose UI.
+    include(":domain", ":app")
 }

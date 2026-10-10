@@ -74,3 +74,51 @@ Running log of what happened, what was decided, and where things stand. `PRD.md`
 3. Llama 3.2 licence accepted on Hugging Face for the account whose token Kaggle uses.
 4. Wired headset mic + fan + HDMI cable for the demo (PRD §6.4).
 5. Branch names (team to decide, PRD §34.2).
+
+---
+
+## App branch (`renny`) log — 2026-10-10 night
+
+**Toolchain (this Mac):** JDK 17 (Temurin), Android SDK 35 / build-tools 35.0.0 / platform-tools via cmdline-tools, Gradle 8.10.2 (wrapper committed; the wrapper's own download times out on this network, so a local copy lives in `~/tools/gradle-8.10.2` — run `~/tools/gradle-8.10.2/bin/gradle`). Robolectric android-all jars are pre-downloaded with curl into `~/tools/robolectric-jars` (the JVM downloader hangs); `app/build.gradle.kts` uses them automatically when the folder exists.
+
+**Stage A (done):** `android/` Gradle project (`:core` JVM, `:app`). `config/` created verbatim from PRD App. A–C (extracted by script, JSON-validated). `:core`: Taxonomy loader, `IncidentForm`/`FieldState`, `Validator` (V1–V10), `SeverityRules`, `TimeResolver` (T1–T10), `LocationMatcher`, `PeopleNormaliser`, `LangDetector`, `EmergencyDetector`, `ToolCallParser`+`PartialJson`+`Grounding`, `FormMerger`, `PromptBuilder` (+ tool schemas D.1–D.3), `SopSelector` (P0 templates), `FormMapper`/`SearchQueryBuilder`/`SearchBody`, `AppConfig`.
+
+**Stage B (done):** Room entities per App. E, `@Fts4` search entity, DAOs, `RoomIncidentRepository` (one transaction per save: incident + children + audit diff + FTS reindex), dashboard (recency list, FTS search with snippets, type/severity/date filters, count row), detail view (basic), `DemoSeeder` (10 realistic incidents through the real parse→merge path). Verified with 8 Robolectric tests against a real in-memory SQLite.
+
+**Stage C (done on Mock engine):** `InferenceEngine` interface + DTOs (`core/engine`), `MockInferenceEngine` (water-leak demo scene + keyword classifier + heuristic answerer), `ConversationOrchestrator` (§8 state machine, in `:core`, 20 JVM tests incl. the water-leak demo end to end), Home/Conversation/Review/Submitted screens, `AndroidTtsSpeaker` (eSpeak). Debug APK builds (78 MB, ORT included).
+
+**Problems met and fixes**
+- FTS4 query syntax is `tok*` — the PRD's `"tok"*` is FTS5 syntax and returned nothing on FTS4. Fixed in `SearchQueryBuilder`.
+- Room `@Upsert` on an FTS4 table throws a generic constraint error (can't detect "already exists"); replaced by delete + insert.
+- Local `put()` helper shadowed the `buildMap` `put` in `FormMapper.toForm` → persons restored as `{}`; caught by the round-trip test.
+- `JaroWinkler` alone matched "somewhere on the moon" to a room (>0.7); now only counts ≥ 0.88 and digit mismatches ("room 7" vs "room 2") cap the score at 0.69.
+- Mock "hurt" was in the YES word list → "no one is hurt" answered YES; fixed.
+- Gradle's JVM DNS fails intermittently here; re-running works.
+
+## App branch (`renny`) log — 2026-10-11 00:10–01:00 (integration + verification)
+
+**Trigger:** user asked to pull main, make the whole app side of the PRD work, and verify it will run on the QIDK (board is attached to the ML machine, not this Mac).
+
+**What I found after `git fetch`:** `main` only had doc changes (merged; CHANGE/STATUS conflicts resolved by keeping both). `origin/Saarthak` however already contains its own `android/core` (190 tests), `android/engine` (`InferenceEngine`, `JniInferenceEngine`, prebuilt `libiv_native.so` + QNN/Genie libs), `config/` (superset `app_config.json`, `schemas/`, golden prompts) and `eval/` — same path and same package as my engine port. Left alone, the two branches would not merge and the APK would have duplicate classes.
+
+**Decisions (reasoning)**
+- Keep ML's trees untouched and identical (`git checkout origin/Saarthak -- android/core android/engine config`) so the merge is conflict-free; move my layer to `android/domain`. Rewriting the app onto ML's `:core` API would have cost hours with no user-visible gain; instead I *prove equivalence* with tests (below).
+- Adapter instead of adopting ML's engine types in the orchestrator: the orchestrator stays pure Kotlin (fast JVM tests) and ML can change DTOs with a one-file fix on my side.
+- Removed `screenOrientation="portrait"` (PRD §20.9): the QIDK shows on an HDMI monitor (landscape, `qidk guide.pdf`); forced portrait would be sideways/pillar-boxed. Content is centred with a 720 dp max width; verified in both orientations.
+
+**Verification done**
+1. *Prompt parity:* my `PromptBuilder` reproduces ML's golden files (extract base/ft, patch, recommend, warm-up) byte-for-byte.
+2. *Eval cross-check:* all 150 gold tool calls survive my parser/merger/time resolver/validator with nothing dropped; follow-up question text equals the eval's in 39/50, the other 11 are the §10.6 rule-severity case.
+3. *Differential tests vs ML `:core`:* time resolver identical on every eval phrase; location matcher identical except bare "Block A/B".
+4. *Type bridge:* orchestrator driven through ML's own `MockInferenceEngine` via `MlEngineAdapter` completes the slide conversation.
+5. *Real Android run:* installed `emulator` + `system-images;android-35;google_apis;arm64-v8a`, AVD `iv_test`; installed the debug APK and walked through every screen with `adb`/`uiautomator`.
+
+**Bugs found only by running the APK (all fixed)**
+- Reference number was `INC-20261011+0530-0001` (`BASIC_ISO_DATE` on a zoned value appends the offset) → `yyyyMMdd`; test now checks the exact pattern.
+- On-screen keyboard covered the text field and Send button (Android 15 edge-to-edge ignores `adjustResize`) → `imePadding()`.
+- "I didn't hear anything" notice stayed on screen for the rest of the conversation → cleared on the next input.
+- White status-bar icons on a white background → `enableEdgeToEdge()`.
+- User and assistant bubbles had near-identical colours; detail screen had a doubled top inset; enum codes shown raw (`IN_PROGRESS`); dashboard header left room for one card in landscape → all fixed.
+- Demo seed data used an enum value that is not in the taxonomy (`UNAUTHORISED_ENTRY`) and missed a mandatory field; a new test asserts every demo incident validates.
+
+**Still unverified (needs the board):** real microphones + noise with the VAD thresholds, eSpeak voice, `libcdsprpc.so` visibility from the app (Plan A), Genie/whisper.cpp load inside the app, end-to-end latency. `scripts/app_device_check.sh` automates the checkable parts.
