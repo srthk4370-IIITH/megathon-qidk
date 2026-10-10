@@ -64,48 +64,7 @@ Only two branches: **App** and **ML**. No separate web/dashboard branch.
 - Who is affected: App branch.
 - Action needed: `include(":engine")`, `implementation(project(":engine"))`, construct `JniInferenceEngine(applicationContext, llmFallback = MockInferenceEngine())`, call `init()` off the main thread at startup. Manifest gets `<uses-native-library libcdsprpc.so>` from the engine module automatically.
 
-
-## 2026-10-10 — renny (App) — `config/` created verbatim from PRD
-- What changed: App branch created `config/` straight from the PRD with no edits to keys/enums: `taxonomy.json` (App. A), `site_registry.json` (A.3), `sop.json` (App. B), `app_config.json` (§22.5), `prompts/*` (App. C.1–C.9; `warmup.user.txt` = C.9). Extracted by script and JSON-validated.
-- Who is affected: ML branch (`Saarthak`) — PRD §22.5 / §34.1.
-- Action needed by others: **use this copy of `config/`; do not create a second one.** Any change to keys/enums/prompts goes in PRD.md and here in the same commit.
-- Commit: renny
-
-## 2026-10-10 — renny (App) — decisions affecting the PRD text
-- R1-07 followed everywhere: Room `@Fts4` on platform SQLite. PRD §20.12 (`sqlite-bundled`), §21.1 (BundledSQLiteDriver) and App. E FTS5 DDL are stale; App branch ignores them.
-- P0 detail view has **no** Acknowledge/Resolve/Close (F-36 is P1, contradicts §23.2 "P0"). Status stays SUBMITTED.
-- P0 dashboard: no charts or stat cards; one plain-text count row (total · critical · last 24 h) instead of §23.1/§23.3 stats.
-- Draft resume UI cut (F-35); drafts still auto-saved.
-- Single build flavour with Mock engine for now (planA/planB split from §20.1 deferred); real engines plug in via `InferenceEngine`.
-- Model dir constant: `/sdcard/Android/data/com.megathon.incidentvoice/files/models/` (PRD §20.10), defined once in the app.
-
-## 2026-10-10 night — renny (App) — what ML needs to know for integration
-- **Interface to implement:** `com.megathon.incidentvoice.engine.InferenceEngine` (`android/core/src/main/kotlin/.../engine/Engine.kt`) — exactly PRD §22.1; DTOs (`EngineInfo`, `AsrResult`, `GenStats`, `EngineError`) carry the Appendix D.5 JSON field names via `@SerialName`. It lives in `:core` (pure Kotlin) so the orchestrator is JVM-tested; `JniInferenceEngine`/`HttpInferenceEngine` go in `:app` (`AppContainer.engine` is the one swap point).
-- **Prompts:** app renders prompts itself (`PromptBuilder`, PRD §13.3 byte format, no BOS) from `config/prompts/*`; engine receives the finished string in `GenRequest.prompt`. `LlmTask`/`SamplerName` per §22.1; app passes `max_tokens` from `config/app_config.json`.
-- **Empty generation** (0 tokens) is treated by the app as a retryable *engine* error, never a content failure (PRD §13.7).
-- **FTS:** `FTS5` query syntax in the PRD (`"tok"*`) does not work on FTS4; app uses `tok*`. PRD §21.4/§21.5 should say so.
-- **Model dir** constant: `ModelPaths.BASE` = `/sdcard/Android/data/com.megathon.incidentvoice/files/models` (PRD §20.10) in `android/app/.../config/ConfigLoader.kt`.
-- Build/test: `cd android && ~/tools/gradle-8.10.2/bin/gradle :core:test :app:testDebugUnitTest`; `:app:assembleDebug` for the APK (package `com.megathon.incidentvoice`, minSdk 31, arm64-v8a only, **no INTERNET permission**).
-
-## 2026-10-11 01:00 — renny (App) — App now consumes ML's `:engine` + `config/`; module layout to avoid merge conflicts
-- **What changed**
-  - `android/core`, `android/engine`, `config/`, the Gradle wrapper files and `.gitignore` rules on `renny` are **the `origin/Saarthak` versions** (re-synced at `d69713a`, no edits) → merging the two branches produces no conflicts in those trees. `eval/text_cases.jsonl` is also taken verbatim (used by app tests).
-  - The App branch's own pure-Kotlin layer moved from `android/core` to **`android/domain` (module `:domain`)**. Its engine port lives in package `com.megathon.incidentvoice.domain.engine` so it does not clash with ML's `com.megathon.incidentvoice.engine`.
-  - `:app` depends on `:domain` + `:engine`. `MlEngineAdapter` (`android/app/.../engineglue/`) is the **only** file that knows both type families; it wraps `JniInferenceEngine` (or any ML `InferenceEngine`). Settings → Engine: Auto / On-device / Mock. Auto = on-device when `llama/genie_config.json` and `whisper/<asr.whisper_cpp_model>` exist under `getExternalFilesDir(null)/models`, else Mock.
-  - Root Gradle files are a superset of ML's: `settings.gradle.kts` includes `:core`, `:domain` always and `:engine`, `:app` when `-PwithAndroid=true` **or** an SDK is configured (`local.properties` / `ANDROID_HOME`). Root `build.gradle.kts` adds the Compose and KSP plugins. **When merging, take renny's `settings.gradle.kts`, `build.gradle.kts`, `gradle.properties`.**
-  - The app's `PromptBuilder` now follows `config/prompts/RENDERING.md` and passes ML's five golden files byte-for-byte; SOP candidate filter mirrors `ml/common/sop.py` (golden candidate ids match).
-- **Who is affected:** ML branch (merge), anyone building `android/`.
-- **Findings for ML (no action taken on ML files)**
-  1. `libiv_native.so` is linked with **4 KB** segment alignment (the QAIRT libs are 16 KB). Fine if the board runs 4 KB pages (`adb shell getconf PAGE_SIZE` → 4096); if it is 16384 the lib will not load → rebuild with `-Wl,-z,max-page-size=16384`. `scripts/app_device_check.sh` checks this.
-  2. (Updated 01:15, after ML's `d69713a`.) The app constructs `JniInferenceEngine(context, modelsDir, whisperModel = app_config.asr.whisper_cpp_model, llmFallback = <app mock>)`. Auto mode picks the on-device engine as soon as the **Whisper** model is present; the Home pill is orange ("On-device ASR ready · LLM mock") until `llmOnNpu()` is true. After the Llama bundle is pushed: Settings → Engine → **Auto** (or "Retry engine") calls `init()` again. The fallback is the app's own mock (it classifies the real transcript) rather than ML's slide-only mock.
-  3. The app treats `IV-E3xx` / `IV-E6xx` generation errors (incl. `IV-E301 empty LLM output`) as retryable (3/7/15 s) before showing ERROR_ENGINE.
-  4. Eval set: in 11 of the 50 follow-up cases the eval asks `severity` although PRD §10.6 says a rule-derived severity (`INFERRED`) counts as filled — the app (and ML's Kotlin `:core`) do not ask. Not a bug; just a difference between the eval generator and the dialogue.
-  5. PRD text to fix when convenient: FTS4 query syntax is `tok*` (not `"tok"*`), manifest must not force portrait (HDMI monitor is landscape), no `@Upsert` on FTS tables.
-- **Action needed by others:** run `bash scripts/app_device_check.sh` on the machine with the board (see `handover_app.md`); `MOCK=1` keeps the app off the NPU.
-
-## 2026-10-11 01:20 — renny (App) — `Saarthak` merged into `main` (ML files untouched)
-- What changed: `main` = `renny` + `origin/Saarthak` (`f24f674`). Every ML-owned path (`android/core`, `android/engine`, `config/`, `native/`, `ml/`, `eval/`, `scripts/` (ML jobs), `server-go/`, `android-probe/`, `android/build.gradle.kts`, `android/gradle.properties`, Gradle wrapper) is **byte-identical to `Saarthak`**.
-- Conflict resolutions: `android/build.gradle.kts` and `android/gradle.properties` → ML's version. `android/settings.gradle.kts` → ML's version plus, at the hook ML left ("The App team adds include(":app") here"), `include(":domain", ":app")` and the Compose/KSP plugin versions in `pluginManagement`. `.gitignore` → ML's plus the Silero asset exception, `.DS_Store`, `.kotlin/`. `CHANGE.md` → both sides kept.
-- **This supersedes the earlier note "take renny's root Gradle files".** The App build now uses ML's gate: `gradle -PwithAndroid=true :app:assembleDebug` (without the flag only `:core` is configured, exactly as before for ML).
-- Verified on the merged tree: `:core` 190, `:domain` 119, `:app` 12 tests green; debug APK builds.
-- Action needed by ML: none. Keep merging `Saarthak` → `main`; no App file lives under an ML path.
+## 2026-10-11 01:15 — Saarthak — ASR language decision: English mode
+- What changed: measured on the team's 30 recorded clips on the QIDK (whisper.cpp small, CPU): **`en` mode → English WER 7.0 %, ~1.9 s per clip**; `auto` is 3× slower with no English gain; Hinglish is weak in every mode (Whisper-small translates/garbles code-mix). `config/app_config.json` → `asr.language_mode = force_en`.
+- Who is affected: App.
+- Action needed: call `transcribe(pcm, mode = LangMode.FORCE_EN)`. Hinglish speech still works end-to-end (the LLM gets an English-ish transcript), just less accurately.
