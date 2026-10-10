@@ -119,6 +119,8 @@ class RoomIncidentRepository(
         audioRoot?.resolve(id)?.deleteRecursively()
     }
 
+    override suspend fun deleteAll(actor: Actor): Int { val ids = dao.allIds(); ids.forEach { delete(it, actor) }; return ids.size }
+
     override suspend fun latestDraft(maxAgeMs: Long): String? = dao.latestDraftSince(nowMs() - maxAgeMs)
 
     override suspend fun purgeOldDrafts(maxAgeMs: Long): Int {

@@ -47,7 +47,8 @@ class LocationMatcher(private val registry: SiteRegistry) {
         val low = spoken.lowercase()
         val qualifier = qualifiers.firstOrNull { Regex("(^|\\s)${Regex.escape(it)}(\\s|$)").containsMatchIn(low) }
             ?.takeIf { it != "the" && it != "at" }
-        val norm = normalise(spoken)
+        // "B4", "bay for", "conference room to" → registry spelling (as heard by the speech recogniser)
+        val norm = normalise(com.megathon.incidentvoice.ask.SpokenPlaces.normalise(spoken, registry).trim())
         if (norm.isEmpty()) return LocationMatch(MatchKind.NONE)
         var best: SiteLocation? = null
         var bestScore = 0.0

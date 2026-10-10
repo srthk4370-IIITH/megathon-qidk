@@ -88,6 +88,23 @@ fun SettingsScreen(c: AppContainer) {
             OutlinedButton({ scope.launch { val n = DemoSeeder(c.config, c.repository).seed(s.reporter); seedMsg = "Added $n demo incidents" } }) { Text("Load demo incidents") }
             seedMsg?.let { Text(it, Modifier.padding(start = 12.dp), style = MaterialTheme.typography.bodySmall) }
         }
+        var confirmReset by remember { mutableStateOf(false) }
+        OutlinedButton({ confirmReset = true }, colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)) { Text("Reset for demo (delete all, load demo incidents)") }
+        if (confirmReset) AlertDialog(
+            onDismissRequest = { confirmReset = false },
+            title = { Text("Reset all reports?") },
+            text = { Text("Every report, draft and recording on this device is deleted, then the 10 demo incidents are loaded. Settings and models are kept.") },
+            confirmButton = { TextButton({
+                confirmReset = false
+                scope.launch {
+                    c.orchestrator.onCancel(); c.askController.clear()
+                    val del = c.repository.deleteAll(com.megathon.incidentvoice.data.Actor.System)
+                    val n = DemoSeeder(c.config, c.repository).seed(s.reporter)
+                    seedMsg = "Deleted $del, loaded $n demo incidents"
+                }
+            }) { Text("Reset") } },
+            dismissButton = { TextButton({ confirmReset = false }) { Text("Cancel") } },
+        )
         Text("IncidentVoice · config v${c.config.taxonomy.version} · fully offline", style = MaterialTheme.typography.labelSmall)
     }
 }

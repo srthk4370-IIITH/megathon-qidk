@@ -144,8 +144,7 @@ class RuleBasedLlm(private val tx: Taxonomy, private val registry: SiteRegistry?
 
     /** Prefer a known site location (name or alias) found in the text; else the phrase after a place preposition. */
     private fun location(t: String): String? {
-        var norm = " $t "
-        for ((w, d) in numWords) norm = norm.replace(Regex("\\b$w\\b"), d)
+        var norm = com.megathon.incidentvoice.ask.SpokenPlaces.normalise(t, registry)
         var best: Pair<String, IntRange>? = null
         for (loc in registry?.locations.orEmpty()) {
             for (name in listOf(loc.name) + loc.aliases) {

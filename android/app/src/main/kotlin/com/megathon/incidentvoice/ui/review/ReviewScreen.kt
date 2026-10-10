@@ -39,6 +39,9 @@ fun ReviewScreen(ui: ConversationUiState, cfg: AppConfigBundle, o: ConversationO
     val missing = v?.missing.orEmpty()
     var editing by remember { mutableStateOf<String?>(null) }
     var newRec by remember { mutableStateOf("") }
+    // Optional fields nobody mentioned are folded away so the screen shows what matters: filled values and gaps.
+    var showOptional by remember { mutableStateOf(false) }
+    fun visible(key: String) = showOptional || key in missing || (f.state(key)?.status ?: FieldStatus.MISSING) != FieldStatus.MISSING
 
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(vertical = 8.dp)) {
         item {
@@ -94,18 +97,19 @@ fun ReviewScreen(ui: ConversationUiState, cfg: AppConfigBundle, o: ConversationO
 
         // ---- People
         item { Section("People") }
-        items(listOf("injuries", "injured_count", "persons", "witnesses", "hazard_ongoing")) { k -> GenericRow(k, ui, tx, missing) { editing = it } }
+        items(listOf("injuries", "injured_count", "persons", "witnesses", "hazard_ongoing").filter { visible(it) }) { k -> GenericRow(k, ui, tx, missing) { editing = it } }
 
         // ---- Category details
         val details = tx.detailFields(f.types)
         if (details.isNotEmpty()) {
             item { Section("Category details") }
-            items(details, key = { it.key }) { d -> GenericRow(d.key, ui, tx, missing) { editing = it } }
+            items(details.filter { visible(it.key) }, key = { it.key }) { d -> GenericRow(d.key, ui, tx, missing) { editing = it } }
         }
 
         // ---- Equipment & actions
         item { Section("Equipment & actions taken") }
-        items(listOf("equipment", "actions_taken")) { k -> GenericRow(k, ui, tx, missing) { editing = it } }
+        items(listOf("equipment", "actions_taken").filter { visible(it) }) { k -> GenericRow(k, ui, tx, missing) { editing = it } }
+        item { TextButton({ showOptional = !showOptional }) { Text(if (showOptional) "Hide empty optional fields" else "Show all optional fields") } }
 
         // ---- Recommendations
         item { Section("Recommended actions") }

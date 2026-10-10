@@ -24,6 +24,21 @@ class AskTest {
         assertEquals(AskIntent.DETAIL, x.intent); assertEquals(setOf("B-G-B4"), x.locationIds); assertEquals("Bay 4", x.locationLabel); assertEquals("", x.freeText)
         assertEquals(setOf("A-1-CR2"), q("anything near conference room two").locationIds)
     }
+    /** Live on the QIDK: "What happened in Bay 4?" was transcribed as "What happened in B4?". */
+    @Test fun location_asHeardBySpeechRecognition() {
+        for (s in listOf("What happened in B4?", "what happened in bay for", "what happened in b 4", "anything in Bay four")) assertEquals(setOf("B-G-B4"), q(s).locationIds, s)
+        assertEquals(setOf("A-1-CR2"), q("incidents near conference room to").locationIds)
+        assertEquals("Bay 4", q("What happened in B4?").locationLabel)
+        assertTrue(q("reports for the last 2 days").locationIds.isEmpty())                 // "for" stays a word when it is not after a place
+        assertEquals("p-101", q("anything about p-101").freeText)
+    }
+    @Test fun nothingUnderstood_saysSo() {
+        val x = q("what happened")
+        assertTrue(!x.hasFilters && x.freeText.isBlank())
+        val a = AnswerComposer(Fx.tx, Fx.zone).compose(x, listOf(AskHit("i", "INC-1", "Water leak near Conference Room 2", "WATER", "LOW", "SUBMITTED", "near Conference Room 2", Fx.now.toEpochMilli())), 10)
+        assertTrue(a.startsWith("I didn't catch a specific place, type or time, so here are the 10 most recent reports."), a)
+    }
+
     @Test fun types_andRelativeRange() {
         val x = q("Show fires in the last 7 days")
         assertEquals(setOf("FIRE"), x.types); assertEquals(Fx.now.toEpochMilli() - 7 * day, x.fromMs); assertEquals("in the last 7 days", x.timeLabel)

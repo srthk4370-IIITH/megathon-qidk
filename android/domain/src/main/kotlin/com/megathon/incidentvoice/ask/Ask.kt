@@ -50,7 +50,16 @@ data class AskHit(
     val score: Float? = null, val semantic: Float? = null, val keyword: Boolean = false,
 )
 
-data class AskAnswer(val query: IncidentQuery, val text: String, val hits: List<AskHit>, val total: Int, val tookMs: Long = 0, val mode: String = "")
+data class AskAnswer(val query: IncidentQuery, val text: String, val hits: List<AskHit>, val total: Int, val tookMs: Long = 0, val mode: String = "") {
+    /** What is read aloud: the first sentences up to ~220 characters (the full text stays on screen). */
+    val spoken: String get() {
+        if (text.length <= 220) return text
+        val parts = text.split(Regex("(?<=[.!?])\\s+"))
+        val sb = StringBuilder()
+        for (p in parts) { if (sb.isNotEmpty() && sb.length + p.length > 220) break; sb.append(p).append(' ') }
+        return sb.toString().trim().ifEmpty { text.take(220) }
+    }
+}
 
 class RuleQueryParser(private val tx: Taxonomy, private val registry: SiteRegistry?, private val zone: ZoneId = ZoneId.of("Asia/Kolkata")) : QueryUnderstanding {
 
@@ -130,8 +139,7 @@ class RuleQueryParser(private val tx: Taxonomy, private val registry: SiteRegist
 
         // ---- location (site registry names and aliases, longest first; then building names)
         val locIds = LinkedHashSet<String>(); var locLabel: String? = null
-        var norm = rest
-        for ((w, d) in mapOf("one" to "1", "two" to "2", "three" to "3", "four" to "4", "five" to "5")) norm = norm.replace(Regex("\\b$w\\b"), d)
+        var norm = SpokenPlaces.normalise(rest, registry)
         val names = registry?.locations.orEmpty().flatMap { l -> (listOf(l.name) + l.aliases).map { it.lowercase() to l } }.filter { it.first.length >= 4 }.sortedByDescending { it.first.length }
         for ((n, l) in names) {
             val i = norm.indexOf(" $n ")
@@ -151,12 +159,37 @@ class RuleQueryParser(private val tx: Taxonomy, private val registry: SiteRegist
         // "leak" alone is ambiguous: a gas/chemical question should not also filter on WATER
         if ("HAZMAT" in types && "WATER" in types && !rx("\\bwater\\b").containsMatchIn(q)) types -= "WATER"
 
-        val free = rest.split(' ').filter { it.length >= 3 && it !in stop && !it.all(Char::isDigit) }.joinToString(" ")
+        // keep short tokens that carry a digit ("p-101", "b4"): they are asset tags / place codes worth a keyword search
+        val free = rest.split(' ').filter { (it.length >= 3 || (it.length == 2 && it.any(Char::isDigit) && it.any(Char::isLetter))) && it !in stop && !it.all(Char::isDigit) }.joinToString(" ")
         return IncidentQuery(
             raw = question.trim(), intent = intent, types = types, severities = sev, injuries = injuries, locationIds = locIds, locationLabel = locLabel,
             fromMs = from?.toInstant()?.toEpochMilli(), toMs = to?.toInstant()?.toEpochMilli(), timeLabel = label, freeText = free,
             limit = if (intent == AskIntent.LATEST || intent == AskIntent.DETAIL) 3 else 5,
         )
+    }
+}
+
+/**
+ * Speech recognisers write places the way they sound: "B4" or "bay for" for "Bay 4", "conference room to" for
+ * "Conference Room 2". This rewrites such forms to the site-registry spelling before matching.
+ */
+object SpokenPlaces {
+    private val digits = mapOf("one" to "1", "won" to "1", "two" to "2", "to" to "2", "too" to "2", "three" to "3", "tree" to "3", "four" to "4", "for" to "4", "five" to "5", "six" to "6", "seven" to "7", "eight" to "8", "ate" to "8", "nine" to "9", "ten" to "10")
+
+    fun normalise(text: String, registry: SiteRegistry?): String {
+        var t = " " + text.lowercase().trim() + " "
+        val names = registry?.locations.orEmpty().map { it.name.lowercase() }
+        // numbered places: the word before the number in a registry name ("bay", "room", "line", …)
+        val heads = names.mapNotNull { Regex("^(.*\\b([a-z]+)) (\\d+)$").find(it)?.groupValues?.get(2) }.toSet()
+        for (h in heads) for ((w, d) in digits) t = t.replace(Regex("\\b$h $w\\b"), "$h $d")
+        for ((w, d) in digits) if (w.length > 3 || w in setOf("one", "two", "six", "ten")) t = t.replace(Regex("\\b$w\\b"), d)
+        // letter+number codes: "b4" → the registry place whose words start with that letter and end with that number
+        t = Regex("\\b([a-z]) ?(\\d{1,2})\\b").replace(t) { m ->
+            val (l, n) = m.destructured
+            val cands = names.filter { it.startsWith(l) && it.endsWith(" $n") && it.split(' ').size == 2 }
+            if (cands.size == 1) cands.single() else m.value
+        }
+        return t
     }
 }
 
@@ -192,6 +225,9 @@ class AnswerComposer(private val tx: Taxonomy, private val zone: ZoneId = ZoneId
             else "I couldn't find any $what" + (if (q.freeText.isNotBlank()) " about \"${q.freeText}\"" else "") + "."
         }
         val top = hits.first()
+        // Nothing specific was understood ("what happened?", or a mis-heard place): say so instead of implying a match.
+        if (!q.hasFilters && q.freeText.isBlank() && q.intent != AskIntent.COUNT && q.intent != AskIntent.LATEST)
+            return "I didn't catch a specific place, type or time, so here are the $total most recent report${if (total != 1) "s" else ""}. The latest is: ${oneLine(top)}."
         return when (q.intent) {
             AskIntent.COUNT -> {
                 val what = describe(q, plural = total != 1)
