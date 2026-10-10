@@ -112,8 +112,8 @@ void LlmEngine::load(const std::string& bundle_dir, int max_tokens_default) {
     }
     st = GenieDialog_setMaxNumTokens(d, static_cast<uint32_t>(max_tokens_default));
     if (st != GENIE_STATUS_SUCCESS) IV_LOGW("GenieDialog_setMaxNumTokens status=%d", st);
-    config_ = c;
-    dialog_ = d;
+    config_ = const_cast<void*>(static_cast<const void*>(c));
+    dialog_ = const_cast<void*>(static_cast<const void*>(d));
     current_sampler_ = "greedy";
     load_ms_ = ms_since(t0);
     IV_LOGI("Genie loaded from %s in %.0f ms", bundle_dir.c_str(), load_ms_);
