@@ -8,9 +8,10 @@ STATUS=$REPO/ml/status/pipeline_status.md
 mkdir -p "$ST" "$(dirname "$STATUS")"
 status(){ echo "- $(date '+%d %H:%M') [$JOB] $*" >> "$STATUS"; echo "$(date '+%F %T') STATUS $*"; }
 w(){ wslpath -w "$1"; }
-adbx(){ "$ADB" "$@" 2>&1 | tr -d '\r'; }
-ash(){ "$ADB" shell "$@" 2>&1 | tr -d '\r'; }
-board_ok(){ "$ADB" get-state 2>/dev/null | tr -d '\r' | grep -q device; }
+# Windows adb.exe via WSL interop hangs on stdin when detached: always feed /dev/null, use `shell -n`, and time out.
+adbx(){ timeout 1800 "$ADB" "$@" < /dev/null 2>&1 | tr -d '\r'; }
+ash(){ timeout 600 "$ADB" shell -n "$@" < /dev/null 2>&1 | tr -d '\r'; }
+board_ok(){ timeout 20 "$ADB" get-state < /dev/null 2>/dev/null | tr -d '\r' | grep -q device; }
 wait_board(){ until board_ok; do sleep 20; done; }
 push_if_changed(){ # local remote_dir
   local f=$1 d=$2 n; n=$(basename "$f")

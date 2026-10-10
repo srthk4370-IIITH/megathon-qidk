@@ -84,7 +84,7 @@ class Adb:
         delay = 5
         for attempt in range(retries + 1):
             try:
-                r = subprocess.run(cmd, env=self.env, capture_output=capture, text=True, timeout=timeout,
+                r = subprocess.run(cmd, env=self.env, stdin=subprocess.DEVNULL, capture_output=capture, text=True, timeout=timeout,
                                    encoding="utf-8", errors="replace")
             except FileNotFoundError:
                 raise AdbError(f"adb binary not found: {self.exe}")
@@ -107,7 +107,7 @@ class Adb:
 
     def wait_for_device(self, timeout_s: int = 300) -> bool:
         try:
-            subprocess.run(self._base() + ["wait-for-device"], env=self.env, capture_output=True, timeout=timeout_s)
+            subprocess.run(self._base() + ["wait-for-device"], env=self.env, stdin=subprocess.DEVNULL, capture_output=True, timeout=timeout_s)
         except subprocess.TimeoutExpired:
             return False
         r = subprocess.run(self._base() + ["get-state"], env=self.env, capture_output=True, text=True)
