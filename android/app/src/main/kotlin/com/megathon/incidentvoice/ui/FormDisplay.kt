@@ -21,10 +21,20 @@ object FormDisplay {
         }
         return when (v) {
             is JsonArray -> v.joinToString(", ") { e ->
-                if (e is JsonObject) personText(e) else (e as? JsonPrimitive)?.contentOrNull.orEmpty()
+                if (e is JsonObject) personText(e) else pretty(key, (e as? JsonPrimitive)?.contentOrNull.orEmpty(), tx)
             }
-            is JsonPrimitive -> v.booleanOrNull?.let { if (it) "Yes" else "No" } ?: v.contentOrNull.orEmpty()
+            is JsonPrimitive -> v.booleanOrNull?.takeIf { !v.isString }?.let { if (it) "Yes" else "No" } ?: pretty(key, v.contentOrNull.orEmpty(), tx)
             else -> v.toString()
+        }
+    }
+
+    /** Enum codes → readable text ("IN_PROGRESS" → "In progress", "WATER" → "Water Leak / Flooding"). Stored values are untouched. */
+    fun pretty(key: String, raw: String, tx: Taxonomy): String {
+        val def = tx.field(key) ?: return raw
+        return when (def.type) {
+            "enum_category", "enum_category_list" -> tx.category(raw)?.label ?: raw
+            "enum" -> raw.lowercase().replace('_', ' ').replaceFirstChar { it.uppercase() }
+            else -> raw
         }
     }
 

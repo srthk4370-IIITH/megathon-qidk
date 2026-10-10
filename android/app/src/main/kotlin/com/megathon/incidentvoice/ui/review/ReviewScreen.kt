@@ -43,7 +43,7 @@ fun ReviewScreen(ui: ConversationUiState, cfg: AppConfigBundle, o: ConversationO
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(vertical = 8.dp)) {
         item {
             if (missing.isNotEmpty()) {
-                Text("${missing.size} field${if (missing.size > 1) "s" else ""} need attention: ${missing.take(3).joinToString { tx.label(it) }}${if (missing.size > 3) "…" else ""}",
+                Text("${missing.size} ${if (missing.size > 1) "fields need" else "field needs"} attention: ${missing.take(3).joinToString { tx.label(it) }}${if (missing.size > 3) "…" else ""}",
                     color = androidx.compose.ui.graphics.Color.White, modifier = Modifier.fillMaxWidth().background(SevCritical, RoundedCornerShape(8.dp)).padding(10.dp))
             } else Text("All required fields complete.", color = FilledGreen, fontWeight = FontWeight.Bold)
             ui.notice?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
@@ -130,6 +130,8 @@ fun ReviewScreen(ui: ConversationUiState, cfg: AppConfigBundle, o: ConversationO
         // ---- Reporter + submit
         item {
             Section("Reporter")
+            val rep = LocalReporter.current
+            Text(if (rep.isBlank()) "Not set — add your name in Settings." else rep, style = MaterialTheme.typography.bodyMedium)
             Text("Taken from the device profile (Settings).", style = MaterialTheme.typography.bodySmall, color = Grey)
             Spacer(Modifier.height(8.dp))
             Button(onClick = o::onSubmit, enabled = ui.canSubmit, modifier = Modifier.fillMaxWidth().height(52.dp)) { Text(if (ui.editingExisting) "Save changes" else "Submit report") }
@@ -190,6 +192,7 @@ private fun FieldRow(
 }
 
 private typealias Color = androidx.compose.ui.graphics.Color
+val LocalReporter = androidx.compose.runtime.staticCompositionLocalOf { "" }
 val LocalOrchestrator = androidx.compose.runtime.staticCompositionLocalOf<ConversationOrchestrator?> { null }
 
 // ---------------------------------------------------------------------------------------------

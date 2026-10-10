@@ -82,7 +82,7 @@ class ConversationOrchestrator(
     fun onTypeInsteadRequested() {
         if (ui.value.state in setOf(ConvState.IDLE, ConvState.LISTENING, ConvState.ASKING, ConvState.TRANSCRIPT_REVIEW)) {
             cancelAll(); tts.stop(); audio.cancel()
-            update { it.copy(state = ConvState.TYPING) }
+            update { it.copy(state = ConvState.TYPING, notice = null) }
         }
     }
 
@@ -168,7 +168,7 @@ class ConversationOrchestrator(
 
     private suspend fun listenNarration() {
         val id = ensureDraft()
-        update { it.copy(state = ConvState.LISTENING, listeningFor = ListenKind.NARRATION, error = null, level = 0f, elapsedMs = 0) }
+        update { it.copy(state = ConvState.LISTENING, listeningFor = ListenKind.NARRATION, error = null, notice = null, level = 0f, elapsedMs = 0) }
         val maxMs = cfg.app.asr.maxNarrationS * 1000L // rev 1.1 R1-08: one Whisper window (30 s)
         when (val r = audio.listen(ListenKind.NARRATION, maxMs, settings().endSilenceMs, id) { lvl, ms -> update { u -> u.copy(level = lvl, elapsedMs = ms) } }) {
             is ListenResult.Speech -> transcribeAndHandle(r, narration = true)
@@ -227,6 +227,7 @@ class ConversationOrchestrator(
     private suspend fun processText(text: String, fromVoice: Boolean, audioPath: String?, audioMs: Long?, asrMs: Long?) {
         ensureDraft()
         narrationText = text
+        update { it.copy(notice = null) }
         scanEmergency(text)
         var finalText = text
         if (fromVoice) {

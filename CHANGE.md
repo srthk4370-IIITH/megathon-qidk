@@ -76,3 +76,19 @@ Only two branches: **App** and **ML**. No separate web/dashboard branch.
 - **FTS:** `FTS5` query syntax in the PRD (`"tok"*`) does not work on FTS4; app uses `tok*`. PRD §21.4/§21.5 should say so.
 - **Model dir** constant: `ModelPaths.BASE` = `/sdcard/Android/data/com.megathon.incidentvoice/files/models` (PRD §20.10) in `android/app/.../config/ConfigLoader.kt`.
 - Build/test: `cd android && ~/tools/gradle-8.10.2/bin/gradle :core:test :app:testDebugUnitTest`; `:app:assembleDebug` for the APK (package `com.megathon.incidentvoice`, minSdk 31, arm64-v8a only, **no INTERNET permission**).
+
+## 2026-10-11 01:00 — renny (App) — App now consumes ML's `:engine` + `config/`; module layout to avoid merge conflicts
+- **What changed**
+  - `android/core`, `android/engine` and `config/` on `renny` are now **byte-for-byte the `origin/Saarthak` versions** (taken at `cc183eb`, no edits) → merging the two branches produces no conflicts in those trees. `eval/text_cases.jsonl` is also taken verbatim (used by app tests).
+  - The App branch's own pure-Kotlin layer moved from `android/core` to **`android/domain` (module `:domain`)**. Its engine port lives in package `com.megathon.incidentvoice.domain.engine` so it does not clash with ML's `com.megathon.incidentvoice.engine`.
+  - `:app` depends on `:domain` + `:engine`. `MlEngineAdapter` (`android/app/.../engineglue/`) is the **only** file that knows both type families; it wraps `JniInferenceEngine` (or any ML `InferenceEngine`). Settings → Engine: Auto / On-device / Mock. Auto = on-device when `llama/genie_config.json` and `whisper/<asr.whisper_cpp_model>` exist under `getExternalFilesDir(null)/models`, else Mock.
+  - Root Gradle files are a superset of ML's: `settings.gradle.kts` includes `:core`, `:domain` always and `:engine`, `:app` when `-PwithAndroid=true` **or** an SDK is configured (`local.properties` / `ANDROID_HOME`). Root `build.gradle.kts` adds the Compose and KSP plugins. **When merging, take renny's `settings.gradle.kts`, `build.gradle.kts`, `gradle.properties`.**
+  - The app's `PromptBuilder` now follows `config/prompts/RENDERING.md` and passes ML's five golden files byte-for-byte; SOP candidate filter mirrors `ml/common/sop.py` (golden candidate ids match).
+- **Who is affected:** ML branch (merge), anyone building `android/`.
+- **Findings for ML (no action taken on ML files)**
+  1. `libiv_native.so` is linked with **4 KB** segment alignment (the QAIRT libs are 16 KB). Fine if the board runs 4 KB pages (`adb shell getconf PAGE_SIZE` → 4096); if it is 16384 the lib will not load → rebuild with `-Wl,-z,max-page-size=16384`. `scripts/app_device_check.sh` checks this.
+  2. `JniInferenceEngine.init()` needs **both** the Llama bundle and the Whisper model; with only Whisper pushed it returns `IV-E603`. The app then shows the error with "Retry engine" / "Use mock engine".
+  3. The app treats `IV-E3xx` / `IV-E6xx` generation errors (incl. `IV-E301 empty LLM output`) as retryable (3/7/15 s) before showing ERROR_ENGINE.
+  4. Eval set: in 11 of the 50 follow-up cases the eval asks `severity` although PRD §10.6 says a rule-derived severity (`INFERRED`) counts as filled — the app (and ML's Kotlin `:core`) do not ask. Not a bug; just a difference between the eval generator and the dialogue.
+  5. PRD text to fix when convenient: FTS4 query syntax is `tok*` (not `"tok"*`), manifest must not force portrait (HDMI monitor is landscape), no `@Upsert` on FTS tables.
+- **Action needed by others:** run `bash scripts/app_device_check.sh` on the machine with the board (see `handover_app.md`); `MOCK=1` keeps the app off the NPU.

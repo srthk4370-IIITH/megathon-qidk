@@ -33,7 +33,7 @@ _Last updated: 2026-10-10 21:20 IST (Saarthak branch)_
 | Branch | Area | Built so far |
 |---|---|---|
 | `Saarthak` | ML / NPU | Docs only. No models exported yet. |
-| `renny` (App) | App + dashboard | **Stages A–C done on the Mock engine** (~116 tests green): `config/` verbatim from PRD; `:core` (validator, normalisers, parser, merger, prompts, SOP templates, orchestrator state machine); `:app` (Room+FTS4, dashboard, detail, home/conversation/review/submitted, eSpeak TTS). Debug APK builds. **Not yet on a device** (D: mic+VAD, E: banner/settings/debug overlay pending). Real engine = ML branch's `InferenceEngine`. |
+| `renny` (App) | App + dashboard | **All P0 app features built and run on Android 15 arm64 (emulator)**; 321 tests green (ML `:core` 190, app `:domain` 119, `:app` 12). ML's `:engine` (JNI, prebuilt libs) integrated behind an adapter; its native libs load inside the APK. **Not yet run on the QIDK** (board is on the ML machine) → `scripts/app_device_check.sh`. Details: section "App branch" below. |
 
 ## Board / environment
 
@@ -44,3 +44,26 @@ _Last updated: 2026-10-10 21:20 IST (Saarthak branch)_
 | Llama 3.2 3B V79 bundle | Export running (2 hosts) |
 | Whisper | P0 = whisper.cpp CPU (not started); NPU via ORT-QNN is P1 |
 | Plan A vs Plan B | Undecided (probe at ~H3) |
+
+## App branch (`renny`) — P0 feature status (2026-10-11 01:00)
+
+Legend: ✅ built + verified by test and by running the APK on an Android 15 arm64 emulator · 🟡 built, needs the QIDK to verify · ⏳ waits for ML.
+
+| ID | Feature | State | Evidence |
+|---|---|---|---|
+| F-01 | Voice capture, Silero VAD auto-stop, manual stop, 30 s cap | 🟡 | Recorder + Silero (ORT) ran on the emulator: 10 s no-speech timeout fired correctly. Real speech/noise needs the board mics. |
+| F-02 | ASR via `transcribe()`; transcript shown, editable, 2 s auto-proceed | ✅ UI / ⏳ real ASR | Orchestrator tests; emulator run with scripted transcript. whisper.cpp comes with ML's `:engine`. |
+| F-03 | Extraction via `fill_incident_form` | ✅ app side / ⏳ model | 150/150 gold tool calls from `eval/text_cases.jsonl` pass parser → merger → validator; prompts byte-identical to ML goldens. |
+| F-04 | Deterministic validator | ✅ | V1–V10 + eval follow-up parity (39/50 exact, 11 explained by §10.6). |
+| F-05 | Spoken follow-ups (EN + Hinglish), patch, ≤3 rounds, UNKNOWN/skip | ✅ logic / 🟡 eSpeak voice | 21 orchestrator tests; emulator run. eSpeak is only on the board (chime fallback otherwise). |
+| F-06 | Time resolver, location matcher | ✅ | Agrees with ML `:core` on every time phrase in the eval set; location differs only for bare "Block A/B" (ML suggests Loading Dock). |
+| F-07 | SOP template recommendations | ✅ | Candidate ids equal ML golden (`recommend_slide`). |
+| F-08 | Review: editable, required fields red, submit gate | ✅ | Emulator; gate blocked an incomplete record. |
+| F-09 | Room + FTS4, drafts autosaved | ✅ | 9 Robolectric tests on real SQLite + emulator. |
+| F-10 | Dashboard: recency, search, filters, count row, detail (+ edit) | ✅ | Emulator: prefix search with snippet, severity filter, detail, edit keeps ref no. |
+| F-11 | Emergency banner + one-tap dial | ✅ | Emulator: amber banner on "fire spreading…", dialer opened. No-dialer case shows a toast. |
+| F-12 | Settings: profile, ERT number, engine status | ✅ | Emulator. Engine mode Auto / On-device / Mock. |
+| F-13 | Debug overlay | ✅ | Emulator (timings, tok/s, raw tool call). |
+| — | On-device engine inside the app (Plan A) | 🟡 | In the APK on Android 15: `libiv_native`, `libGenie`, `libQnnSystem`, `libQnnHtp` load; `libQnnHtpV79Stub` needs the board's `libcdsprpc.so`. Missing models → clean `IV-E603`. |
+
+Cut per rev 1.1 (not built): draft-resume UI, charts, status lifecycle beyond SUBMITTED, PDF/JSON export, 3-min chunking, LLM-tailored recommendations, per-field mic.

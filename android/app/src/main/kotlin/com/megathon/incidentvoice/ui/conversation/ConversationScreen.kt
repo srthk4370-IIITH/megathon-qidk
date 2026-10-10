@@ -30,14 +30,15 @@ import com.megathon.incidentvoice.ui.theme.SevCritical
 fun ConversationScreen(ui: ConversationUiState, tx: Taxonomy, o: ConversationOrchestrator, showDebug: Boolean) {
     var typed by remember(ui.state) { mutableStateOf("") }
     val listState = rememberLazyListState()
-    LaunchedEffect(ui.timeline.size) { if (ui.timeline.isNotEmpty()) listState.animateScrollToItem(ui.timeline.size - 1) }
+    LaunchedEffect(ui.timeline.size, ui.emergency != null) { if (ui.timeline.isNotEmpty()) listState.animateScrollToItem(ui.timeline.size - 1 + if (ui.emergency != null) 1 else 0) }
 
     Column(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
         LinearProgressIndicator(progress = { ui.validation?.progress ?: 0f }, Modifier.fillMaxWidth().padding(top = 8.dp))
-        ui.emergency?.let { Spacer(Modifier.height(8.dp)); EmergencyBannerView(it, o::onEmergencyCall, o::onEmergencyDismiss) }
         ui.notice?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 4.dp)) }
 
         LazyColumn(Modifier.weight(1f).padding(vertical = 8.dp), state = listState, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            // the banner scrolls with the timeline so it never squeezes the conversation on a landscape monitor
+            ui.emergency?.let { e -> item(key = "emergency") { EmergencyBannerView(e, o::onEmergencyCall, o::onEmergencyDismiss) } }
             items(ui.timeline, key = { it.id }) { b -> BubbleView(b) }
             item { LiveForm(ui, tx) }
         }
@@ -51,10 +52,10 @@ fun ConversationScreen(ui: ConversationUiState, tx: Taxonomy, o: ConversationOrc
 private fun BubbleView(b: Bubble) {
     when (b.role) {
         BubbleRole.USER -> Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
-            Text(b.text, Modifier.background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(14.dp)).padding(10.dp).widthIn(max = 300.dp))
+            Text(b.text, color = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.background(MaterialTheme.colorScheme.primary, RoundedCornerShape(14.dp, 14.dp, 2.dp, 14.dp)).padding(10.dp).widthIn(max = 300.dp))
         }
         BubbleRole.ASSISTANT -> Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text(b.text, Modifier.background(MaterialTheme.colorScheme.secondaryContainer, RoundedCornerShape(14.dp)).padding(10.dp).widthIn(max = 300.dp))
+            Text(b.text, Modifier.background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(14.dp, 14.dp, 14.dp, 2.dp)).padding(10.dp).widthIn(max = 300.dp))
             if (b.speaking) Icon(Icons.AutoMirrored.Filled.VolumeUp, "Speaking", Modifier.padding(start = 6.dp))
         }
         BubbleRole.SYSTEM -> Text(b.text, style = MaterialTheme.typography.labelSmall, fontStyle = FontStyle.Italic, color = Grey)

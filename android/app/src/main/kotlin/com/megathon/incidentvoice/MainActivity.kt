@@ -3,8 +3,11 @@ package com.megathon.incidentvoice
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.ui.Alignment
@@ -41,6 +44,7 @@ import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
+        enableEdgeToEdge() // Android 15 draws edge-to-edge anyway; this also gives readable status-bar icons
         super.onCreate(savedInstanceState)
         val container = (application as IncidentVoiceApp).container
         // keep the screen on while a report is in progress (PRD §20.2)
@@ -75,7 +79,8 @@ private fun AppRoot(c: AppContainer) {
             }
         }
     }) { pad ->
-        Box(Modifier.padding(pad).fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+        // consumeWindowInsets + imePadding: keep text fields above the on-screen keyboard (edge-to-edge on Android 15)
+        Box(Modifier.padding(pad).consumeWindowInsets(pad).imePadding().fillMaxSize(), contentAlignment = Alignment.TopCenter) {
         NavHost(nav, startDestination = "home", modifier = Modifier.widthIn(max = 720.dp).fillMaxSize()) {
             composable("home") { ReportFlow(c, onOpenDetail = { nav.navigate("detail/$it") }, onGoDashboard = { nav.navigate("dashboard") { launchSingleTop = true } }) }
             composable("dashboard") {

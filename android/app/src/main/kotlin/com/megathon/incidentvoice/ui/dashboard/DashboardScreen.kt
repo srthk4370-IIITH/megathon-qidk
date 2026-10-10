@@ -43,6 +43,9 @@ fun DashboardScreen(vm: DashboardViewModel, tx: Taxonomy, onOpen: (String) -> Un
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search), keyboardActions = KeyboardActions(),
         )
         Spacer(Modifier.height(6.dp))
+        // filters + count row scroll with the list (PRD §23.1 "collapsible on scroll"); only the search box stays pinned
+        val header: @Composable () -> Unit = {
+            Column {
         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             item {
                 Box {
@@ -71,10 +74,14 @@ fun DashboardScreen(vm: DashboardViewModel, tx: Taxonomy, onOpen: (String) -> Un
             style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Spacer(Modifier.height(6.dp))
+            }
+        }
         val list = items
         when {
             list == null -> Box(Modifier.fillMaxSize(), Alignment.Center) { CircularProgressIndicator() }
-            list.isEmpty() -> Column(Modifier.fillMaxSize(), Arrangement.Center, Alignment.CenterHorizontally) {
+            list.isEmpty() -> Column(Modifier.fillMaxSize(), Arrangement.Top, Alignment.CenterHorizontally) {
+                header()
+                Spacer(Modifier.height(48.dp))
                 Text(if (ui.query.isBlank() && ui.types.isEmpty() && ui.severities.isEmpty() && counts.total == 0) "No incidents reported yet." else "No incidents match.",
                     style = MaterialTheme.typography.bodyLarge)
                 if (onSeed != null && counts.total == 0) {
@@ -86,6 +93,7 @@ fun DashboardScreen(vm: DashboardViewModel, tx: Taxonomy, onOpen: (String) -> Un
                 }
             }
             else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(bottom = 16.dp)) {
+                item(key = "header") { header() }
                 items(list, key = { it.id }) { IncidentCard(it, tx, onOpen) }
             }
         }

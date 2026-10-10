@@ -50,10 +50,19 @@ class RepositoryTest {
         assertTrue(list.all { it.status == "SUBMITTED" && it.refNo != null })
     }
 
+    @Test fun everyDemoIncidentIsCompleteAccordingToTheValidator() = runBlocking {
+        seed()
+        for (i in repo.observeList(DashboardFilter()).first()) {
+            val d = repo.load(i.id)!!
+            val v = Validator.validate(d.form, cfg.taxonomy, java.time.Instant.ofEpochMilli(now))
+            assertTrue("${i.title}: missing ${v.missing} invalid ${v.invalid}", v.complete)
+        }
+    }
+
     @Test fun refNumbers_areUniqueAndSequentialPerDay() = runBlocking {
         val a = repo.createDraft(reporter); val b = repo.createDraft(reporter)
         val r1 = repo.submit(a); val r2 = repo.submit(b)
-        assertTrue(r1.startsWith("INC-")); assertTrue(r1.endsWith("0001")); assertTrue(r2.endsWith("0002"))
+        assertTrue(r1, Regex("INC-\\d{8}-0001").matches(r1)); assertTrue(r2, Regex("INC-\\d{8}-0002").matches(r2)) // PRD: INC-YYYYMMDD-NNNN
     }
 
     @Test fun ftsSearch_prefixAndSnippetAndHinglishCues() = runBlocking {

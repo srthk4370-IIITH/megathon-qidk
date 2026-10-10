@@ -24,30 +24,44 @@ In: 30 s narration cap, Silero VAD, whisper.cpp via `transcribe()`, validator lo
 
 Out (P1+): chunked 3-min narration, draft-resume UI, multi-incident follow-through, status lifecycle beyond SUBMITTED, dashboard stats/charts, PDF/JSON export, prefix cache, LLM-tailored recs, per-field mic, fine-tuning.
 
-## Current state (2026-10-10 night)
+## Current state (2026-10-11 01:00)
 
-Done on the Mock engine: Stage A (`:core`), B (Room+FTS4, dashboard, detail), C (orchestrator, home/conversation/review/submitted). ~116 JVM/Robolectric tests green; debug APK builds. Pending: D (real mic + Silero VAD wiring on device), E (settings screen, debug overlay polish, emergency banner already in UI), real engine from ML.
+All P0 app features are built, tested (321 tests) and exercised on an Android 15 arm64 emulator. ML's `:engine` is integrated behind `MlEngineAdapter`. **Never run on the QIDK yet.** Feature-by-feature status: `STATUS.md` → "App branch".
+
+## Module map (after integrating the ML branch)
+
+| Path | Owner | What |
+|---|---|---|
+| `android/core` | ML (verbatim from `origin/Saarthak`, do not edit here) | ML's pure-Kotlin library; used by app tests as a reference implementation |
+| `android/engine` | ML (verbatim) | `InferenceEngine`, `JniInferenceEngine`, prebuilt arm64 libs |
+| `android/domain` | App | form model, validator, normalisers, parser, merger, prompts, SOP, **orchestrator** (`orchestrator/`), engine port + mock (`domain/engine/`) |
+| `android/app` | App | Compose UI, Room + FTS4, audio (AudioRecord + Silero VAD), TTS, `engineglue/` (adapter + switchable engine), `AppContainer` |
+| `config/` | ML (verbatim) | taxonomy, SOPs, prompts, schemas, app_config |
 
 ## How to build / test (this Mac)
 
 ```
 export JAVA_HOME=$(/usr/libexec/java_home -v 17) ANDROID_HOME=/opt/homebrew/share/android-commandlinetools
 cd android
-~/tools/gradle-8.10.2/bin/gradle :core:test :app:testDebugUnitTest      # all unit tests
-~/tools/gradle-8.10.2/bin/gradle :app:assembleDebug                      # app/build/outputs/apk/debug/app-debug.apk
+~/tools/gradle-8.10.2/bin/gradle :core:test :domain:test :app:testDebugUnitTest   # 190 + 119 + 12
+~/tools/gradle-8.10.2/bin/gradle :app:assembleDebug                               # app/build/outputs/apk/debug/app-debug.apk
 ```
-(The wrapper's download times out on this network; `~/tools/gradle-8.10.2` is a manual copy. Robolectric jars are in `~/tools/robolectric-jars`.)
+The wrapper's own download times out on this network (`~/tools/gradle-8.10.2` is a manual copy); Robolectric jars are in `~/tools/robolectric-jars`. Emulator: AVD `iv_test` (`$ANDROID_HOME/emulator/emulator -avd iv_test`).
 
-## Where things are
+## Running on the QIDK (board is on the ML machine)
 
-- `android/core` — pure Kotlin: `Validator`, `TimeResolver`, `LocationMatcher`, `ToolCallParser`, `FormMerger`, `PromptBuilder`, `SopSelector`, `FormMapper`, `Endpointer`, `engine/` (interface + Mock), `orchestrator/` (state machine + ports `AudioInput`, `TtsSpeaker`).
-- `android/app` — Compose UI (`ui/`), Room (`data/`), `AppContainer` (DI; swap engine/audio there), `tts/AndroidTtsSpeaker`, `audio/MockAudioInput`.
+```
+bash scripts/app_device_check.sh path/to/app-debug.apk          # full check, Auto engine
+MOCK=1 bash scripts/app_device_check.sh path/to/app-debug.apk   # never touches the NPU
+```
+It checks ABI / page size / clock / eSpeak / `libcdsprpc.so`, installs, grants the mic, starts the app, verifies the native libs were extracted, reports whether models are present and what the engine logged. Then the 2-minute manual pass printed at the end. In the app: Settings → Engine shows the active engine and the exact model folder.
 
 ## Gotchas to remember
 
-- `INTERNET` permission only in a future `planB` flavour (D-54); the single flavour has none.
-- FTS is **Room `@Fts4`** with `tok*` query syntax; no `@Upsert` on FTS tables.
-- Persist `DEFAULTED` time with `occurred_at_approx=1`; it satisfies the mandatory time field.
-- Skip ≠ unknown: "skip" leaves `MISSING`; only "I don't know" gives `UNKNOWN`.
-- User edits (`USER_EDITED`) are never overwritten by LLM patches.
-- Contract changes (field keys, enums, DTOs) → edit PRD and add a CHANGE.md entry in the same commit.
+- Do not edit `android/core`, `android/engine`, `config/` on this branch (they must stay identical to ML's for a clean merge). Take renny's root Gradle files when merging.
+- App package for the engine port is `com.megathon.incidentvoice.domain.engine`; ML's is `com.megathon.incidentvoice.engine`. Only `MlEngineAdapter` imports both.
+- No `INTERNET` permission (D-54). `extractNativeLibs=true` + legacy jniLibs packaging are required for the QNN stubs.
+- FTS is Room `@Fts4` with `tok*` queries; replace FTS rows with delete + insert (no `@Upsert`).
+- Edge-to-edge on Android 15: keep `imePadding()` on the root; nested Scaffolds need `WindowInsets(0)`.
+- `DEFAULTED` time satisfies the mandatory field (amber in review). Skip ≠ unknown. `USER_EDITED` is never overwritten by the LLM.
+- Reference numbers: `INC-yyyyMMdd-NNNN` — never `BASIC_ISO_DATE` on a zoned time.

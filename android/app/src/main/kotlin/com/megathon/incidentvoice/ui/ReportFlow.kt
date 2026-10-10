@@ -24,6 +24,7 @@ import com.megathon.incidentvoice.ui.components.SeverityChip
 import com.megathon.incidentvoice.ui.conversation.ConversationScreen
 import com.megathon.incidentvoice.ui.home.HomeScreen
 import com.megathon.incidentvoice.ui.review.LocalOrchestrator
+import com.megathon.incidentvoice.ui.review.LocalReporter
 import com.megathon.incidentvoice.ui.review.ReviewScreen
 
 /** The "Report" tab: routes the orchestrator state to a screen (PRD §20.3). */
@@ -73,7 +74,7 @@ fun ReportFlow(c: AppContainer, onOpenDetail: (String) -> Unit, onGoDashboard: (
         )
     }
 
-    CompositionLocalProvider(LocalOrchestrator provides o) {
+    CompositionLocalProvider(LocalOrchestrator provides o, LocalReporter provides listOf(settings.reporterName, settings.reporterEmpId).filter { it.isNotBlank() }.joinToString(" · ")) {
         when (ui.state) {
             ConvState.IDLE, ConvState.ERROR_AUDIO ->
                 if (ui.state == ConvState.ERROR_AUDIO) ConversationScreen(ui, c.config.taxonomy, o, settings.showDebug)

@@ -31,8 +31,10 @@ fun DetailScreen(id: String, repo: IncidentRepository, tx: Taxonomy, disclaimer:
     val scope = rememberCoroutineScope()
     var confirmDelete by remember { mutableStateOf(false) }
 
-    Scaffold(topBar = {
+    // nested inside the app Scaffold, which already applies the system-bar insets
+    Scaffold(contentWindowInsets = WindowInsets(0), topBar = {
         TopAppBar(
+            windowInsets = WindowInsets(0),
             title = { Text(detail?.meta?.refNo ?: "Incident") },
             navigationIcon = { IconButton(onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } },
             actions = {

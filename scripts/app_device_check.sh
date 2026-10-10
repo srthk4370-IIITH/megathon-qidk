@@ -68,7 +68,7 @@ pid=$(sh_ pidof $PKG)
 grep -q "FATAL EXCEPTION" /tmp/iv_app_logcat.txt && { bad "FATAL EXCEPTION in logcat:"; grep -A12 "FATAL EXCEPTION" /tmp/iv_app_logcat.txt | head -30; } || ok "no FATAL EXCEPTION in logcat"
 
 echo "== 3. native libs + models + engine =="
-libdir=$(sh_ dumpsys package $PKG | grep -m1 nativeLibraryDir | sed 's/.*nativeLibraryDir=//' | awk '{print $1}')
+base=$(sh_ pm path $PKG | head -1 | sed 's/^package://'); libdir="${base%/*}/lib/arm64"
 libs=$(sh_ ls "$libdir")
 for l in libiv_native.so libGenie.so libQnnHtp.so libQnnHtpV79Stub.so libQnnSystem.so libc++_shared.so libonnxruntime.so; do
   echo "$libs" | grep -q "^$l$" && ok "extracted $l" || bad "$l not extracted to $libdir (extractNativeLibs)"

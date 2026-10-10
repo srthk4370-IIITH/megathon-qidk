@@ -87,7 +87,8 @@ class RoomIncidentRepository(
 
     override suspend fun submit(id: String, actor: Actor, atMs: Long?): String = db.withTransaction {
         val now = atMs ?: nowMs()
-        val day = DateTimeFormatter.BASIC_ISO_DATE.format(Instant.ofEpochMilli(now).atZone(zone))
+        // not BASIC_ISO_DATE: on a zoned value it appends the offset ("20261011+0530")
+        val day = DateTimeFormatter.ofPattern("yyyyMMdd").format(Instant.ofEpochMilli(now).atZone(zone))
         val prefix = "INC-$day-"
         val ref = prefix + (dao.countRefs(prefix) + 1).toString().padStart(4, '0')
         dao.markSubmitted(id, IncidentStatus.SUBMITTED.name, ref, now)
