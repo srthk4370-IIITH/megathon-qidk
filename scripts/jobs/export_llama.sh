@@ -21,6 +21,8 @@ if [ -n "$S3T" ] && ! grep -q "IV patch2" "$S3T"; then
   sed -i -E 's/^_MULTIPART_CHUNK_SIZE = [0-9]+ \* 1024 \* 1024.*/_MULTIPART_CHUNK_SIZE = 64 * 1024 * 1024  # IV patch2/; s/    max_request_concurrency=[0-9]+,.*/    max_request_concurrency=8,  # IV patch2/; s/retries=\{"max_attempts": 10, "mode": "adaptive"\},/retries={"max_attempts": 10, "mode": "standard"}, connect_timeout=30, read_timeout=120,  # IV patch2/' "$S3T"
   status "patched qai_hub S3 upload: 64 MiB × 8, standard retries, timeouts"
 fi
+# Resumable export: reuse finished uploads / jobs after a crash (ml/export/iv_resume_hub.py → sitecustomize)
+cp "$REPO/ml/export/iv_resume_hub.py" "$(ls -d "$V"/lib/python3.*/site-packages)/sitecustomize.py"
 status "venv $V: $($V/bin/pip list 2>/dev/null | grep -E '^(transformers|torch) ' | tr -s ' ' | tr '\n' ' ')"
 export HF_TOKEN=$(cat ~/.cache/huggingface/token)
 export HF_HUB_OFFLINE=1   # weights cached locally; avoids flaky-network HEAD requests
