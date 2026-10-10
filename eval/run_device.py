@@ -364,7 +364,12 @@ def main():
     if not adb.exists(RUN_SH):
         print(f"[device] FATAL: {RUN_SH} missing on the board (deploy native/ first)", file=sys.stderr)
         return 4
-    info = adb.shell(f"sh {RUN_SH} info", check=False, timeout=600)
+    # ASR-only runs must not try to load the LLM bundle (it may not exist yet); info is best-effort
+    info_args = " --no-llm" if (a.asr and not a.e2e) else ""
+    try:
+        info = adb.shell(f"sh {RUN_SH} info{info_args}", check=False, timeout=180)
+    except Exception as e:  # noqa: BLE001
+        info = subprocess.CompletedProcess([], 1, "", f"info failed: {e}")
     (out_dir / "engine_info.json").write_text((info.stdout or "") + (info.stderr or ""), encoding="utf-8")
     transcripts = None
     if a.asr:

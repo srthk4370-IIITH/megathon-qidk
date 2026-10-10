@@ -39,6 +39,7 @@ start build_native
 start host_eval
 done_ build_native && start deploy_runtime
 done_ deploy_runtime && start asr_eval
+done_ deploy_runtime && start deploy_app_models
 { done_ export_llama && done_ deploy_runtime; } && start deploy_llama
 done_ deploy_llama && start probe_planA
 { done_ deploy_llama && done_ probe_planA; } && start eval_device
