@@ -15,11 +15,26 @@
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:launchMode="singleTop"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
+            <!-- Extra 2 Level A: app shortcut (long-press the icon) -->
+            <meta-data android:name="android.app.shortcuts" android:resource="@xml/shortcuts"/>
         </activity>
+
+        <!-- Extra 2 Level A: Quick Settings tile "Report incident" -->
+        <service android:name=".quick.ReportTileService" android:exported="true" android:label="@string/quick_report"
+            android:icon="@drawable/ic_report_mic" android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter><action android:name="android.service.quicksettings.action.QS_TILE"/></intent-filter>
+        </service>
+
+        <!-- Extra 2 Level A: home-screen widget with one REPORT button -->
+        <receiver android:name=".quick.ReportWidgetReceiver" android:exported="true" android:label="@string/quick_report">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE"/></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/report_widget_info"/>
+        </receiver>
     </application>
 </manifest>

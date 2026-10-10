@@ -52,11 +52,21 @@ fun ReportFlow(c: AppContainer, onOpenDetail: (String) -> Unit, onGoDashboard: (
         if (settings.useMic && !granted) permLauncher.launch(Manifest.permission.RECORD_AUDIO) else o.onMicTapped()
     }
 
+    // Extra 2: tile / shortcut / widget / wake word → start listening straight away (asks for the mic permission if needed)
+    val quick by c.quickReport.collectAsStateWithLifecycle()
+    var quickHandled by remember { mutableIntStateOf(c.quickReport.value.let { if (ui.state == ConvState.IDLE) 0 else it }) }
+    LaunchedEffect(quick) {
+        if (quick > quickHandled) {
+            quickHandled = quick
+            if (ui.state == ConvState.IDLE || ui.state == ConvState.SUBMITTED) { if (ui.state == ConvState.SUBMITTED) o.startNew(); onMic() }
+        }
+    }
+
     // First launch: ask for the reporter profile once (PRD §20.8, D-25)
     val stored by c.settings.flow.collectAsStateWithLifecycle(initialValue = null)
     var profileDismissed by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
-    if (stored != null && stored!!.reporterName.isBlank() && !stored!!.profileAsked && !profileDismissed && ui.state == ConvState.IDLE) {
+    if (stored != null && stored!!.reporterName.isBlank() && !stored!!.profileAsked && !profileDismissed && ui.state == ConvState.IDLE && quick == 0) {
         var name by remember { mutableStateOf("") }
         var emp by remember { mutableStateOf("") }
         AlertDialog(

@@ -44,6 +44,9 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
+    override fun onNewIntent(intent: android.content.Intent) { super.onNewIntent(intent); setIntent(intent); handleQuickLaunchPublic(intent) }
+    private fun handleQuickLaunchPublic(i: android.content.Intent?) = handleQuickLaunch(i)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge() // Android 15 draws edge-to-edge anyway; this also gives readable status-bar icons
         super.onCreate(savedInstanceState)
@@ -54,7 +57,16 @@ class MainActivity : ComponentActivity() {
                 if (busy) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             }
         }
+        handleQuickLaunch(intent)
+        com.megathon.incidentvoice.quick.QuickLaunch.applyFlag(this, container.config.app.features.quickLaunch)
         setContent { IncidentVoiceTheme { AppRoot(container) } }
+    }
+}
+
+private fun MainActivity.handleQuickLaunch(i: android.content.Intent?) {
+    if (i?.action == com.megathon.incidentvoice.quick.QuickLaunch.ACTION_REPORT) {
+        (application as IncidentVoiceApp).container.requestQuickReport()
+        i.action = android.content.Intent.ACTION_MAIN            // do not fire again on rotation
     }
 }
 
@@ -67,6 +79,9 @@ private fun AppRoot(c: AppContainer) {
     val entry by nav.currentBackStackEntryAsState()
     val route = entry?.destination?.route
     val scope = rememberCoroutineScope()
+    // Extra 2: a quick-launch request brings the Report tab forward (ReportFlow then starts the mic)
+    val quick by c.quickReport.collectAsState()
+    LaunchedEffect(quick) { if (quick > 0 && nav.currentDestination?.route != "home") nav.navigate("home") { popUpTo(nav.graph.findStartDestination().id); launchSingleTop = true } }
     val dashVm: DashboardViewModel = viewModel(factory = viewModelFactory { initializer { DashboardViewModel(c.repository) } })
 
     val conv by c.orchestrator.ui.collectAsState()

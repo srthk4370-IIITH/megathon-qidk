@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">IncidentVoice</string>
+    <string name="quick_report">Report incident</string>
+    <string name="quick_report_long">Report an incident by voice</string>
+    <string name="widget_description">One tap to start a voice incident report</string>
+    <string name="wake_channel">Hands-free listening</string>
+</resources>

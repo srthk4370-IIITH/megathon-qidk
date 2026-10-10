@@ -42,6 +42,10 @@ class AppContainer(val context: Context) {
 
     val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
+    /** Extra 2: bumped by the tile / shortcut / widget / wake word; the Report tab then starts listening. */
+    val quickReport = MutableStateFlow(0)
+    fun requestQuickReport() { if (config.app.features.quickLaunch || config.app.features.wakeWord) quickReport.value += 1 }
+
     // The app creates the model folders itself so they are owned by the app uid: folders created by `adb push`
     // are owned by `shell` (drwxrws--- shell:ext_data_rw) and the app process cannot even list them (Android 15).
     // adb then only pushes FILES into these folders (files land as shell-owned 0666/0755, which the app can read).
