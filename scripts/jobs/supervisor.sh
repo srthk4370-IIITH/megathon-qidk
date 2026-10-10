@@ -28,7 +28,9 @@ start(){
 # Hang guard: export log idle > 40 min ⇒ kill its process group (the job restarts next tick; ONNX is cached).
 if alive export_llama; then
   idle=$(( $(date +%s) - $(stat -c %Y "$HOME/iv/logs/export_llama.log") ))
-  if [ "$idle" -gt 2400 ]; then
+  # torch.export is silent for long stretches but CPU-busy: only treat as hung when the export python is idle too
+  cpu=$(ps -o pcpu= -p "$(pgrep -f 'bin/qai-hub-models export' | head -1)" 2>/dev/null | tr -d ' ' | cut -d. -f1)
+  if [ "$idle" -gt 2400 ] && [ "${cpu:-0}" -lt 5 ]; then
     kill -TERM -"$(ps -o pgid= -p "$(cat "$ST/export_llama.pid")" | tr -d ' ')" 2>/dev/null
     rm -f "$ST/export_llama.pid"
     echo "$(date '+%F %T') killed hung export_llama (log idle ${idle}s)" >> "$HOME/iv/logs/supervisor.log"
