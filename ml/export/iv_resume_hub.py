@@ -4,7 +4,7 @@
   the cached / recently-uploaded AI Hub model is reused.
 - compile/link jobs: a job with the same name (+ options) submitted in the last 6 h that is not FAILED
   is reused instead of resubmitted.
-Cache: ~/iv/state/hub_cache.json. Disable with IV_HUB_RESUME=0.
+Cache: ~/iv/state/hub_cache.json (override with IV_HUB_CACHE, e.g. a separate cache for the fine-tuned export). Disable with IV_HUB_RESUME=0.
 """
 import datetime as _dt
 import json as _json
@@ -12,7 +12,7 @@ import os as _os
 import sys as _sys
 from pathlib import Path as _Path
 
-_CACHE = _Path.home() / "iv" / "state" / "hub_cache.json"
+_CACHE = _Path(_os.environ.get("IV_HUB_CACHE") or (_Path.home() / "iv" / "state" / "hub_cache.json"))
 _WINDOW = _dt.timedelta(hours=6)
 
 
