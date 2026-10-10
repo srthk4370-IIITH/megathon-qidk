@@ -18,8 +18,8 @@ Everything model- and NPU-side (PRD roles P1 + P3):
 |---|---|---|
 | `InferenceEngine` (transcribe / generate / abort) | PRD §22.1 | Android |
 | JNI `NativeBridge` | PRD §18.6 | Android |
-| Plan B HTTP API (`127.0.0.1:8765`) | PRD §19.2 | Android, Web/Dashboard (if on-device web) |
-| `config/*.json`, prompts | PRD §22.5, App. A–C | Android, Web |
+| Plan B HTTP API (`127.0.0.1:8765`) | PRD §19.2 | Android |
+| `config/*.json`, prompts | PRD §22.5, App. A–C | Android |
 | Model files on device | PRD §20.10, §25.5 | Android |
 
 ## Current state (2026-10-10)

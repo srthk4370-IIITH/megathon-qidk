@@ -26,15 +26,13 @@ _Last updated: 2026-10-10 (Saarthak branch)_
 | Item | State | Owner |
 |---|---|---|
 | WSL VHDX compaction (frees ~110 GB on C:) | Sparse flag removed; user re-runs diskpart as admin | User |
-| Dashboard location (Android vs Web branch) | Open question — see CHANGE.md | Team |
 
 ## By branch
 
 | Branch | Area | Built so far |
 |---|---|---|
 | `Saarthak` | ML / NPU | Docs only. No models exported yet. |
-| Android (TBD) | App | — |
-| Web/Dashboard (TBD) | Dashboard | — |
+| Android (TBD) | App + dashboard | — |
 
 ## Board / environment
 

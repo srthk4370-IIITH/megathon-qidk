@@ -17,9 +17,11 @@ Running log of what happened, what was decided, and where things stand. `PRD.md`
 
 ### 2026-10-10 (later) — Branch workflow + VHDX compaction error
 
-**Branch workflow (from user + updated CLAUDE.md):** all ML work commits go to `Saarthak`; separate branches will own Android and Web/Dashboard. Main carries `HANDBOOK.md`, `CHANGE.md` (cross-branch change announcements), `STATUS.md` (what exists now); each branch keeps `handover_<branch>.md`. Created `CHANGE.md`, `STATUS.md`, `handover_Saarthak.md`. PRD v1.0 was pushed to `main` and `Saarthak` as `8ff065e`.
+**Branch workflow (from user + updated CLAUDE.md):** all ML work commits go to `Saarthak`; a separate branch owns the Android app (including the dashboard). Main carries `HANDBOOK.md`, `CHANGE.md` (cross-branch change announcements), `STATUS.md` (what exists now); each branch keeps `handover_<branch>.md`. Created `CHANGE.md`, `STATUS.md`, `handover_Saarthak.md`. PRD v1.0 was pushed to `main` and `Saarthak` as `8ff065e`.
 
-**Open question logged in CHANGE.md:** PRD D-44 puts the dashboard inside the Android app, but the team now has a Web/Dashboard branch → team must decide and PRD §23 gets updated.
+**Dashboard decision:** user confirmed the dashboard is **app-only** (PRD D-44 stands). Only two branches: App and ML. Logged in CHANGE.md.
+
+**Git rule (user):** local issues and history (laptop, board housekeeping, HANDBOOK) are pushed to `Saarthak` only; `main` receives only the shared coordination files `CHANGE.md`, `STATUS.md` and handover files.
 
 **Error:** user ran the VHDX compaction (PRD Appendix H); diskpart failed:
 `DiskPart has encountered an error: The requested operation could not be completed due to a virtual disk system limitation. Virtual hard disk files must be uncompressed and unencrypted and must not be sparse.`

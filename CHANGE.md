@@ -6,8 +6,9 @@ Purpose: announce any change on one branch that affects another branch (contract
 | Branch | Area | Handover file |
 |---|---|---|
 | `Saarthak` | ML / NPU: models, export, native inference, prompts, taxonomy, eval | `handover_Saarthak.md` |
-| (Android branch, name TBD) | Android app | `handover_<branch>.md` |
-| (Web/Dashboard branch, name TBD) | Web / dashboard | `handover_<branch>.md` |
+| (Android branch, name TBD) | Android app, including the dashboard | `handover_<branch>.md` |
+
+Only two branches: **App** and **ML**. No separate web/dashboard branch.
 
 **Entry format**
 ```
@@ -26,7 +27,7 @@ Purpose: announce any change on one branch that affects another branch (contract
 - Action needed by others: any change to a field key, enum value, schema or DTO must be announced here **and** made in PRD.md in the same commit.
 - Commit: 8ff065e
 
-## 2026-10-10 — Saarthak — Open question: dashboard location
-- What changed: team split now has a separate Web/Dashboard branch, but PRD D-44 / §23 places the dashboard **inside the Android app**.
-- Who is affected: Android, Web/Dashboard.
-- Action needed: team decides (in-app Compose dashboard vs web dashboard served on-device vs both). PRD §23 and D-44 get updated once decided.
+## 2026-10-10 — Saarthak — Decision: dashboard is app-only
+- What changed: dashboard stays **inside the Android app** (PRD D-44 and §23 unchanged). No web dashboard, no Web branch. Branches are App + ML only.
+- Who is affected: Android branch (owns the dashboard: recency list, FTS search, filters, stats, detail view).
+- Action needed: none for ML; Android builds PRD §23 as specified.
