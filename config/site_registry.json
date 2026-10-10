@@ -2,35 +2,306 @@
   "version": 1,
   "site": "Demo Plant & Campus",
   "locations": [
-    {"id": "A-G-REC", "name": "Main Reception", "building": "Block A", "floor": "G", "aliases": ["reception", "front desk", "lobby"]},
-    {"id": "A-1-CR1", "name": "Conference Room 1", "building": "Block A", "floor": "1", "aliases": ["conf room 1", "CR1", "meeting room 1"]},
-    {"id": "A-1-CR2", "name": "Conference Room 2", "building": "Block A", "floor": "1", "aliases": ["conf room 2", "CR2", "meeting room 2"]},
-    {"id": "A-1-PAN", "name": "Pantry", "building": "Block A", "floor": "1", "aliases": ["kitchen", "cafeteria pantry"]},
-    {"id": "A-2-SRV", "name": "Server Room", "building": "Block A", "floor": "2", "aliases": ["data centre", "IT room"]},
-    {"id": "A-2-WS", "name": "Open Workspace", "building": "Block A", "floor": "2", "aliases": ["office floor", "desks area"]},
-    {"id": "A-R-TER", "name": "Terrace", "building": "Block A", "floor": "Roof", "aliases": ["roof", "chhat"]},
-    {"id": "B-G-STR", "name": "Store Room", "building": "Block B", "floor": "G", "aliases": ["store", "storeroom", "godown"]},
-    {"id": "B-G-B1", "name": "Bay 1", "building": "Block B", "floor": "G", "aliases": ["production bay 1"]},
-    {"id": "B-G-B2", "name": "Bay 2", "building": "Block B", "floor": "G", "aliases": ["production bay 2"]},
-    {"id": "B-G-B3", "name": "Bay 3", "building": "Block B", "floor": "G", "aliases": ["production bay 3"]},
-    {"id": "B-G-B4", "name": "Bay 4", "building": "Block B", "floor": "G", "aliases": ["production bay 4", "racking area"]},
-    {"id": "B-G-L1", "name": "Assembly Line 1", "building": "Block B", "floor": "G", "aliases": ["line 1"]},
-    {"id": "B-G-L2", "name": "Assembly Line 2", "building": "Block B", "floor": "G", "aliases": ["line 2"]},
-    {"id": "B-1-DB3", "name": "Electrical Panel DB-3", "building": "Block B", "floor": "1", "aliases": ["DB-3", "DB 3", "distribution board 3", "panel 3"]},
-    {"id": "B-1-CMP", "name": "Compressor Room", "building": "Block B", "floor": "1", "aliases": ["compressor house"]},
-    {"id": "B-1-LAB", "name": "QC Lab", "building": "Block B", "floor": "1", "aliases": ["quality lab", "lab"]},
-    {"id": "C-G-CHM", "name": "Chemical Store", "building": "Block C", "floor": "G", "aliases": ["chemical godown", "hazmat store"]},
-    {"id": "C-G-BLR", "name": "Boiler House", "building": "Block C", "floor": "G", "aliases": ["boiler room"]},
-    {"id": "C-G-ETP", "name": "Effluent Treatment Plant", "building": "Block C", "floor": "G", "aliases": ["ETP", "effluent plant"]},
-    {"id": "C-G-DG", "name": "DG Set Room", "building": "Block C", "floor": "G", "aliases": ["generator room", "diesel generator"]},
-    {"id": "Y-LD", "name": "Loading Dock", "building": "Yard", "floor": "G", "aliases": ["dock", "loading bay"]},
-    {"id": "Y-PK", "name": "Parking Area", "building": "Yard", "floor": "G", "aliases": ["parking", "car park"]},
-    {"id": "Y-G1", "name": "Main Gate", "building": "Yard", "floor": "G", "aliases": ["gate 1", "security gate"]},
-    {"id": "Y-WT", "name": "Water Tank Area", "building": "Yard", "floor": "G", "aliases": ["overhead tank", "tanki"]},
-    {"id": "A-G-STA", "name": "Staircase A", "building": "Block A", "floor": "All", "aliases": ["stairs", "seedhi", "staircase"]},
-    {"id": "A-G-LFT", "name": "Lift A", "building": "Block A", "floor": "All", "aliases": ["lift", "elevator"]},
-    {"id": "A-G-WR", "name": "Washroom Ground Floor", "building": "Block A", "floor": "G", "aliases": ["toilet", "restroom", "washroom"]},
-    {"id": "A-G-CAF", "name": "Cafeteria", "building": "Block A", "floor": "G", "aliases": ["canteen", "food court"]},
-    {"id": "B-G-WH", "name": "Warehouse", "building": "Block B", "floor": "G", "aliases": ["finished goods store", "FG store"]}
+    {
+      "id": "A-G-REC",
+      "name": "Main Reception",
+      "building": "Block A",
+      "floor": "G",
+      "aliases": [
+        "reception",
+        "front desk",
+        "lobby"
+      ]
+    },
+    {
+      "id": "A-1-CR1",
+      "name": "Conference Room 1",
+      "building": "Block A",
+      "floor": "1",
+      "aliases": [
+        "conf room 1",
+        "CR1",
+        "meeting room 1"
+      ]
+    },
+    {
+      "id": "A-1-CR2",
+      "name": "Conference Room 2",
+      "building": "Block A",
+      "floor": "1",
+      "aliases": [
+        "conf room 2",
+        "CR2",
+        "meeting room 2"
+      ]
+    },
+    {
+      "id": "A-1-PAN",
+      "name": "Pantry",
+      "building": "Block A",
+      "floor": "1",
+      "aliases": [
+        "kitchen",
+        "cafeteria pantry"
+      ]
+    },
+    {
+      "id": "A-2-SRV",
+      "name": "Server Room",
+      "building": "Block A",
+      "floor": "2",
+      "aliases": [
+        "data centre",
+        "IT room"
+      ]
+    },
+    {
+      "id": "A-2-WS",
+      "name": "Open Workspace",
+      "building": "Block A",
+      "floor": "2",
+      "aliases": [
+        "office floor",
+        "desks area"
+      ]
+    },
+    {
+      "id": "A-R-TER",
+      "name": "Terrace",
+      "building": "Block A",
+      "floor": "Roof",
+      "aliases": [
+        "roof",
+        "chhat"
+      ]
+    },
+    {
+      "id": "B-G-STR",
+      "name": "Store Room",
+      "building": "Block B",
+      "floor": "G",
+      "aliases": [
+        "store",
+        "storeroom",
+        "godown"
+      ]
+    },
+    {
+      "id": "B-G-B1",
+      "name": "Bay 1",
+      "building": "Block B",
+      "floor": "G",
+      "aliases": [
+        "production bay 1"
+      ]
+    },
+    {
+      "id": "B-G-B2",
+      "name": "Bay 2",
+      "building": "Block B",
+      "floor": "G",
+      "aliases": [
+        "production bay 2"
+      ]
+    },
+    {
+      "id": "B-G-B3",
+      "name": "Bay 3",
+      "building": "Block B",
+      "floor": "G",
+      "aliases": [
+        "production bay 3"
+      ]
+    },
+    {
+      "id": "B-G-B4",
+      "name": "Bay 4",
+      "building": "Block B",
+      "floor": "G",
+      "aliases": [
+        "production bay 4",
+        "racking area"
+      ]
+    },
+    {
+      "id": "B-G-L1",
+      "name": "Assembly Line 1",
+      "building": "Block B",
+      "floor": "G",
+      "aliases": [
+        "line 1"
+      ]
+    },
+    {
+      "id": "B-G-L2",
+      "name": "Assembly Line 2",
+      "building": "Block B",
+      "floor": "G",
+      "aliases": [
+        "line 2"
+      ]
+    },
+    {
+      "id": "B-1-DB3",
+      "name": "Electrical Panel DB-3",
+      "building": "Block B",
+      "floor": "1",
+      "aliases": [
+        "DB-3",
+        "DB 3",
+        "distribution board 3",
+        "panel 3"
+      ]
+    },
+    {
+      "id": "B-1-CMP",
+      "name": "Compressor Room",
+      "building": "Block B",
+      "floor": "1",
+      "aliases": [
+        "compressor house"
+      ]
+    },
+    {
+      "id": "B-1-LAB",
+      "name": "QC Lab",
+      "building": "Block B",
+      "floor": "1",
+      "aliases": [
+        "quality lab",
+        "lab"
+      ]
+    },
+    {
+      "id": "C-G-CHM",
+      "name": "Chemical Store",
+      "building": "Block C",
+      "floor": "G",
+      "aliases": [
+        "chemical godown",
+        "hazmat store"
+      ]
+    },
+    {
+      "id": "C-G-BLR",
+      "name": "Boiler House",
+      "building": "Block C",
+      "floor": "G",
+      "aliases": [
+        "boiler room"
+      ]
+    },
+    {
+      "id": "C-G-ETP",
+      "name": "Effluent Treatment Plant",
+      "building": "Block C",
+      "floor": "G",
+      "aliases": [
+        "ETP",
+        "effluent plant"
+      ]
+    },
+    {
+      "id": "C-G-DG",
+      "name": "DG Set Room",
+      "building": "Block C",
+      "floor": "G",
+      "aliases": [
+        "generator room",
+        "diesel generator"
+      ]
+    },
+    {
+      "id": "Y-LD",
+      "name": "Loading Dock",
+      "building": "Yard",
+      "floor": "G",
+      "aliases": [
+        "dock",
+        "loading bay"
+      ]
+    },
+    {
+      "id": "Y-PK",
+      "name": "Parking Area",
+      "building": "Yard",
+      "floor": "G",
+      "aliases": [
+        "parking",
+        "car park"
+      ]
+    },
+    {
+      "id": "Y-G1",
+      "name": "Main Gate",
+      "building": "Yard",
+      "floor": "G",
+      "aliases": [
+        "gate 1",
+        "security gate"
+      ]
+    },
+    {
+      "id": "Y-WT",
+      "name": "Water Tank Area",
+      "building": "Yard",
+      "floor": "G",
+      "aliases": [
+        "overhead tank",
+        "tanki"
+      ]
+    },
+    {
+      "id": "A-G-STA",
+      "name": "Staircase A",
+      "building": "Block A",
+      "floor": "All",
+      "aliases": [
+        "stairs",
+        "seedhi",
+        "staircase"
+      ]
+    },
+    {
+      "id": "A-G-LFT",
+      "name": "Lift A",
+      "building": "Block A",
+      "floor": "All",
+      "aliases": [
+        "lift",
+        "elevator"
+      ]
+    },
+    {
+      "id": "A-G-WR",
+      "name": "Washroom Ground Floor",
+      "building": "Block A",
+      "floor": "G",
+      "aliases": [
+        "toilet",
+        "restroom",
+        "washroom"
+      ]
+    },
+    {
+      "id": "A-G-CAF",
+      "name": "Cafeteria",
+      "building": "Block A",
+      "floor": "G",
+      "aliases": [
+        "canteen",
+        "food court"
+      ]
+    },
+    {
+      "id": "B-G-WH",
+      "name": "Warehouse",
+      "building": "Block B",
+      "floor": "G",
+      "aliases": [
+        "finished goods store",
+        "FG store"
+      ]
+    }
   ]
 }

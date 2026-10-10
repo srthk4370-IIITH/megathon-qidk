@@ -9,6 +9,7 @@
         android:name=".IncidentVoiceApp"
         android:label="IncidentVoice"
         android:allowBackup="false"
+        android:extractNativeLibs="true"
         android:largeHeap="true"
         android:theme="@style/Theme.IncidentVoice">
         <activity

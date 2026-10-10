@@ -1,0 +1,44 @@
+{
+  "task": "patch",
+  "form": {
+    "lang": "en",
+    "title": "Water leak near Conference Room 2",
+    "reported_at": "2026-10-10T10:07:12+05:30",
+    "fields": {
+      "incident_type": {
+        "value": "WATER",
+        "status": "FILLED"
+      },
+      "description": {
+        "value": "A water leak occurred near Conference Room 2. Maintenance has isolated the area.",
+        "status": "FILLED"
+      },
+      "location": {
+        "value": "near Conference Room 2",
+        "status": "FILLED"
+      },
+      "occurred_at": {
+        "value": "around 10 AM",
+        "status": "FILLED"
+      },
+      "actions_taken": {
+        "value": [
+          "Maintenance isolated the area"
+        ],
+        "status": "FILLED"
+      }
+    }
+  },
+  "asked_fields": [
+    "injuries",
+    "severity"
+  ],
+  "question": "Was anyone hurt, and how serious is the situation right now?",
+  "answer": "No one is hurt, it's minor.",
+  "note": "Form fields are flat (category fields are NOT nested); occurred_at.value is the spoken time expression. Status MISSING fields are absent. Compare the .txt bytes exactly (UTF-8, no BOS, no trailing newline).",
+  "placeholders": {
+    "form_compact_json": "{\"incident_type\":\"WATER\",\"description\":\"A water leak occurred near Conference Room 2. Maintenance has isolated the area.\",\"location\":\"near Conference Room 2\",\"time\":\"around 10 AM\",\"actions_taken\":[\"Maintenance isolated the area\"]}",
+    "asked_field_specs": "injuries(YES|NO|UNKNOWN)\nseverity(LOW|MEDIUM|HIGH|CRITICAL)",
+    "asked_fields": "injuries, severity"
+  }
+}

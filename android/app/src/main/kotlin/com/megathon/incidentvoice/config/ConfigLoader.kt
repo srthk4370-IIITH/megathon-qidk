@@ -10,13 +10,17 @@ object ConfigLoader {
             Taxonomy.parse(read("taxonomy.json")),
             SiteRegistry.parse(read("site_registry.json")),
             SopLibrary.parse(read("sop.json")),
-            PromptTemplates.load { read("prompts/$it") },
+            PromptTemplates.load { read(it) },
             AppConfig.parse(read("app_config.json")),
         )
     }
 }
 
-/** The one place the on-device model directory is defined (PRD §20.10). */
+/**
+ * On-device model directory (PRD §20.10): `getExternalFilesDir(null)/models` =
+ * `/sdcard/Android/data/com.megathon.incidentvoice/files/models/{llama,whisper,dsp}`. The runtime value is
+ * `AppContainer.modelsDir`; this constant is for documentation and adb scripts.
+ */
 object ModelPaths {
     const val BASE = "/sdcard/Android/data/com.megathon.incidentvoice/files/models"
 }

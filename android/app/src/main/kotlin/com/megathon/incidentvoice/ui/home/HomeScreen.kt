@@ -13,7 +13,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.megathon.incidentvoice.AppContainer
 import com.megathon.incidentvoice.data.DashboardFilter
-import com.megathon.incidentvoice.engine.EngineStatus
+import com.megathon.incidentvoice.domain.engine.EngineStatus
 import com.megathon.incidentvoice.ui.components.MicButton
 import com.megathon.incidentvoice.ui.components.SeverityChip
 import com.megathon.incidentvoice.ui.relativeTime

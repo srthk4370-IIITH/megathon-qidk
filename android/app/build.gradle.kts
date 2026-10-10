@@ -19,6 +19,8 @@ android {
     }
     buildFeatures { compose = true }
     testOptions { unitTests.isIncludeAndroidResources = true }
+    // QNN stubs are located through ADSP_LIBRARY_PATH = nativeLibraryDir, so the .so files must be extracted (PRD §18.2)
+    packaging { jniLibs { useLegacyPackaging = true } }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -29,13 +31,16 @@ android {
 
 // Single source of truth: <repo>/config -> assets/config (PRD §20.10)
 val copyConfig by tasks.registering(Copy::class) {
-    from(rootProject.projectDir.parentFile.resolve("config"))
+    from(rootProject.projectDir.parentFile.resolve("config")) {
+        exclude("prompts/golden/**", "**/*.md") // test fixtures / docs are not needed on the device
+    }
     into(layout.buildDirectory.dir("generated/config-assets/config"))
 }
 tasks.matching { it.name == "preBuild" }.configureEach { dependsOn(copyConfig) }
 
 dependencies {
-    implementation(project(":core"))
+    implementation(project(":domain"))
+    implementation(project(":engine")) // ML branch: JNI/HTTP engines + prebuilt arm64 native libs
     val composeBom = platform("androidx.compose:compose-bom:2024.10.01")
     implementation(composeBom)
     implementation("androidx.compose.ui:ui")

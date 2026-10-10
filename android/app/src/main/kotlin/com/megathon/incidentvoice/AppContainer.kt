@@ -12,8 +12,12 @@ import com.megathon.incidentvoice.audio.EnergyVadAdapter
 import com.megathon.incidentvoice.audio.MockAudioInput
 import com.megathon.incidentvoice.audio.SileroVad
 import com.megathon.incidentvoice.audio.SwitchableAudioInput
-import com.megathon.incidentvoice.engine.InferenceEngine
-import com.megathon.incidentvoice.engine.MockInferenceEngine
+import com.megathon.incidentvoice.domain.engine.InferenceEngine
+import com.megathon.incidentvoice.domain.engine.MockInferenceEngine
+import com.megathon.incidentvoice.engine.JniInferenceEngine
+import com.megathon.incidentvoice.engineglue.MlEngineAdapter
+import com.megathon.incidentvoice.engineglue.SwitchableEngine
+import kotlinx.coroutines.flow.first
 import com.megathon.incidentvoice.orchestrator.AudioInput
 import com.megathon.incidentvoice.orchestrator.ConversationOrchestrator
 import com.megathon.incidentvoice.orchestrator.OrchestratorSettings
@@ -36,8 +40,32 @@ class AppContainer(val context: Context) {
 
     val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
-    /** Stage C: Mock engine only. Real JNI/HTTP engines plug in here behind the same interface. */
-    val engine: InferenceEngine by lazy { MockInferenceEngine(config.taxonomy) }
+    val modelsDir: File by lazy { File(context.getExternalFilesDir(null), "models") }
+
+    private val mockEngine: InferenceEngine by lazy { MockInferenceEngine(config.taxonomy) }
+
+    /** ML branch's in-process engine (Plan A): whisper.cpp + Genie on the HTP, via libiv_native.so. */
+    private val jniEngine: InferenceEngine by lazy {
+        MlEngineAdapter(JniInferenceEngine(context, modelsDir, whisperModel = config.app.asr.whisperCppModel), appScope, "on-device")
+    }
+
+    /** The single engine reference everything uses; the delegate is chosen by [selectEngine]. */
+    val engine: SwitchableEngine by lazy { SwitchableEngine(appScope, mockEngine) }
+    val engineKind = MutableStateFlow("MOCK")
+
+    /** Model files the JNI engine needs (same check as JniInferenceEngine.init). */
+    fun modelsPresent(): Boolean =
+        File(modelsDir, "${config.app.models.llamaDir}/genie_config.json").exists() &&
+            File(modelsDir, "${config.app.models.whisperDir}/${config.app.asr.whisperCppModel}").exists()
+
+    /** AUTO → on-device engine when its model files are on the board, else Mock. */
+    fun selectEngine(mode: String) {
+        val useJni = when (mode) { "JNI" -> true; "MOCK" -> false; else -> modelsPresent() }
+        engine.switchTo(if (useJni) jniEngine else mockEngine)
+        engineKind.value = if (useJni) "JNI" else "MOCK"
+        appScope.launch { runCatching { engine.init(); engine.warmup() } }
+    }
+
     val tts: TtsSpeaker by lazy { AndroidTtsSpeaker(context) }
     val micCapture: AudioCapture by lazy {
         AudioCapture(context, audioRoot, { config.app.vad }) { SileroVad.create(context) ?: EnergyVadAdapter() }
@@ -58,5 +86,5 @@ class AppContainer(val context: Context) {
         )
     }
 
-    fun startEngine() { appScope.launch { runCatching { engine.init() } } }
+    fun startEngine() { appScope.launch { selectEngine(settings.flow.first().engineMode) } }
 }

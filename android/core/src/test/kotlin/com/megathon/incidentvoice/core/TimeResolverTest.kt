@@ -1,56 +1,139 @@
 package com.megathon.incidentvoice.core
 
-import java.time.ZonedDateTime
+import com.megathon.incidentvoice.core.model.TimeGranularity
+import com.megathon.incidentvoice.core.normalize.TimeResolver
+import org.junit.jupiter.api.DynamicTest
+import org.junit.jupiter.api.TestFactory
+import java.time.LocalDateTime
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
+/** PRD §15.1. Reference now = Sat 2026-10-10 10:07:12 IST. */
 class TimeResolverTest {
-    // now = Sat 2026-10-10 10:07 IST
-    private fun r(p: String?) = Fx.times.resolve(p, Fx.now)
-    private fun at(p: String?): ZonedDateTime = r(p).instant.atZone(Fx.zone)
+    private val r = TimeResolver(T.ZONE)
+    private val now = T.NOW
 
-    private fun assertAt(p: String, y: Int, mo: Int, d: Int, h: Int, mi: Int) {
-        val z = at(p)
-        assertEquals(listOf(y, mo, d, h, mi), listOf(z.year, z.monthValue, z.dayOfMonth, z.hour, z.minute), p)
-    }
+    /** (phrase, expected local date-time "yyyy-MM-ddTHH:mm[:ss]", expected approx or null = don't care) */
+    private val cases: List<Triple<String, String, Boolean?>> = listOf(
+        // T1
+        Triple("just now", "2026-10-10T10:07:12", false),
+        Triple("abhi", "2026-10-10T10:07:12", false),
+        Triple("right now", "2026-10-10T10:07:12", false),
+        // T2
+        Triple("10 minutes ago", "2026-10-10T09:57:12", false),
+        Triple("5 min pehle", "2026-10-10T10:02:12", false),
+        Triple("ten minutes back", "2026-10-10T09:57:12", false),
+        Triple("an hour ago", "2026-10-10T09:07:12", true),
+        Triple("2 hours ago", "2026-10-10T08:07:12", true),
+        Triple("do ghante pehle", "2026-10-10T08:07:12", true),
+        Triple("teen ghante pehle", "2026-10-10T07:07:12", true),
+        Triple("dedh ghanta pehle", "2026-10-10T08:37:12", true),
+        Triple("an hour and a half ago", "2026-10-10T08:37:12", true),
+        Triple("a few minutes ago", "2026-10-10T09:52:12", true),
+        // T3
+        Triple("half an hour ago", "2026-10-10T09:37:12", true),
+        Triple("about half an hour ago", "2026-10-10T09:37:12", true),
+        Triple("aadha ghanta pehle", "2026-10-10T09:37:12", true),
+        Triple("thodi der pehle", "2026-10-10T09:52:12", true),
+        Triple("a while ago", "2026-10-10T09:52:12", true),
+        // T4 + T7
+        Triple("around 10 AM", "2026-10-10T10:00", true),
+        Triple("at 10 am", "2026-10-10T10:00", false),
+        Triple("10 a.m.", "2026-10-10T10:00", false),
+        Triple("ten am", "2026-10-10T10:00", false),
+        Triple("9:30 am", "2026-10-10T09:30", false),
+        Triple("9.15 am", "2026-10-10T09:15", false),
+        Triple("at 10:05", "2026-10-10T10:05", false),
+        Triple("quarter past 9", "2026-10-10T09:15", false),
+        Triple("half past 8", "2026-10-10T08:30", false),
+        Triple("quarter to 10", "2026-10-10T09:45", false),
+        Triple("lagbhag 9 baje", "2026-10-10T09:00", true),
+        Triple("aaj subah 8 baje", "2026-10-10T08:00", false),
+        // Hinglish numerals
+        Triple("saadhe nau baje", "2026-10-10T09:30", false),
+        Triple("sawa nau", "2026-10-10T09:15", false),
+        Triple("paune das", "2026-10-10T09:45", false),
+        Triple("dedh baje", "2026-10-10T01:30", false),
+        Triple("dhai baje", "2026-10-10T02:30", false),
+        Triple("kareeb das baje", "2026-10-10T10:00", true),
+        // T8 ambiguity resolved backwards
+        Triple("around 10", "2026-10-10T10:00", true),
+        Triple("at 9", "2026-10-10T09:00", false),
+        Triple("at 2", "2026-10-10T02:00", false),
+        Triple("at 11", "2026-10-09T23:00", false),
+        Triple("at 10:10", "2026-10-10T10:10", false),
+        // T9 future → previous day
+        Triple("at 3 pm", "2026-10-09T15:00", false),
+        Triple("14:30", "2026-10-09T14:30", false),
+        Triple("12 noon", "2026-10-09T12:00", null),
+        Triple("raat 10 baje", "2026-10-09T22:00", false),
+        Triple("10 baje raat ko", "2026-10-09T22:00", false),
+        // T5 day parts
+        Triple("this morning", "2026-10-10T09:00", true),
+        Triple("subah", "2026-10-10T09:00", true),
+        Triple("in the evening", "2026-10-09T18:30", true),
+        Triple("noon", "2026-10-09T13:00", true),
+        Triple("midnight", "2026-10-10T00:00", true),
+        // T6 days
+        Triple("yesterday evening", "2026-10-09T18:30", true),
+        Triple("kal shaam 7 baje", "2026-10-09T19:00", false),
+        Triple("last night at 11", "2026-10-09T23:00", false),
+        Triple("kal raat", "2026-10-09T22:00", true),
+        Triple("last night at 2", "2026-10-10T02:00", false),
+        Triple("yesterday", "2026-10-09T12:00", true),
+        Triple("day before yesterday", "2026-10-08T12:00", true),
+        Triple("parson subah", "2026-10-08T09:00", true),
+        Triple("on Monday", "2026-10-05T12:00", true),
+        Triple("Saturday", "2026-10-03T12:00", true),
+        Triple("last Friday at 4 pm", "2026-10-09T16:00", false),
+        Triple("5th October at 4 pm", "2026-10-05T16:00", false),
+        Triple("October 5", "2026-10-05T12:00", true),
+        Triple("10-10-2026 9:15 am", "2026-10-10T09:15", false),
+        Triple("05/10", "2026-10-05T12:00", true),
+        Triple("2 days ago", "2026-10-08T12:00", true),
+        Triple("do din pehle", "2026-10-08T12:00", true),
+        Triple("25 December", "2025-12-25T12:00", true),
+    )
 
-    @Test fun t1_now() { assertEquals(Fx.now, r("just now").instant); assertEquals(Fx.now, r("abhi abhi").instant); assertFalse(r("right now").approximate) }
-    @Test fun t2_minutesAgo() { assertAt("5 minutes ago", 2026, 10, 10, 10, 2); assertAt("ten minutes back", 2026, 10, 10, 9, 57) }
-    @Test fun t2_hoursAgo() { assertAt("about an hour ago", 2026, 10, 10, 9, 7); assertTrue(r("two hours ago").approximate); assertAt("2 hours ago", 2026, 10, 10, 8, 7) }
-    @Test fun t2_hinglish() { assertAt("ek ghanta pehle", 2026, 10, 10, 9, 7); assertAt("teen ghante pehle", 2026, 10, 10, 7, 7) }
-    @Test fun t3_halfHour() { assertAt("half an hour ago", 2026, 10, 10, 9, 37); assertAt("aadha ghanta pehle", 2026, 10, 10, 9, 37); assertAt("about half an hour ago", 2026, 10, 10, 9, 37) }
-    @Test fun t3_whileAgo() { assertAt("thodi der pehle", 2026, 10, 10, 9, 52); assertAt("a while ago", 2026, 10, 10, 9, 37) }
-    @Test fun t4_amPm() { assertAt("around 10 AM", 2026, 10, 10, 10, 0); assertAt("at 9:30 am", 2026, 10, 10, 9, 30); assertAt("8 pm", 2026, 10, 9, 20, 0) }
-    @Test fun t4_dotted() { assertAt("10.05 am", 2026, 10, 10, 10, 5); assertAt("9.30", 2026, 10, 10, 9, 30) }
-    @Test fun t4_fractions() { assertAt("half past 9", 2026, 10, 10, 9, 30); assertAt("quarter past 9", 2026, 10, 10, 9, 15); assertAt("saadhe nau baje", 2026, 10, 10, 9, 30); assertAt("sawa nau baje", 2026, 10, 10, 9, 15); assertAt("paune das baje", 2026, 10, 10, 9, 45) }
-    @Test fun t4_hinglishBaje() { assertAt("9 baje", 2026, 10, 10, 9, 0); assertAt("das baje", 2026, 10, 10, 10, 0) }
-    @Test fun t5_dayparts() { assertAt("this morning", 2026, 10, 10, 9, 0); assertTrue(r("this morning").approximate); assertAt("subah", 2026, 10, 10, 9, 0); assertAt("dopahar", 2026, 10, 9, 13, 0) }
-    @Test fun t5_evening_night() { assertAt("shaam ko", 2026, 10, 9, 18, 30); assertAt("last night", 2026, 10, 9, 22, 0); assertAt("midnight", 2026, 10, 10, 0, 0) }
-    @Test fun t6_yesterday() { assertAt("yesterday at 3 pm", 2026, 10, 9, 15, 0); assertAt("kal subah 8 baje", 2026, 10, 9, 8, 0); assertAt("day before yesterday evening", 2026, 10, 8, 18, 30) }
-    @Test fun t6_today() { assertAt("today at 9 am", 2026, 10, 10, 9, 0); assertAt("aaj subah", 2026, 10, 10, 9, 0) }
-    @Test fun t6_lastNightClock() { assertAt("last night at 11", 2026, 10, 9, 23, 0) }
-    @Test fun t6_weekday() { val z = at("on Thursday at 2 pm"); assertEquals(8, z.dayOfMonth); assertEquals(14, z.hour) }
-    @Test fun t6_dates() { assertAt("5th October at 2 pm", 2026, 10, 5, 14, 0); assertAt("on 05/10 at 2 pm", 2026, 10, 5, 14, 0); assertAt("10-10-2026 9 am", 2026, 10, 10, 9, 0); assertAt("october 3 at 4 pm", 2026, 10, 3, 16, 0) }
-    @Test fun t6_dateInFutureMeansLastYear() { assertAt("25th December 10 am", 2025, 12, 25, 10, 0) }
-    @Test fun t7_approx() { assertTrue(r("around 9 am").approximate); assertTrue(r("lagbhag 9 baje").approximate); assertFalse(r("at 9 am").approximate) }
-    @Test fun t8_ambiguousHour_backwards() {
-        assertAt("at 9", 2026, 10, 10, 9, 0)      // 9 ≤ now → today 09:00
-        assertAt("at 11", 2026, 10, 9, 23, 0)     // 11:00 would be future; 23:00 yesterday is the latest past
-        assertAt("around 2", 2026, 10, 10, 2, 0) // 02:00 today (latest past of 02:00/14:00)
-    }
-    @Test fun t9_futureSubtractsDay() { assertAt("at 3 pm", 2026, 10, 9, 15, 0) }
-    @Test fun t10_default() {
-        for (p in listOf(null, "", "   ", "sometime")) {
-            val x = r(p); assertTrue(x.defaulted, p.toString()); assertEquals(Fx.now, x.instant); assertTrue(x.approximate); assertEquals("T10", x.matchedRule)
+    @TestFactory
+    fun table(): List<DynamicTest> = cases.map { (phrase, expected, approx) ->
+        DynamicTest.dynamicTest("'$phrase' -> $expected") {
+            val res = r.resolve(phrase, now)
+            val got = LocalDateTime.ofInstant(res.instant!!, T.ZONE)
+            assertEquals(LocalDateTime.parse(expected), got, "phrase='$phrase' rule=${res.matchedRule}")
+            if (approx != null) assertEquals(approx, res.approximate, "approx for '$phrase' rule=${res.matchedRule}")
+            assertTrue(!res.defaulted, "should not default: '$phrase'")
         }
     }
-    @Test fun granularity() { assertEquals(Granularity.HOUR, r("at 9 am").granularity); assertEquals(Granularity.MINUTE, r("9:30 am").granularity); assertEquals(Granularity.DAYPART, r("this morning").granularity); assertEquals(Granularity.DAY, r("on 5th october").granularity) }
-    @Test fun noonAfternoon() { assertAt("2 in the afternoon", 2026, 10, 9, 14, 0); assertAt("12 noon", 2026, 10, 9, 12, 0) }
-    @Test fun resultNeverFarFuture() {
-        for (p in listOf("at 11", "at 3 pm", "evening", "night", "tomorrow", "at 10:30")) {
-            val x = r(p); assertTrue(!x.instant.isAfter(Fx.now.plusSeconds(300)), p)
+
+    @Test fun t10_noPhraseDefaultsToReportTime() {
+        for (p in listOf(null, "", "   ", "sometime", "I don't know")) {
+            val res = r.resolve(p, now)
+            assertEquals(now, res.instant, "phrase=$p")
+            assertTrue(res.approximate)
+            assertTrue(res.defaulted)
+            assertEquals("T10", res.matchedRule)
         }
+    }
+
+    @Test fun granularity() {
+        assertEquals(TimeGranularity.HOUR, r.resolve("at 10 am", now).granularity)
+        assertEquals(TimeGranularity.MINUTE, r.resolve("9:30 am", now).granularity)
+        assertEquals(TimeGranularity.DAYPART, r.resolve("this morning", now).granularity)
+        assertEquals(TimeGranularity.DAY, r.resolve("yesterday", now).granularity)
+    }
+
+    @Test fun neverInFutureWithoutExplicitDate() {
+        for (p in listOf("at 11", "evening", "11 pm", "noon", "at 10:30", "afternoon", "raat")) {
+            val res = r.resolve(p, now)
+            assertTrue(!res.instant!!.isAfter(now.plusSeconds(300)), "'$p' resolved to future ${res.instant}")
+        }
+    }
+
+    @Test fun injectableZone() {
+        val utc = TimeResolver(java.time.ZoneOffset.UTC)
+        val res = utc.resolve("at 3 am", T.NOW) // now = 04:37:12 UTC
+        assertEquals(LocalDateTime.parse("2026-10-10T03:00"), LocalDateTime.ofInstant(res.instant!!, java.time.ZoneOffset.UTC))
     }
 }

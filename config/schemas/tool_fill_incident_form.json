@@ -1,0 +1,151 @@
+{
+  "name": "fill_incident_form",
+  "description": "Fill the incident report form from the transcript. Omit unknown fields.",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "lang": {
+        "type": "string",
+        "enum": [
+          "en",
+          "hinglish",
+          "hi"
+        ]
+      },
+      "incident_type": {
+        "type": "string",
+        "enum": [
+          "FIRE",
+          "MEDICAL",
+          "WATER",
+          "ELECTRICAL",
+          "HAZMAT",
+          "EQUIPMENT",
+          "SECURITY",
+          "STRUCTURAL",
+          "ENVIRONMENTAL",
+          "VEHICLE",
+          "OTHER"
+        ]
+      },
+      "secondary_types": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "maxItems": 2
+      },
+      "title": {
+        "type": "string"
+      },
+      "description": {
+        "type": "string"
+      },
+      "severity": {
+        "type": "string",
+        "enum": [
+          "LOW",
+          "MEDIUM",
+          "HIGH",
+          "CRITICAL"
+        ]
+      },
+      "location": {
+        "type": "string"
+      },
+      "time": {
+        "type": "string",
+        "description": "time phrase as spoken, in English"
+      },
+      "injuries": {
+        "type": "string",
+        "enum": [
+          "YES",
+          "NO",
+          "UNKNOWN"
+        ]
+      },
+      "injured_count": {
+        "type": "integer"
+      },
+      "persons": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "role": {
+              "type": "string",
+              "enum": [
+                "AFFECTED",
+                "INVOLVED",
+                "RESPONDER",
+                "REPORTER",
+                "OTHER"
+              ]
+            },
+            "injured": {
+              "type": "boolean"
+            },
+            "injury": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "equipment": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "actions_taken": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "witnesses": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "contact": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "near_miss": {
+        "type": "boolean"
+      },
+      "hazard_ongoing": {
+        "type": "string",
+        "enum": [
+          "YES",
+          "NO",
+          "UNKNOWN"
+        ]
+      },
+      "details": {
+        "type": "object",
+        "description": "category detail fields"
+      },
+      "other_incidents": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "required": [
+      "incident_type",
+      "description"
+    ]
+  }
+}

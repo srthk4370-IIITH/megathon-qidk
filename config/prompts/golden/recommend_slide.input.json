@@ -1,0 +1,70 @@
+{
+  "task": "recommend",
+  "form": {
+    "lang": "en",
+    "title": "Water leak near Conference Room 2",
+    "reported_at": "2026-10-10T10:07:12+05:30",
+    "fields": {
+      "incident_type": {
+        "value": "WATER",
+        "status": "FILLED"
+      },
+      "description": {
+        "value": "A water leak occurred near Conference Room 2. Maintenance has isolated the area.",
+        "status": "FILLED"
+      },
+      "location": {
+        "value": "near Conference Room 2",
+        "status": "FILLED"
+      },
+      "occurred_at": {
+        "value": "around 10 AM",
+        "status": "FILLED"
+      },
+      "actions_taken": {
+        "value": [
+          "Maintenance isolated the area"
+        ],
+        "status": "FILLED"
+      },
+      "injuries": {
+        "value": "NO",
+        "status": "FILLED",
+        "source": "LLM_PATCH"
+      },
+      "severity": {
+        "value": "LOW",
+        "status": "FILLED",
+        "source": "LLM_PATCH"
+      },
+      "leak_source": {
+        "value": "burst pipe under the sink",
+        "status": "FILLED",
+        "source": "LLM_PATCH"
+      },
+      "leak_status": {
+        "value": "STOPPED",
+        "status": "FILLED",
+        "source": "LLM_PATCH"
+      }
+    }
+  },
+  "candidate_ids": [
+    "WATER-02",
+    "WATER-04",
+    "WATER-05",
+    "WATER-06",
+    "WATER-07",
+    "WATER-08",
+    "GEN-01",
+    "GEN-02",
+    "GEN-03",
+    "GEN-04"
+  ],
+  "note": "Form fields are flat (category fields are NOT nested); occurred_at.value is the spoken time expression. Status MISSING fields are absent. Compare the .txt bytes exactly (UTF-8, no BOS, no trailing newline). Candidates come from the SOP P0 filter (ml/common/sop.py docstring).",
+  "placeholders": {
+    "form_compact_json": "{\"incident_type\":\"WATER\",\"description\":\"A water leak occurred near Conference Room 2. Maintenance has isolated the area.\",\"location\":\"near Conference Room 2\",\"time\":\"around 10 AM\",\"severity\":\"LOW\",\"injuries\":\"NO\",\"actions_taken\":[\"Maintenance isolated the area\"],\"details\":{\"leak_source\":\"burst pipe under the sink\",\"leak_status\":\"STOPPED\"}}",
+    "actions_taken_list": "[\"Maintenance isolated the area\"]",
+    "sop_candidates": "WATER-02: Switch off electrical equipment and sockets in the wet area if it is safe to do so.\nWATER-04: Move documents, IT equipment and stock away from the water.\nWATER-05: Mop up or pump out standing water and dry the area.\nWATER-06: Ask maintenance to repair the source of the leak and inspect nearby pipes or roof sections.\nWATER-07: Check ceilings, walls and electrical fittings for water damage before reuse.\nWATER-08: Watch for mould or odour over the next days and log any follow-up repairs.\nGEN-01: Inform your supervisor and the EHS team about this incident.\nGEN-02: Preserve evidence: photos, CCTV, and do not disturb the scene unnecessarily.\nGEN-03: Collect witness statements while details are fresh.\nGEN-04: Schedule a root-cause review and track corrective actions to closure."
+  }
+}

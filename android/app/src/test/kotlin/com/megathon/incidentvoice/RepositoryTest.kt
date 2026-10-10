@@ -30,7 +30,7 @@ class RepositoryTest {
         val dir = File(System.getProperty("iv.configDir")!!)
         cfg = AppConfigBundle(
             Taxonomy.parse(File(dir, "taxonomy.json").readText()), SiteRegistry.parse(File(dir, "site_registry.json").readText()),
-            SopLibrary.parse(File(dir, "sop.json").readText()), PromptTemplates.load { File(dir, "prompts/$it").readText() },
+            SopLibrary.parse(File(dir, "sop.json").readText()), PromptTemplates.load { File(dir, it).readText() },
             AppConfig.parse(File(dir, "app_config.json").readText()),
         )
         db = IncidentDb.inMemory(ApplicationProvider.getApplicationContext<Context>())

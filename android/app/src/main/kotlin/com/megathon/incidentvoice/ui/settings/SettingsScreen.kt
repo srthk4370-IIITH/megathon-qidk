@@ -10,12 +10,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.megathon.incidentvoice.AppContainer
-import com.megathon.incidentvoice.config.ModelPaths
 import com.megathon.incidentvoice.data.AppSettings
 import com.megathon.incidentvoice.data.DemoSeeder
-import com.megathon.incidentvoice.engine.EngineStatus
+import com.megathon.incidentvoice.domain.engine.EngineStatus
 import kotlinx.coroutines.launch
-import java.io.File
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -62,9 +60,15 @@ fun SettingsScreen(c: AppContainer) {
                     EngineStatus.Idle -> Text("Not started")
                 }
                 Spacer(Modifier.height(6.dp))
-                val dir = File(ModelPaths.BASE)
-                Text("Model folder: ${ModelPaths.BASE}", style = MaterialTheme.typography.labelSmall)
-                Text(if (dir.isDirectory) "Found (${dir.list()?.size ?: 0} entries)" else "Not present (Mock engine in use)", style = MaterialTheme.typography.labelSmall)
+                val kind by c.engineKind.collectAsStateWithLifecycle()
+                Text("Active: " + if (kind == "JNI") "on-device (whisper.cpp + Genie/NPU)" else "Mock (canned demo responses)", style = MaterialTheme.typography.labelMedium)
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf("AUTO" to "Auto", "JNI" to "On-device", "MOCK" to "Mock").forEach { (mode, label) ->
+                        FilterChip(selected = s.engineMode == mode, onClick = { upd { it.copy(engineMode = mode) }; c.selectEngine(mode) }, label = { Text(label) })
+                    }
+                }
+                Text("Model folder: ${c.modelsDir.absolutePath}", style = MaterialTheme.typography.labelSmall)
+                Text(if (c.modelsPresent()) "Model files found" else "Model files not found (Auto uses the Mock engine)", style = MaterialTheme.typography.labelSmall)
                 OutlinedButton({ scope.launch { runCatching { c.engine.warmup() } } }, Modifier.padding(top = 6.dp)) { Text("Re-run warm-up") }
             }
         }
