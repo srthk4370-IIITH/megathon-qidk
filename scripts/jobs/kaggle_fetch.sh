@@ -18,7 +18,7 @@ while true; do
       status "kaggle bundle extracted: $(du -sh "$DST" | cut -f1) → stopping laptop export"
       P=$(cat "$ST/export_llama.pid" 2>/dev/null); [ -n "$P" ] && kill -TERM -"$(ps -o pgid= -p "$P" | tr -d ' ')" 2>/dev/null
       rm -f "$ST/export_llama.pid"; mark_done; exit 0 ;;
-    *404*|*"not found"*|*Not Found*) sleep 60 ;;  # kernel not pushed yet
+    *404*|*"not found"*|*"Not Found"*) sleep 60 ;;  # kernel not pushed yet
     *ERROR*|*CANCEL*)
       status "kaggle kernel failed: $s (logs: kaggle kernels output $KID)"; mark_failed "kernel $s" ;;
     *) sleep 120 ;;
