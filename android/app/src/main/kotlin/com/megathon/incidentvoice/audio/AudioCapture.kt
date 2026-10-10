@@ -128,6 +128,8 @@ class SwitchableAudioInput(
     private val mic: AudioCapture,
     private val mock: AudioInput,
     private val injectDir: File? = null,
+    /** Runs before every recording (used to make the wake-word listener release the microphone first). */
+    private val beforeListen: suspend () -> Unit = {},
     private val useMic: () -> Boolean,
 ) : AudioInput {
     private var active: AudioInput = mock
@@ -143,6 +145,7 @@ class SwitchableAudioInput(
                 return ListenResult.Speech(pcm, pcm.size / 16L)
             }
         }
+        beforeListen()
         active = if (useMic()) mic else mock
         return active.listen(kind, maxMs, endSilenceMs, incidentId, onProgress)
     }

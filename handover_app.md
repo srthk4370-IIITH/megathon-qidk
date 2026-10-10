@@ -68,6 +68,8 @@ It checks ABI / page size / clock / eSpeak / `libcdsprpc.so`, installs, grants t
 
 - Flags live in `config/app_config.json` → `features`; parsed in `AppConfig.Features`.
 - Extra 1, response clock: `core/ResponseClock.kt`, orchestrator `onResponseStep` / `resumeActiveResponse`, `ui/components/ResponseClockCard.kt`, DB v3 (`response_actions`, `incidents.response_started_at`).
+- Extra 2, one-tap launch: `quick/QuickLaunch.kt` (tile, shortcut, widget → one intent → `AppContainer.requestQuickReport()`).
+- Extra 2, wake word: `core/WakeWord.kt` in `:domain` (strategy + matcher), `wake/WakeWord.kt` in `:app` (`WakeEngine` owns Vosk, `WakeWordService` decides when it may listen). The report flow calls `wake.release()` before every recording (`SwitchableAudioInput.beforeListen`); `AppContainer.wakeHold` keeps the listener off between a detection and the flow taking the microphone. Tune by watching `adb logcat -s IV | grep wake` or Settings → "Last heard"; variants and threshold are in `config/app_config.json`.
 
 ## Gotchas to remember
 
