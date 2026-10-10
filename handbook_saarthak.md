@@ -34,7 +34,15 @@
 | 11 | Eval numbers for slides | `eval/results/*/report.md` | ☐ |
 | 12 | P1: NPU Whisper via ORT-QNN; LLM-tailored recs; prefix cache | — | later |
 
-## 2. Recovery: how to resume if the session dies
+## 2. Operating model (since 23:00): everything runs under the supervisor
+
+- **Windows Scheduled Task `IV_Supervisor`** (every 5 min, hidden) runs `~/iv/jobs/supervisor.sh` in WSL. Installed by `scripts/install_supervisor.ps1` (also sets `.wslconfig` `vmIdleTimeout=-1`, `instanceIdleTimeout=-1`). Independent of any Claude session.
+- Supervisor copies `scripts/jobs/*.sh` from the repo (keeps last copy if the repo is on another branch) and starts each job detached when deps are met. Job chain: `export_llama` (3B ×3, then 1B) · `build_native` → `deploy_runtime` (runtime + whisper.cpp + ASR smoke) → `deploy_llama` (verify, push, Genie + iv_cli smoke) → `probe_planA` (in-app NPU verdict) → `eval_device` (text eval + clips if recorded).
+- State: `~/iv/state/<job>.{pid,done,failed}`; `llama_bundle_root`, `planA_verdict`. Logs: `~/iv/logs/<job>.log`. Human status: `ml/status/pipeline_status.md`.
+- **Re-run a job:** `rm ~/iv/state/<job>.done ~/iv/state/<job>.failed` → next tick restarts it. After changing native code: `rm ~/iv/state/{build_native,deploy_runtime}.done`.
+- **Check everything:** `wsl -d Ubuntu -- bash -c "cat ~/iv/logs/supervisor.log; ls ~/iv/state; tail ~/iv/logs/*.log"`.
+
+## 2b. Recovery: how to resume if the session dies
 
 1. `wsl -d Ubuntu` → `tail ~/iv/logs/*.log ~/iv_exports/llama_export.log`.
 2. Kaggle: `kaggle kernels status srthk4370/iv-llama-v79-export`; output: `kaggle kernels output srthk4370/iv-llama-v79-export -p ~/iv/kaggle_out`.
@@ -43,7 +51,15 @@
 
 ## 3. Live log (newest first)
 
-> WSL clock is UTC: `16:00` in `ml/status/pipeline_status.md` = 21:30 IST.
+> WSL clock is UTC: `16:00` in `ml/status/pipeline_status.md` = 21:30 IST (job lines from 23:00 on are IST).
+
+### 2026-10-10 23:05 IST — session-limit fallout and fixes
+- Usage limit killed my session ~22:30 → killed both agents mid-task, the laptop export (child of my session; **not** an OOM — log just stops after "Loading checkpoint shards"), and WSL itself (VM restarted, keep-alive gone).
+- Native build had failed: Genie handles are `const` pointers → fixed in `llm_engine.cpp`; build now **OK** (Genie sampler + signal APIs detected in QAIRT 2.50).
+- A `git pull --rebase` of `Saarthak` onto `main` was stuck on doc conflicts since 21:57 (working tree detached, `native/` missing). Aborted with `git rebase --abort` → `Saarthak` restored at `5d98a4b` (teammate's "M1" commit, which also captured the agents' WIP). Nothing lost.
+- Built the **supervisor job system** (§2). Export restarted in a clean pinned venv `~/venvs/qaihm_pin` (`qai-hub-models[llama-v3-2-3b-instruct]==0.63.0`) at 22:58.
+- Prebuilt engine libs committed to `android/engine/src/main/jniLibs/arm64-v8a` (23 MB) so the App branch builds without QAIRT/NDK.
+- Agents resumed (Kotlin core: tests; Python eval: scorer + runners).
 
 ### 2026-10-10 22:10 IST
 - **Built (code, committed c20214b):** `native/` (whisper.cpp ASR + Genie LLM engine, `iv_cli`, JNI bridge, CMake, `build_android.sh`), `android/engine` (InferenceEngine + JNI/HTTP/Mock), `android-probe/` (Gradle-free probe APK, `build_and_run.sh`), `server-go/` (Plan B; arm64 build OK → `~/iv/iv-server`), `ml/scripts/verify_bundle.py`, `scripts/auto_pipeline.sh`.
