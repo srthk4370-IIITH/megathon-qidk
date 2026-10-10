@@ -15,7 +15,11 @@ board_ok(){ timeout 20 "$ADB" get-state < /dev/null 2>/dev/null | tr -d '\r' | g
 wait_board(){ until board_ok; do sleep 20; done; }
 push_if_changed(){ # local remote_dir
   local f=$1 d=$2 n; n=$(basename "$f")
-  [ "$(ash stat -c %s "$d/$n" 2>/dev/null)" = "$(stat -c %s "$f")" ] || adbx push "$(w "$f")" "$d/" | tail -1
+  # size check first (cheap for multi-GB model files), md5 for small files (rebuilt binaries keep their size)
+  local ls rs; ls=$(stat -c %s "$f"); rs=$(ash stat -c %s "$d/$n" 2>/dev/null)
+  if [ "$ls" = "$rs" ] && [ "$ls" -gt 100000000 ]; then return 0; fi
+  if [ "$ls" = "$rs" ] && [ "$(md5sum "$f" | cut -c1-32)" = "$(ash md5sum "$d/$n" | cut -c1-32)" ]; then return 0; fi
+  adbx push "$(w "$f")" "$d/" | tail -1; ash chmod 755 "$d/$n" >/dev/null
 }
 mark_done(){ touch "$ST/$JOB.done"; rm -f "$ST/$JOB.pid"; status "DONE"; }
 mark_failed(){ touch "$ST/$JOB.failed"; rm -f "$ST/$JOB.pid"; status "GAVE UP: $*  (rm ~/iv/state/$JOB.failed to retry)"; exit 1; }
