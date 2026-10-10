@@ -22,16 +22,16 @@ Everything model- and NPU-side (PRD roles P1 + P3):
 | `config/*.json`, prompts | PRD §22.5, App. A–C | Android |
 | Model files on device | PRD §20.10, §25.5 | Android |
 
-## Current state (2026-10-10)
+## Current state (2026-10-10 21:20)
 
-- Docs only; no code yet. See `STATUS.md`.
+- PRD v1.1, `M1.md`. Llama V79 export running on laptop (`~/iv_exports/llama_export.log`) and Kaggle (`kaggle kernels status srthk4370/iv-llama-v79-export`, output zip `llama32_3b_genie_w4a16_v79.zip`). QAIRT 2.50 downloading to `~/qairt/` from the public URL (PRD R1-01). After export: delete private dataset `srthk4370/iv-creds`.
 - Laptop: WSL venvs ready (`~/venvs/qaihm` with qai-hub-models 0.63.0 + AI Hub token; `~/venvs/train`), HF Llama 3.2 3B weights cached. C: low on space until VHDX compaction.
 - Board backup runtime (QAIRT 2.47) in `_board_runtime_backup/` (local only).
 
 ## First steps when the clock starts (PRD §35.2, P1/P3 rows)
 
-1. Start Kaggle Llama export (PRD §25.2) and Whisper export (§25.4); download QAIRT 2.50 (§25.1).
-2. Fix board clock (§26.3); push runtime; smoke tests S0–S3 (§26.5).
+1. ~~Start exports; download QAIRT; fix board clock~~ (done 21:03). Next: verify bundle (`verify_bundle.py`), push QAIRT 2.50 V79 runtime, smoke tests S0–S3 (§26.5).
+2. whisper.cpp (Whisper-small) Android JNI build behind `InferenceEngine` (P0 ASR, R1-03).
 3. Commit `config/` contracts from PRD Appendix A–D; announce in `CHANGE.md`.
 4. Build `android-probe` (§26.6) → decide Plan A/B → record in `CHANGE.md` + PRD D-39a.
 
