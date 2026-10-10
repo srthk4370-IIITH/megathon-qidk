@@ -120,6 +120,10 @@ EXTRA_HOMO = {"fire": "fair", "leak": "leek", "room": "rum", "smoke": "smock", "
               "hurt": "hut", "sparks": "sparkes", "pump": "pomp", "water": "vater"}
 
 
+NEG_EN = ["Thankfully nobody is hurt and nobody is unconscious.", "No one was injured, nobody fainted.",
+          "Nobody got hurt, no one needs an ambulance.", "No injuries, everyone is fine and conscious."]
+
+
 def paraphrase(rng: random.Random, text: str, lang: str) -> str:
     sw = SWAP_EN if lang == "en" else SWAP_HI
     for a, alts in sw.items():
@@ -191,15 +195,19 @@ def gen(n_target: int, seed: int, eval_grams: list[set], eval_norm: set, tag: st
         cat = rng.choices(cats, weights=weights)[0]
         scen = rng.choice(list(SCENARIOS[cat]))
         r = rng.random()
-        lang = "en" if r < 0.5 else "hinglish"
+        lang = "en" if r < 0.7 else "hinglish"   # user: 70/30, English first
         kw = dict(want_unknown=rng.random() < 0.12, two_incident=rng.random() < 0.05,
-                  want_critical=rng.random() < 0.08,
+                  want_critical=rng.random() < 0.15,   # response-clock trigger (HANDBOOK extra 1)
                   max_optional=rng.choice([None, None, 0, 1, 2, 3]))
         try:
             text, gold, feats, slots, loc_gold = gc.build_case(rng, cat, scen, lang, **kw)
         except Exception as e:  # template/gold inconsistency -> reject (checker, §27.2.3)
             rejected[type(e).__name__] += 1
             continue
+        # negated danger must NOT read as CRITICAL / injured (app live-session fix; response-clock trigger)
+        if lang == "en" and "injuries" not in gold and gold.get("severity") != "CRITICAL" and rng.random() < 0.12:
+            text = text.rstrip() + " " + rng.choice(NEG_EN)
+            gold["injuries"] = "NO"
         text = paraphrase(rng, text, lang)
         noisy = rng.random() < 0.45
         if noisy:
