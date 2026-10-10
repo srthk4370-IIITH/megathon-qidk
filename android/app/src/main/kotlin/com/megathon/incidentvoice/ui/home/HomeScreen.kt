@@ -23,6 +23,7 @@ import com.megathon.incidentvoice.ui.theme.SevCritical
 @Composable
 fun HomeScreen(c: AppContainer, onMic: () -> Unit, onTypeInstead: () -> Unit, notice: String?, onOpen: (String) -> Unit) {
     val status by c.engine.status.collectAsStateWithLifecycle()
+    val llm by c.llmBackend.collectAsStateWithLifecycle()
     val recent by remember { c.repository.observeList(DashboardFilter(), 3) }.collectAsStateWithLifecycle(initialValue = emptyList())
     val clockBad = remember { java.time.Year.now().value < 2026 }
 
@@ -30,7 +31,7 @@ fun HomeScreen(c: AppContainer, onMic: () -> Unit, onTypeInstead: () -> Unit, no
         if (clockBad) Text("Device clock is wrong — relative times will be off.", color = Color.White,
             modifier = Modifier.fillMaxWidth().background(SevCritical).padding(8.dp), textAlign = TextAlign.Center)
         Spacer(Modifier.height(16.dp))
-        EnginePill(status)
+        EnginePill(status, llm)
         (status as? EngineStatus.Error)?.let { e ->
             Text(e.error.message.take(160), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error, textAlign = TextAlign.Center)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -63,9 +64,13 @@ fun HomeScreen(c: AppContainer, onMic: () -> Unit, onTypeInstead: () -> Unit, no
 }
 
 @Composable
-fun EnginePill(s: EngineStatus) {
+fun EnginePill(s: EngineStatus, llm: String = "") {
     val (text, color) = when (s) {
-        is EngineStatus.Ready -> (if (s.info.backend == "MOCK") "Mock engine ready" else "NPU ready") to FilledGreen
+        is EngineStatus.Ready -> when {
+            s.info.backend == "MOCK" -> "Mock engine ready" to FilledGreen
+            llm == "FALLBACK" -> "On-device ASR ready · LLM mock (bundle pending)" to Color(0xFFEF6C00)
+            else -> "NPU ready" to FilledGreen
+        }
         is EngineStatus.Loading -> "Loading models… ${(s.progress * 100).toInt()} %" to Color(0xFFF9A825)
         is EngineStatus.Error -> "Engine error — ${s.error.code}" to SevCritical
         EngineStatus.Idle -> "Engine starting…" to Color.Gray

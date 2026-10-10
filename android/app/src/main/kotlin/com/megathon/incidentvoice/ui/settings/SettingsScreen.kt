@@ -61,14 +61,21 @@ fun SettingsScreen(c: AppContainer) {
                 }
                 Spacer(Modifier.height(6.dp))
                 val kind by c.engineKind.collectAsStateWithLifecycle()
-                Text("Active: " + if (kind == "JNI") "on-device (whisper.cpp + Genie/NPU)" else "Mock (canned demo responses)", style = MaterialTheme.typography.labelMedium)
+                val llm by c.llmBackend.collectAsStateWithLifecycle()
+                Text("Active: " + when {
+                    kind != "JNI" -> "Mock (canned demo responses)"
+                    llm == "NPU" -> "on-device — Whisper ASR + Llama on the Hexagon NPU"
+                    llm == "FALLBACK" -> "on-device Whisper ASR · LLM = mock until the Llama bundle is pushed (then tap Auto to reload)"
+                    else -> "on-device (starting…)"
+                }, style = MaterialTheme.typography.labelMedium)
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     listOf("AUTO" to "Auto", "JNI" to "On-device", "MOCK" to "Mock").forEach { (mode, label) ->
                         FilterChip(selected = s.engineMode == mode, onClick = { upd { it.copy(engineMode = mode) }; c.selectEngine(mode) }, label = { Text(label) })
                     }
                 }
                 Text("Model folder: ${c.modelsDir.absolutePath}", style = MaterialTheme.typography.labelSmall)
-                Text(if (c.modelsPresent()) "Model files found" else "Model files not found (Auto uses the Mock engine)", style = MaterialTheme.typography.labelSmall)
+                Text("Whisper model: ${if (c.whisperPresent()) "found" else "missing"} · Llama bundle: ${if (c.llamaPresent()) "found" else "missing"}" +
+                    if (!c.whisperPresent()) " (Auto uses the Mock engine)" else "", style = MaterialTheme.typography.labelSmall)
                 OutlinedButton({ scope.launch { runCatching { c.engine.warmup() } } }, Modifier.padding(top = 6.dp)) { Text("Re-run warm-up") }
             }
         }

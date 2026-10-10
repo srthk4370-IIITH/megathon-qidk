@@ -55,6 +55,15 @@ Only two branches: **App** and **ML**. No separate web/dashboard branch.
 - Action needed: build UI against `MockInferenceEngine` now; switch to `JniInferenceEngine` when STATUS.md says the board is ready.
 - Commit: c20214b
 
+## 2026-10-11 00:50 — Saarthak — App can wire the REAL engine now (ASR live, LLM auto-switches)
+- What changed:
+  - `JniInferenceEngine(context, llmFallback = MockInferenceEngine())`: on-device **Whisper ASR works now** (whisper.cpp small, ~1.5 s for 11 s audio on the QIDK). Until the Llama V79 bundle is on the device, `generate()` is served by `llmFallback`. When the bundle arrives, call `engine.init()` again (e.g. on app start / a "Reload models" button) → `generate()` runs on the Hexagon NPU. `engine.llmOnNpu()` tells which is active (show it in the debug overlay).
+  - ML pushes model files into the app dir automatically (`scripts/jobs/deploy_app_models.sh`): `/sdcard/Android/data/com.megathon.incidentvoice/files/models/{whisper,dsp,llama}`. **App package must be `com.megathon.incidentvoice`** (tell ML in CHANGE.md if different: set `IV_APP_PKG`).
+  - Updated `android/engine/src/main/jniLibs/arm64-v8a/libiv_native.so` (fast ASR).
+  - Language: pass `LangMode.AUTO_EN_HI` for now (ASR eval on the 30 clips decides the default; will be posted here).
+- Who is affected: App branch.
+- Action needed: `include(":engine")`, `implementation(project(":engine"))`, construct `JniInferenceEngine(applicationContext, llmFallback = MockInferenceEngine())`, call `init()` off the main thread at startup. Manifest gets `<uses-native-library libcdsprpc.so>` from the engine module automatically.
+
 ## 2026-10-10 — renny (App) — `config/` created verbatim from PRD
 - What changed: App branch created `config/` straight from the PRD with no edits to keys/enums: `taxonomy.json` (App. A), `site_registry.json` (A.3), `sop.json` (App. B), `app_config.json` (§22.5), `prompts/*` (App. C.1–C.9; `warmup.user.txt` = C.9). Extracted by script and JSON-validated.
 - Who is affected: ML branch (`Saarthak`) — PRD §22.5 / §34.1.
@@ -79,7 +88,7 @@ Only two branches: **App** and **ML**. No separate web/dashboard branch.
 
 ## 2026-10-11 01:00 — renny (App) — App now consumes ML's `:engine` + `config/`; module layout to avoid merge conflicts
 - **What changed**
-  - `android/core`, `android/engine` and `config/` on `renny` are now **byte-for-byte the `origin/Saarthak` versions** (taken at `cc183eb`, no edits) → merging the two branches produces no conflicts in those trees. `eval/text_cases.jsonl` is also taken verbatim (used by app tests).
+  - `android/core`, `android/engine`, `config/`, the Gradle wrapper files and `.gitignore` rules on `renny` are **the `origin/Saarthak` versions** (re-synced at `d69713a`, no edits) → merging the two branches produces no conflicts in those trees. `eval/text_cases.jsonl` is also taken verbatim (used by app tests).
   - The App branch's own pure-Kotlin layer moved from `android/core` to **`android/domain` (module `:domain`)**. Its engine port lives in package `com.megathon.incidentvoice.domain.engine` so it does not clash with ML's `com.megathon.incidentvoice.engine`.
   - `:app` depends on `:domain` + `:engine`. `MlEngineAdapter` (`android/app/.../engineglue/`) is the **only** file that knows both type families; it wraps `JniInferenceEngine` (or any ML `InferenceEngine`). Settings → Engine: Auto / On-device / Mock. Auto = on-device when `llama/genie_config.json` and `whisper/<asr.whisper_cpp_model>` exist under `getExternalFilesDir(null)/models`, else Mock.
   - Root Gradle files are a superset of ML's: `settings.gradle.kts` includes `:core`, `:domain` always and `:engine`, `:app` when `-PwithAndroid=true` **or** an SDK is configured (`local.properties` / `ANDROID_HOME`). Root `build.gradle.kts` adds the Compose and KSP plugins. **When merging, take renny's `settings.gradle.kts`, `build.gradle.kts`, `gradle.properties`.**
@@ -87,7 +96,7 @@ Only two branches: **App** and **ML**. No separate web/dashboard branch.
 - **Who is affected:** ML branch (merge), anyone building `android/`.
 - **Findings for ML (no action taken on ML files)**
   1. `libiv_native.so` is linked with **4 KB** segment alignment (the QAIRT libs are 16 KB). Fine if the board runs 4 KB pages (`adb shell getconf PAGE_SIZE` → 4096); if it is 16384 the lib will not load → rebuild with `-Wl,-z,max-page-size=16384`. `scripts/app_device_check.sh` checks this.
-  2. `JniInferenceEngine.init()` needs **both** the Llama bundle and the Whisper model; with only Whisper pushed it returns `IV-E603`. The app then shows the error with "Retry engine" / "Use mock engine".
+  2. (Updated 01:15, after ML's `d69713a`.) The app constructs `JniInferenceEngine(context, modelsDir, whisperModel = app_config.asr.whisper_cpp_model, llmFallback = <app mock>)`. Auto mode picks the on-device engine as soon as the **Whisper** model is present; the Home pill is orange ("On-device ASR ready · LLM mock") until `llmOnNpu()` is true. After the Llama bundle is pushed: Settings → Engine → **Auto** (or "Retry engine") calls `init()` again. The fallback is the app's own mock (it classifies the real transcript) rather than ML's slide-only mock.
   3. The app treats `IV-E3xx` / `IV-E6xx` generation errors (incl. `IV-E301 empty LLM output`) as retryable (3/7/15 s) before showing ERROR_ENGINE.
   4. Eval set: in 11 of the 50 follow-up cases the eval asks `severity` although PRD §10.6 says a rule-derived severity (`INFERRED`) counts as filled — the app (and ML's Kotlin `:core`) do not ask. Not a bug; just a difference between the eval generator and the dialogue.
   5. PRD text to fix when convenient: FTS4 query syntax is `tok*` (not `"tok"*`), manifest must not force portrait (HDMI monitor is landscape), no `@Upsert` on FTS tables.

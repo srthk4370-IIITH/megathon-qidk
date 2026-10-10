@@ -75,8 +75,8 @@ for l in libiv_native.so libGenie.so libQnnHtp.so libQnnHtpV79Stub.so libQnnSyst
 done
 M=/sdcard/Android/data/$PKG/files/models
 echo "  model dir: $M"
-sh_ ls $M/llama/genie_config.json | grep -q genie_config && ok "llama/genie_config.json present" || wn "Llama bundle not pushed yet → Auto mode uses the Mock engine"
-sh_ ls $M/whisper | grep -q -E 'ggml-.*\.bin' && ok "whisper ggml model present" || wn "whisper model not pushed yet → Auto mode uses the Mock engine"
+sh_ ls $M/llama/genie_config.json | grep -q genie_config && ok "llama/genie_config.json present" || wn "Llama bundle not pushed yet → with Whisper present the app runs real ASR + mock LLM (orange pill); tap Settings → Engine → Auto after the bundle arrives"
+sh_ ls $M/whisper | grep -q -E 'ggml-.*\.bin' && ok "whisper ggml model present" || wn "whisper model not pushed yet → Auto mode uses the Mock engine (scripted transcript)"
 sh_ ls $M/dsp | grep -q -i skel && ok "dsp/ skel libs present" || wn "dsp/ (HTP V79 skel libs) not pushed yet"
 grep -E "iv_native|IV-E|Genie|whisper" /tmp/iv_app_logcat.txt | tail -15 | sed 's/^/    /'
 if grep -q "Genie loaded" /tmp/iv_app_logcat.txt; then ok "Genie (Llama on HTP) loaded inside the app process → Plan A works"; fi

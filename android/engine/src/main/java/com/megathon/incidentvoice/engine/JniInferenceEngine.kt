@@ -31,7 +31,14 @@ class JniInferenceEngine(
     private val whisperModel: String = "ggml-small-q5_1.bin",
     /** All native calls run on this single thread (PRD §7.4 npuDispatcher). */
     private val npu: CoroutineDispatcher = newSingleThreadContext("npu"),
+    /**
+     * Used for generate() while the Llama bundle is not on the device yet (e.g. MockInferenceEngine()).
+     * ASR is still real. When llama/genie_config.json appears, call init() again → NPU LLM is used.
+     */
+    private val llmFallback: InferenceEngine? = null,
 ) : InferenceEngine {
+
+    @Volatile private var llmLoaded = false
 
     private val _status = MutableStateFlow<EngineStatus>(EngineStatus.NotStarted)
     override val status: StateFlow<EngineStatus> = _status
@@ -42,15 +49,22 @@ class JniInferenceEngine(
         if (err != null) {
             return@withContext EngineStatus.Error("IV-E601", "native libs: ${err.message}", false).also { _status.value = it }
         }
-        if (!File(modelsDir, "llama/genie_config.json").exists() || !File(modelsDir, "whisper/$whisperModel").exists()) {
-            return@withContext EngineStatus.Error("IV-E603", "model files missing under $modelsDir", false).also { _status.value = it }
+        if (!File(modelsDir, "whisper/$whisperModel").exists()) {
+            return@withContext EngineStatus.Error("IV-E603", "whisper model missing under $modelsDir/whisper", false).also { _status.value = it }
         }
-        val cfg = """{"asr_threads":$asrThreads,"whisper_model":"$whisperModel"}"""
+        val hasLlm = File(modelsDir, "llama/genie_config.json").exists()
+        if (!hasLlm && llmFallback != null) llmFallback.init()
+        if (llmLoaded) NativeBridge.release() // re-init (e.g. bundle just arrived)
+        val cfg = """{"asr_threads":$asrThreads,"whisper_model":"$whisperModel","load_llm":$hasLlm}"""
         val raw = NativeBridge.init(modelsDir.absolutePath, context.applicationInfo.nativeLibraryDir, cfg)
         val e = parseError(raw)
+        llmLoaded = e == null && hasLlm
         _status.value = if (e != null) EngineStatus.Error(e.code, e.message, e.retryable) else EngineStatus.Ready(raw)
         _status.value
     }
+
+    /** True when generate() runs on the NPU; false when it uses [llmFallback] (bundle not pushed yet). */
+    fun llmOnNpu(): Boolean = llmLoaded
 
     override suspend fun warmup(): GenStatsDto? {
         var stats: GenStatsDto? = null
@@ -65,7 +79,12 @@ class JniInferenceEngine(
         return wireJson.decodeFromString(AsrResultDto.serializer(), raw)
     }
 
-    override fun generate(req: GenRequest): Flow<GenEvent> = callbackFlow {
+    override fun generate(req: GenRequest): Flow<GenEvent> =
+        if (!llmLoaded) llmFallback?.generate(req)
+            ?: kotlinx.coroutines.flow.flowOf(GenEvent.Error(EngineErrorDto("IV-E603", "Llama bundle not on device yet", true)))
+        else npuGenerate(req)
+
+    private fun npuGenerate(req: GenRequest): Flow<GenEvent> = callbackFlow {
         launch(npu) {
             val raw = NativeBridge.llmGenerate(req.prompt, req.task.name, req.sampler.wire, req.maxTokens) { piece ->
                 trySend(GenEvent.Token(piece))

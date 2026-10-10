@@ -38,5 +38,5 @@ __pycache__/
 .env
 *.token
 kaggle.json
-
+eval/clips/raw/*.m4a
 .DS_Store

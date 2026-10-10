@@ -15,6 +15,7 @@ import com.megathon.incidentvoice.audio.SwitchableAudioInput
 import com.megathon.incidentvoice.domain.engine.InferenceEngine
 import com.megathon.incidentvoice.domain.engine.MockInferenceEngine
 import com.megathon.incidentvoice.engine.JniInferenceEngine
+import com.megathon.incidentvoice.engineglue.DomainToMlEngine
 import com.megathon.incidentvoice.engineglue.MlEngineAdapter
 import com.megathon.incidentvoice.engineglue.SwitchableEngine
 import kotlinx.coroutines.flow.first
@@ -45,18 +46,27 @@ class AppContainer(val context: Context) {
     private val mockEngine: InferenceEngine by lazy { MockInferenceEngine(config.taxonomy) }
 
     /** ML branch's in-process engine (Plan A): whisper.cpp + Genie on the HTP, via libiv_native.so. */
-    private val jniEngine: InferenceEngine by lazy {
-        MlEngineAdapter(JniInferenceEngine(context, modelsDir, whisperModel = config.app.asr.whisperCppModel), appScope, "on-device")
+    private val jni: JniInferenceEngine by lazy {
+        // Until the Llama bundle is on the board, ML's engine serves generate() from this fallback while ASR is
+        // already real (whisper.cpp). The app's own mock is used because it classifies/answers from the actual
+        // transcript instead of replaying one canned scene.
+        JniInferenceEngine(context, modelsDir, whisperModel = config.app.asr.whisperCppModel, llmFallback = DomainToMlEngine(mockEngine))
     }
+    private val jniEngine: InferenceEngine by lazy { MlEngineAdapter(jni, appScope, "on-device") }
+
+    /** "NPU" when Llama runs on the Hexagon NPU, "FALLBACK" when ASR is real but the LLM is the mock, "" for Mock engine. */
+    val llmBackend = MutableStateFlow("")
 
     /** The single engine reference everything uses; the delegate is chosen by [selectEngine]. */
     val engine: SwitchableEngine by lazy { SwitchableEngine(appScope, mockEngine) }
     val engineKind = MutableStateFlow("MOCK")
 
     /** Model files the JNI engine needs (same check as JniInferenceEngine.init). */
-    fun modelsPresent(): Boolean =
-        File(modelsDir, "${config.app.models.llamaDir}/genie_config.json").exists() &&
-            File(modelsDir, "${config.app.models.whisperDir}/${config.app.asr.whisperCppModel}").exists()
+    fun whisperPresent(): Boolean = File(modelsDir, "${config.app.models.whisperDir}/${config.app.asr.whisperCppModel}").exists()
+    fun llamaPresent(): Boolean = File(modelsDir, "${config.app.models.llamaDir}/genie_config.json").exists()
+
+    /** The on-device engine can start as soon as the Whisper model is there (LLM falls back until the bundle arrives). */
+    fun modelsPresent(): Boolean = whisperPresent()
 
     /** AUTO → on-device engine when its model files are on the board, else Mock. */
     fun selectEngine(mode: String) {
@@ -66,7 +76,12 @@ class AppContainer(val context: Context) {
         val useJni = when (mode) { "JNI" -> true; "MOCK" -> false; else -> modelsPresent() && !forceMock }
         engine.switchTo(if (useJni) jniEngine else mockEngine)
         engineKind.value = if (useJni) "JNI" else "MOCK"
-        appScope.launch { runCatching { engine.init(); engine.warmup() } }
+        llmBackend.value = ""
+        appScope.launch {
+            runCatching { engine.init() }
+            if (useJni) llmBackend.value = if (jni.llmOnNpu()) "NPU" else "FALLBACK"
+            runCatching { engine.warmup() }
+        }
     }
 
     val tts: TtsSpeaker by lazy { AndroidTtsSpeaker(context) }
