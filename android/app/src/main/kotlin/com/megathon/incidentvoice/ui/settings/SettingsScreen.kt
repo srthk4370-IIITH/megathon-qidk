@@ -66,7 +66,7 @@ fun SettingsScreen(c: AppContainer) {
                     kind != "JNI" -> "Mock (canned demo responses)"
                     llm == "NPU" -> "on-device — Whisper ASR + Llama on the Hexagon NPU"
                     llm == "FALLBACK" -> "on-device Whisper ASR · LLM = mock until the Llama bundle is pushed (then tap Auto to reload)"
-                    else -> "on-device (starting…)"
+                    else -> "on-device (not ready — see the message above)"
                 }, style = MaterialTheme.typography.labelMedium)
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     listOf("AUTO" to "Auto", "JNI" to "On-device", "MOCK" to "Mock").forEach { (mode, label) ->

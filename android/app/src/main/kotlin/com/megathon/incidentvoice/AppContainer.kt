@@ -78,8 +78,8 @@ class AppContainer(val context: Context) {
         engineKind.value = if (useJni) "JNI" else "MOCK"
         llmBackend.value = ""
         appScope.launch {
-            runCatching { engine.init() }
-            if (useJni) llmBackend.value = if (jni.llmOnNpu()) "NPU" else "FALLBACK"
+            val ok = runCatching { engine.init() }.isSuccess
+            if (useJni && ok) llmBackend.value = if (jni.llmOnNpu()) "NPU" else "FALLBACK"
             runCatching { engine.warmup() }
         }
     }

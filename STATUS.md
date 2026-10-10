@@ -64,6 +64,6 @@ Legend: ✅ built + verified by test and by running the APK on an Android 15 arm
 | F-11 | Emergency banner + one-tap dial | ✅ | Emulator: amber banner on "fire spreading…", dialer opened. No-dialer case shows a toast. |
 | F-12 | Settings: profile, ERT number, engine status | ✅ | Emulator. Engine mode Auto / On-device / Mock. |
 | F-13 | Debug overlay | ✅ | Emulator (timings, tok/s, raw tool call). |
-| — | On-device engine inside the app (Plan A) | 🟡 | In the APK on Android 15: `libiv_native`, `libGenie`, `libQnnSystem`, `libQnnHtp` load; `libQnnHtpV79Stub` needs the board's `libcdsprpc.so`. Missing models → clean `IV-E603`. |
+| — | On-device engine inside the app (Plan A) | 🟡 | ML engine `d69713a` wired: `JniInferenceEngine(llmFallback = app mock)`. In the APK on Android 15: `libiv_native`, `libGenie`, `libQnnSystem`, `libQnnHtp` load; `libQnnHtpV79Stub` needs the board's `libcdsprpc.so`. Whisper missing → clean `IV-E603`; Whisper present → real ASR, LLM on the fallback until the Llama bundle is pushed (orange pill), then Settings → Engine → Auto reloads onto the NPU. |
 
 Cut per rev 1.1 (not built): draft-resume UI, charts, status lifecycle beyond SUBMITTED, PDF/JSON export, 3-min chunking, LLM-tailored recommendations, per-field mic.
