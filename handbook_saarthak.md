@@ -43,6 +43,15 @@
 
 ## 3. Live log (newest first)
 
+> WSL clock is UTC: `16:00` in `ml/status/pipeline_status.md` = 21:30 IST.
+
+### 2026-10-10 22:10 IST
+- **Built (code, committed c20214b):** `native/` (whisper.cpp ASR + Genie LLM engine, `iv_cli`, JNI bridge, CMake, `build_android.sh`), `android/engine` (InferenceEngine + JNI/HTTP/Mock), `android-probe/` (Gradle-free probe APK, `build_and_run.sh`), `server-go/` (Plan B; arm64 build OK → `~/iv/iv-server`), `ml/scripts/verify_bundle.py`, `scripts/auto_pipeline.sh`.
+- **Unattended pipeline running** (`~/iv/auto_pipeline.sh`, log `~/iv/logs/pipeline.log`, human status `ml/status/pipeline_status.md`): waits for toolchains → native build → push runtime + whisper model → ASR smoke (jfk.wav) → waits for Llama bundle (laptop or Kaggle) → verify → push → `genie-t2t-run` + `iv_cli llm` smoke. Re-run any time: `wsl -- bash ~/iv/auto_pipeline.sh` (idempotent).
+- **Agents (parallel):** Kotlin `android/core` and Python `ml/common` + `eval/` — in progress.
+- **Kaggle export FAILED: OOM (exit 137)** — the box has 31 GB RAM and no swap despite `enable_tpu` (old probe showed the same). Probing `--accelerator TpuV6E8/TpuV5E8` RAM + swapon (kernels `iv-memprobe-*`). **Laptop export is now the primary path** (in torch.export, ~39 GB swap used).
+- **Lesson:** never `git checkout`/`stash` in the shared working tree while agents write; an earlier `stash -u` collided with agent writes (no loss — verified file-by-file; stash@{0} kept as backup). Sync `main` via a separate `git worktree`.
+
 ### 2026-10-10 21:35
 - Contracts generated into `config/` from PRD appendices (`app_config.json` carries rev 1.1: whisper.cpp engine, 30 s cap, templates for recs, time default).
 - Detached `~/iv/bg_setup.sh` (log `~/iv/logs/bg_setup.log`): NDK r27c, whisper.cpp clone, `ggml-small-q5_1.bin` + `q8_0`, Gradle 8.10.2, QAIRT unzip when download completes.
