@@ -72,7 +72,16 @@ class MlEngineAdapterTest {
     }
 
     @Test fun slideConversation_throughMlEngineTypes() = runTest {
-        val ml = MlMock(asrDelayMs = 0, tokensPerSecond = 1000)
+        // ML's slideResponder keys on the word "injuries" anywhere in the prompt; the patch prompt wording changes with
+        // prompt tuning, so decide by the "Asked fields:" line (stable, RENDERING.md) and reuse their canned calls.
+        val responder: (com.megathon.incidentvoice.engine.GenRequest) -> String = { req ->
+            if (req.task == com.megathon.incidentvoice.engine.LlmTask.PATCH && !Regex("Asked fields: [^\\n]*injuries").containsMatchIn(req.prompt))
+                """{"name":"update_incident_fields","parameters":{"lang":"en","set":{"leak_source":"burst pipe under the sink","leak_status":"STOPPED"},"unknown":[],"skipped":false}}"""
+            else if (req.task == com.megathon.incidentvoice.engine.LlmTask.PATCH)
+                """{"name":"update_incident_fields","parameters":{"lang":"en","set":{"injuries":"NO","severity":"LOW"},"unknown":[],"skipped":false}}"""
+            else MlMock.slideResponder(req)
+        }
+        val ml = MlMock(responder = responder, asrDelayMs = 0, tokensPerSecond = 1000)
         val engine = SwitchableEngine(backgroundScope, MlEngineAdapter(ml, backgroundScope, "ml-mock"))
         val info = engine.init()
         assertEquals("MOCK", info.plan)

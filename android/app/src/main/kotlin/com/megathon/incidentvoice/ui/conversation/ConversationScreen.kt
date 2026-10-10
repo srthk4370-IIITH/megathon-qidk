@@ -13,6 +13,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.unit.dp
 import com.megathon.incidentvoice.core.FieldStatus
@@ -104,7 +105,8 @@ private fun Controls(ui: ConversationUiState, o: ConversationOrchestrator, typed
             }
             ConvState.TRANSCRIBING -> Row(verticalAlignment = Alignment.CenterVertically) { CircularProgressIndicator(Modifier.size(20.dp)); Spacer(Modifier.width(8.dp)); Text("Transcribing…") }
             ConvState.TRANSCRIPT_REVIEW -> {
-                OutlinedTextField(ui.transcriptDraft, o::onTranscriptEdited, Modifier.fillMaxWidth(), label = { Text("Transcript — edit if needed") })
+                OutlinedTextField(ui.transcriptDraft, o::onTranscriptEdited, Modifier.fillMaxWidth().onFocusChanged { o.onTranscriptFocus(it.isFocused) },
+                    label = { Text("Heard this — tap to correct, or it continues by itself") })
                 LinearProgressIndicator(progress = { ui.countdownMs / 2000f }, Modifier.fillMaxWidth().padding(vertical = 4.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(o::onContinue) { Text("Continue") }

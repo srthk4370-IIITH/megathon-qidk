@@ -79,6 +79,7 @@ class AppContainer(val context: Context) {
 
     /** AUTO → on-device engine when its model files are on the board, else Mock. */
     fun selectEngine(mode: String) {
+        writeAsrPrompt()
         // `adb shell touch <externalFilesDir>/force_mock` keeps AUTO on the Mock engine (so installing the app
         // never grabs the NPU while the ML owner is running jobs on the board).
         val forceMock = File(context.getExternalFilesDir(null), "force_mock").exists()
@@ -94,6 +95,18 @@ class AppContainer(val context: Context) {
             runCatching { engine.warmup() }
             if (useJni && ok && !jni.llmOnNpu()) watchForLlama()
         }
+    }
+
+    /**
+     * Writes the speech-recogniser hint next to the Whisper model (`models/whisper/prompt.txt`). The native engine
+     * reads it when it loads the model (see docs/proposals/asr_initial_prompt.patch); older native builds ignore it.
+     */
+    private fun writeAsrPrompt() {
+        runCatching {
+            val f = File(modelsDir, "${config.app.models.whisperDir}/prompt.txt")
+            val text = com.megathon.incidentvoice.core.AsrPrompt.build(config.taxonomy)
+            if (!f.exists() || f.readText() != text) f.writeText(text)
+        }.onFailure { android.util.Log.w("IV", "could not write ASR prompt: ${it.message}") }
     }
 
     private var llamaWatcher: kotlinx.coroutines.Job? = null
@@ -132,6 +145,23 @@ class AppContainer(val context: Context) {
                 OrchestratorSettings(s.reporter, s.ertNumber, s.speakQuestions, s.vadEndSilenceMs)
             },
         )
+    }
+
+    /** logcat trace of the conversation (tag IV): state changes, every bubble, timings. `adb logcat -s IV` during tests/demo. */
+    fun traceConversation() {
+        appScope.launch {
+            var lastState: Any? = null; var seen = 0; var lastDebug = ""
+            orchestrator.ui.collect { u ->
+                if (u.state != lastState) { android.util.Log.i("IV", "state ${lastState} -> ${u.state} round=${u.round} missing=${u.validation?.missing}"); lastState = u.state }
+                if (u.timeline.size < seen) seen = 0
+                u.timeline.drop(seen).forEach { android.util.Log.i("IV", "bubble ${it.role}: ${it.text}") }
+                seen = u.timeline.size
+                val d = "asr=${u.debug.asrMs}ms llm=${u.debug.llmMs}ms tok=${u.debug.tokensOut} task=${u.debug.lastTask}"
+                if (d != lastDebug && u.debug.lastTask.isNotBlank()) { android.util.Log.i("IV", "timing $d"); lastDebug = d }
+                u.error?.let { android.util.Log.w("IV", "error: $it") }
+                u.notice?.let { android.util.Log.i("IV", "notice: $it") }
+            }
+        }
     }
 
     fun startEngine() { appScope.launch { selectEngine(settings.flow.first().engineMode) } }

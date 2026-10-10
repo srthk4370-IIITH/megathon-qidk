@@ -111,6 +111,11 @@ class AudioCapture(
         val startMs = (maxOf(0, ep.speechStartMs - cfg.prerollMs))
         val startSample = (startMs.toLong() * rate / 1000).toInt().coerceIn(0, n)
         val out = pcm.copyOfRange(startSample, n)
+        // PRD §16.2: peak-normalise to 0.9 before ASR (the board mic is quiet: speech peaks around -8…-10 dBFS)
+        var peak = 1
+        for (v in out) { val a = if (v < 0) -v.toInt() else v.toInt(); if (a > peak) peak = a }
+        val gain = (0.9 * 32767 / peak).coerceIn(1.0, 8.0)
+        if (gain > 1.05) for (i in out.indices) out[i] = (out[i] * gain).toInt().coerceIn(-32768, 32767).toShort()
         if (out.size < rate * 300 / 1000) return ListenResult.NoSpeech
         val file = File(File(audioRoot, incidentId).apply { mkdirs() }, "${System.currentTimeMillis()}.wav")
         runCatching { file.writeBytes(Wav.encode(out, rate)) }

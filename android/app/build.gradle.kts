@@ -17,6 +17,18 @@ android {
         versionName = "0.1"
         ndk { abiFilters += "arm64-v8a" }
     }
+    // One shared debug key (committed) so every laptop can `adb install -r` over another laptop's build.
+    // Without it each machine signs with its own ~/.android/debug.keystore and the board rejects the update
+    // (INSTALL_FAILED_UPDATE_INCOMPATIBLE) — and uninstalling wipes the model folder.
+    signingConfigs {
+        getByName("debug") {
+            storeFile = file("debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
+    buildTypes { getByName("debug") { signingConfig = signingConfigs.getByName("debug") } }
     buildFeatures { compose = true }
     testOptions { unitTests.isIncludeAndroidResources = true }
     // QNN stubs are located through ADSP_LIBRARY_PATH = nativeLibraryDir, so the .so files must be extracted (PRD §18.2)
