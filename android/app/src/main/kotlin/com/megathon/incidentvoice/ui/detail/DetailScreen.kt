@@ -5,8 +5,12 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.ui.unit.sp
+import com.megathon.incidentvoice.ui.components.FlatCard
+import com.megathon.incidentvoice.ui.components.QDivider
+import com.megathon.incidentvoice.ui.theme.secondaryText
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -25,8 +29,8 @@ import com.megathon.incidentvoice.core.Taxonomy
 import com.megathon.incidentvoice.data.IncidentDetail
 import com.megathon.incidentvoice.data.IncidentRepository
 import com.megathon.incidentvoice.ui.FormDisplay
-import com.megathon.incidentvoice.ui.components.SeverityChip
-import com.megathon.incidentvoice.ui.components.StatusChip
+import com.megathon.incidentvoice.ui.components.SeverityLabel
+import com.megathon.incidentvoice.ui.components.StatusText
 import com.megathon.incidentvoice.ui.fmtDateTime
 import com.megathon.incidentvoice.ui.theme.Amber
 import kotlinx.coroutines.launch
@@ -50,14 +54,15 @@ fun DetailScreen(
     var confirmDelete by remember { mutableStateOf(false) }
 
     // nested inside the app Scaffold, which already applies the system-bar insets
-    Scaffold(contentWindowInsets = WindowInsets(0), topBar = {
+    Scaffold(containerColor = MaterialTheme.colorScheme.background, contentWindowInsets = WindowInsets(0), topBar = {
         TopAppBar(
             windowInsets = WindowInsets(0),
-            title = { Text(detail?.meta?.refNo ?: "Incident") },
+            title = { Text(detail?.meta?.refNo ?: "Report", style = com.megathon.incidentvoice.ui.theme.Mono.copy(fontSize = 17.sp)) },
+            colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
             navigationIcon = { IconButton(onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } },
             actions = {
-                IconButton({ onEdit(id) }) { Icon(Icons.Default.Edit, "Edit") }
-                IconButton({ confirmDelete = true }) { Icon(Icons.Default.Delete, "Delete") }
+                IconButton({ onEdit(id) }, Modifier.size(48.dp)) { Icon(Icons.Outlined.Edit, "Edit") }
+                IconButton({ confirmDelete = true }, Modifier.size(48.dp)) { Icon(Icons.Outlined.Delete, "Delete") }
             },
         )
     }) { pad ->
@@ -79,54 +84,70 @@ fun DetailScreen(
 @Composable
 private fun DetailBody(d: IncidentDetail, tx: Taxonomy, disclaimer: String, modifier: Modifier, similarHits: List<com.megathon.incidentvoice.ask.AskHit>, onOpen: (String) -> Unit, case: MergedCase?, onTrust: (String, String) -> Unit, onTick: (Long, Boolean) -> Unit) {
     val f = d.form
-    LazyColumn(modifier.fillMaxSize().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(vertical = 12.dp)) {
+    LazyColumn(modifier.fillMaxSize().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(vertical = 16.dp)) {
         item {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                SeverityChip(f.str("severity")); StatusChip(d.meta.status.name)
-                Text(f.types.joinToString(" + ") { tx.category(it)?.label ?: it }, style = MaterialTheme.typography.labelLarge)
-            }
+            Text(f.str("title") ?: "Report", style = MaterialTheme.typography.titleLarge)
             Spacer(Modifier.height(8.dp))
-            Text(f.str("title") ?: "Incident", style = MaterialTheme.typography.headlineSmall)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                SeverityLabel(f.str("severity")); StatusText(d.meta.status.name)
+            }
+            Text(f.types.joinToString(" + ") { tx.category(it)?.label ?: it }, style = MaterialTheme.typography.bodySmall, color = secondaryText)
             Spacer(Modifier.height(4.dp))
             Text(f.str("description").orEmpty())
         }
         if (case != null) item(key = "case") { WitnessTable(case, d.meta.id, onOpen, onTrust) }
         item { SectionTitle("Details") }
-        items(FormDisplay.rows(f, tx), key = { it.key }) { r ->
-            Row(Modifier.fillMaxWidth()) {
-                Text(r.label, Modifier.weight(0.4f), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text(r.value, Modifier.weight(0.6f), color = if (r.status == FieldStatus.DEFAULTED || r.status == FieldStatus.INFERRED) Amber else MaterialTheme.colorScheme.onSurface)
-            }
-        }
-        if (f.locationId != null) item { Text("Matched site location: ${f.locationId}", style = MaterialTheme.typography.bodySmall) }
-        if (d.recommendations.isNotEmpty()) {
-            item { SectionTitle("Recommended actions") }
-            items(d.recommendations, key = { "r${it.id}" }) { r ->
-                Row(verticalAlignment = Alignment.Top) {
-                    Checkbox(r.done, { onTick(r.id, it) })
-                    Column {
-                        Text(r.text); if (r.immediate) Text("Immediate", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
+        item {
+            FlatCard {
+                FormDisplay.rows(f, tx).forEachIndexed { n, r ->
+                    if (n > 0) QDivider()
+                    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(r.label, style = MaterialTheme.typography.bodySmall, color = secondaryText)
+                            if (r.status == FieldStatus.DEFAULTED || r.status == FieldStatus.INFERRED) Text("Check", style = MaterialTheme.typography.labelMedium, color = Amber)
+                        }
+                        Text(r.value)
                     }
                 }
             }
-            item { Text(disclaimer, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        }
+        if (f.locationId != null) item { Text("Site location: ${f.locationId}", style = MaterialTheme.typography.bodySmall, color = secondaryText) }
+        if (d.recommendations.isNotEmpty()) {
+            item { SectionTitle("Recommended actions") }
+            item {
+                FlatCard {
+                    d.recommendations.forEachIndexed { n, r ->
+                        if (n > 0) QDivider()
+                        Row(Modifier.padding(start = 4.dp, end = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Checkbox(r.done, { onTick(r.id, it) }, colors = CheckboxDefaults.colors(checkedColor = MaterialTheme.colorScheme.onSurface, checkmarkColor = MaterialTheme.colorScheme.surface))
+                            Column(Modifier.padding(vertical = 8.dp)) {
+                                Text(r.text); if (r.immediate) Text("Immediate", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.error)
+                            }
+                        }
+                    }
+                }
+            }
+            item { Text(disclaimer, style = MaterialTheme.typography.bodySmall, color = secondaryText) }
         }
         if (d.turns.isNotEmpty()) {
             item { SectionTitle("Transcript") }
             items(d.turns, key = { "t${it.idx}" }) { t ->
-                Text((if (t.role == "ASSISTANT") "Assistant: " else "Reporter: ") + t.text, style = MaterialTheme.typography.bodyMedium)
+                Column {
+                    Text(if (t.role == "ASSISTANT") "Qalam" else "Reporter", style = MaterialTheme.typography.bodySmall, color = secondaryText)
+                    Text(t.text)
+                }
             }
         }
         d.meta.responseStartedAt?.let { start ->
             item {
                 SectionTitle("Response timeline")
-                Text(com.megathon.incidentvoice.core.ResponseClock.timeline(start, d.responseActions))
+                Text(com.megathon.incidentvoice.core.ResponseClock.timeline(start, d.responseActions), style = com.megathon.incidentvoice.ui.theme.Mono)
                 Text("Clock started ${fmtDateTime(start)} · ${d.responseActions.size} step${if (d.responseActions.size != 1) "s" else ""} logged", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
         if (similarHits.isNotEmpty()) {
             item { SectionTitle("Similar incidents") }
-            items(similarHits, key = { "s${it.id}" }) { h -> com.megathon.incidentvoice.ui.ask.HitCard(h, tx, false, onOpen) }
+            item { FlatCard { similarHits.forEachIndexed { n, h -> if (n > 0) QDivider(); com.megathon.incidentvoice.ui.ask.HitCard(h, tx, false, onOpen) } } }
         }
         item {
             SectionTitle("Reporter")
@@ -141,8 +162,9 @@ private fun WitnessTable(case: MergedCase, currentId: String, onOpen: (String) -
     var showSummary by remember { mutableStateOf(false) }
     val open = case.openConflicts
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        SectionTitle("Witness accounts · ${case.accounts.size} accounts · $open conflict${if (open != 1) "s" else ""}" + (if (case.conflicts > open) " (${case.conflicts - open} resolved)" else ""))
-        Text("Each column is one person's report. Rows in amber disagree: tap the value you trust.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        SectionTitle("Witness accounts")
+        Text("${case.accounts.size} accounts · $open conflict${if (open != 1) "s" else ""}" + (if (case.conflicts > open) " (${case.conflicts - open} resolved)" else ""), style = MaterialTheme.typography.titleMedium)
+        Text("Each column is one person's report. Highlighted rows disagree: tap the value you trust.", style = MaterialTheme.typography.bodySmall, color = secondaryText)
         val labelW = 84.dp; val cellW = 112.dp
         Column(Modifier.horizontalScroll(rememberScrollState())) {
             Row {
@@ -158,12 +180,12 @@ private fun WitnessTable(case: MergedCase, currentId: String, onOpen: (String) -
             case.fields.forEach { f ->
                 HorizontalDivider()
                 val unresolved = f.conflict && f.resolved == null
-                Row(Modifier.background(if (unresolved) Amber.copy(alpha = 0.22f) else androidx.compose.ui.graphics.Color.Transparent)) {
-                    Text(f.label + if (f.conflict) " ⚠" else "", Modifier.width(labelW).padding(4.dp), style = MaterialTheme.typography.labelMedium)
+                Row(Modifier.background(if (unresolved) MaterialTheme.colorScheme.primaryContainer else androidx.compose.ui.graphics.Color.Transparent)) {
+                    Text(f.label, Modifier.width(labelW).padding(4.dp), style = MaterialTheme.typography.labelMedium, color = if (unresolved) MaterialTheme.colorScheme.onPrimaryContainer else secondaryText)
                     f.values.forEach { v ->
                         val trusted = f.resolved != null && v == f.resolved
                         Text(
-                            (if (trusted) "✓ " else "") + v,
+                            v + (if (trusted) " (trusted)" else ""),
                             Modifier.width(cellW).clickable(enabled = f.conflict && v != MergeEngine.NONE) { onTrust(f.key, v) }.padding(4.dp),
                             style = MaterialTheme.typography.bodySmall, fontWeight = if (trusted || unresolved) FontWeight.Bold else FontWeight.Normal,
                             maxLines = if (f.key == "description") 6 else 3, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
@@ -176,10 +198,10 @@ private fun WitnessTable(case: MergedCase, currentId: String, onOpen: (String) -
                 }
             }
         }
-        TextButton({ showSummary = !showSummary }) { Text(if (showSummary) "Hide summary" else "Summarise accounts") }
+        com.megathon.incidentvoice.ui.components.SecondaryButton(if (showSummary) "Hide summary" else "Summarise accounts", { showSummary = !showSummary })
         if (showSummary) Text(MergeEngine.summary(case), style = MaterialTheme.typography.bodyMedium)
     }
 }
 
 @Composable
-private fun SectionTitle(t: String) = Text(t, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+private fun SectionTitle(t: String) = com.megathon.incidentvoice.ui.components.SectionHeader(t)

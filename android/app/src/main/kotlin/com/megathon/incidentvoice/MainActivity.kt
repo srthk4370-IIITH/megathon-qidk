@@ -13,10 +13,10 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.unit.dp
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Dashboard
-import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material.icons.filled.QuestionAnswer
-import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.outlined.Dashboard
+import androidx.compose.material.icons.outlined.Mic
+import androidx.compose.material.icons.outlined.QuestionAnswer
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -82,7 +82,7 @@ private data class Tab(val route: String, val label: String, val icon: androidx.
 @Composable
 private fun AppRoot(c: AppContainer) {
     val nav = rememberNavController()
-    val tabs = listOf(Tab("home", "Report", Icons.Default.Mic), Tab("dashboard", "Dashboard", Icons.Default.Dashboard), Tab("ask", "Ask", Icons.Default.QuestionAnswer), Tab("settings", "Settings", Icons.Default.Settings))
+    val tabs = listOf(Tab("home", "Report", Icons.Outlined.Mic), Tab("dashboard", "Dashboard", Icons.Outlined.Dashboard), Tab("ask", "Ask", Icons.Outlined.QuestionAnswer), Tab("settings", "Settings", Icons.Outlined.Settings))
     val entry by nav.currentBackStackEntryAsState()
     val route = entry?.destination?.route
     val scope = rememberCoroutineScope()
@@ -93,12 +93,20 @@ private fun AppRoot(c: AppContainer) {
 
     val conv by c.orchestrator.ui.collectAsState()
     val inConversation = route == "home" && conv.state != com.megathon.incidentvoice.orchestrator.ConvState.IDLE
-    Scaffold(bottomBar = {
-        if (route in tabs.map { it.route } && !inConversation) NavigationBar {
-            tabs.forEach { t ->
-                NavigationBarItem(selected = route == t.route, onClick = {
-                    nav.navigate(t.route) { popUpTo(nav.graph.findStartDestination().id) { saveState = true }; launchSingleTop = true; restoreState = true }
-                }, icon = { Icon(t.icon, t.label) }, label = { Text(t.label) })
+    val goTab: (String) -> Unit = { r -> nav.navigate(r) { popUpTo(nav.graph.findStartDestination().id) { saveState = true }; launchSingleTop = true; restoreState = true } }
+    Box {
+    Scaffold(containerColor = MaterialTheme.colorScheme.background, topBar = {
+        if (route == null || route in tabs.map { it.route }) com.megathon.incidentvoice.ui.components.QalamTopBar(c) { goTab("settings") }
+    }, bottomBar = {
+        if (route in tabs.map { it.route } && !inConversation) androidx.compose.foundation.layout.Column {
+            com.megathon.incidentvoice.ui.components.QDivider()
+            NavigationBar(containerColor = MaterialTheme.colorScheme.surface, tonalElevation = 0.dp) {
+                tabs.forEach { t ->
+                    NavigationBarItem(selected = route == t.route, onClick = { goTab(t.route) }, icon = { Icon(t.icon, t.label) }, label = { Text(t.label) },
+                        colors = NavigationBarItemDefaults.colors(
+                            selectedIconColor = MaterialTheme.colorScheme.primary, selectedTextColor = MaterialTheme.colorScheme.primary, indicatorColor = MaterialTheme.colorScheme.primaryContainer,
+                            unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant, unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant))
+                }
             }
         }
     }) { pad ->
@@ -127,5 +135,7 @@ private fun AppRoot(c: AppContainer) {
             composable("settings") { SettingsScreen(c) }
         }
         }
+    }
+    com.megathon.incidentvoice.ui.components.SplashOverlay()
     }
 }

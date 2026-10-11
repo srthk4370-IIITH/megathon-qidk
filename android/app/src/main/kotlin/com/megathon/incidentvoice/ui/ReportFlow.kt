@@ -20,7 +20,10 @@ import com.megathon.incidentvoice.AppContainer
 import kotlinx.coroutines.launch
 import com.megathon.incidentvoice.orchestrator.ConvState
 import com.megathon.incidentvoice.orchestrator.UiEvent
-import com.megathon.incidentvoice.ui.components.SeverityChip
+import com.megathon.incidentvoice.ui.components.*
+import com.megathon.incidentvoice.ui.theme.Mono
+import com.megathon.incidentvoice.ui.theme.secondaryText
+import androidx.compose.ui.unit.sp
 import com.megathon.incidentvoice.ui.conversation.ConversationScreen
 import com.megathon.incidentvoice.ui.home.HomeScreen
 import com.megathon.incidentvoice.ui.review.LocalOrchestrator
@@ -87,7 +90,7 @@ fun ReportFlow(c: AppContainer, onOpenDetail: (String) -> Unit, onGoDashboard: (
     CompositionLocalProvider(LocalOrchestrator provides o, LocalReporter provides listOf(settings.reporterName, settings.reporterEmpId).filter { it.isNotBlank() }.joinToString(" · ")) {
         when (ui.state) {
             ConvState.IDLE, ConvState.ERROR_AUDIO ->
-                if (ui.state == ConvState.ERROR_AUDIO) ConversationScreen(ui, c.config.taxonomy, o, settings.showDebug)
+                if (ui.state == ConvState.ERROR_AUDIO) ConversationScreen(ui, c.config.taxonomy, o, settings.showDebug) { com.megathon.incidentvoice.ui.components.ProofLine(c) }
                 else HomeScreen(c, onMic = onMic, onTypeInstead = o::onTypeInsteadRequested, notice = ui.notice, onOpen = onOpenDetail)
             ConvState.MANUAL_FILL, ConvState.RECOMMENDING, ConvState.REVIEW -> ReviewScreen(ui, c.config, o)
             ConvState.SUBMITTED -> {
@@ -97,35 +100,42 @@ fun ReportFlow(c: AppContainer, onOpenDetail: (String) -> Unit, onGoDashboard: (
                     AlertDialog(
                         onDismissRequest = o::onKeepSeparate,
                         title = { Text("Same incident?") }, text = { Text(d.question) },
-                        confirmButton = { Button(o::onLinkWitness) { Text("Link") } },
-                        dismissButton = { OutlinedButton(o::onKeepSeparate) { Text("Separate") } },
+                        confirmButton = { SecondaryButton("Link", o::onLinkWitness) },
+                        dismissButton = { PlainButton("Separate", o::onKeepSeparate) },
                     )
                 }
             }
-            else -> ConversationScreen(ui, c.config.taxonomy, o, settings.showDebug)
+            else -> ConversationScreen(ui, c.config.taxonomy, o, settings.showDebug) { com.megathon.incidentvoice.ui.components.ProofLine(c) }
         }
     }
 }
 
 @Composable
 private fun SubmittedScreen(ref: String, severity: String?, others: List<String>, updated: Boolean, onAnother: (String?) -> Unit, onDashboard: () -> Unit, linkedTo: String? = null) {
-    Column(Modifier.fillMaxSize().padding(24.dp), Arrangement.Center, Alignment.CenterHorizontally) {
-        Text(if (updated) "Report updated" else "Report saved", style = MaterialTheme.typography.headlineMedium)
-        Spacer(Modifier.height(8.dp))
-        Text(ref, style = MaterialTheme.typography.titleLarge)
-        Spacer(Modifier.height(8.dp)); SeverityChip(severity)
-        linkedTo?.let { Spacer(Modifier.height(8.dp)); Text("Added as a witness account to $it", style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center) }
-        Spacer(Modifier.height(24.dp))
+    Column(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
+        ScreenTitle(if (updated) "Report updated" else "Report saved")
+        Text("Saved on device", color = secondaryText)
+        Spacer(Modifier.height(16.dp))
+        FlatCard {
+            Column(Modifier.padding(16.dp)) {
+                Text("Reference", style = MaterialTheme.typography.bodySmall, color = secondaryText)
+                Text(ref, style = Mono.copy(fontSize = 20.sp, lineHeight = 26.sp))
+                Spacer(Modifier.height(8.dp))
+                SeverityLabel(severity)
+                linkedTo?.let { Spacer(Modifier.height(8.dp)); Text("Added as a witness account to $it", style = MaterialTheme.typography.bodySmall, color = secondaryText) }
+            }
+        }
         others.firstOrNull()?.let { other ->
-            Card(Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(12.dp)) {
-                    Text("You also mentioned: $other", textAlign = TextAlign.Start)
-                    Button({ onAnother(other) }, Modifier.padding(top = 8.dp)) { Text("Report it now") }
+            SectionHeader("You also mentioned")
+            FlatCard {
+                Column(Modifier.padding(16.dp)) {
+                    Text(other)
+                    SecondaryButton("Report it now", { onAnother(other) }, Modifier.padding(top = 8.dp))
                 }
             }
-            Spacer(Modifier.height(16.dp))
         }
-        Button({ onAnother(null) }, Modifier.fillMaxWidth()) { Text("Report another incident") }
-        OutlinedButton(onDashboard, Modifier.fillMaxWidth().padding(top = 8.dp)) { Text("View dashboard") }
+        Spacer(Modifier.height(24.dp))
+        PrimaryButton("Report another incident", { onAnother(null) })
+        PlainButton("View dashboard", onDashboard)
     }
 }

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Qalam mark. Generated from branding/qalam_icon.svg; shapes are the SVG's, unchanged (the nib outline is drawn as a
+     separate stroke under the fill, which is what paint-order="stroke" does). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="48dp" android:height="48dp" android:viewportWidth="512" android:viewportHeight="512">
+    <path android:pathData="M112,0 H400 A112,112 0 0 1 512,112 V400 A112,112 0 0 1 400,512 H112 A112,112 0 0 1 0,400 V112 A112,112 0 0 1 112,0 Z" android:fillColor="#E5484D"/>
+    <path android:pathData="M106,228 A126,126 0 1 1 358,228 A126,126 0 1 1 106,228 Z" android:strokeColor="#FFFFFF" android:strokeWidth="56"/>
+    <group android:translateX="338" android:translateY="334" android:rotation="-45">
+        <path android:pathData="M-42,-78 L42,-78 L42,-26 C42,18 16,52 0,96 C-16,52 -42,18 -42,-26 Z" android:strokeColor="#E5484D" android:strokeWidth="16" android:strokeLineJoin="round"/>
+        <path android:pathData="M-42,-78 L42,-78 L42,-26 C42,18 16,52 0,96 C-16,52 -42,18 -42,-26 Z" android:fillColor="#FFFFFF"/>
+        <path android:pathData="M0,-8 L0,88" android:strokeColor="#E5484D" android:strokeWidth="10" android:strokeLineCap="round"/>
+        <path android:pathData="M-12,-22 a12,12 0 1 0 24,0 a12,12 0 1 0 -24,0 Z" android:fillColor="#E5484D"/>
+    </group>
+</vector>

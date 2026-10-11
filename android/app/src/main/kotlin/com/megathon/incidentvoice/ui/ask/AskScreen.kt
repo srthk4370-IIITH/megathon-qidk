@@ -10,9 +10,15 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Send
-import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.automirrored.outlined.Send
+import androidx.compose.material.icons.outlined.Mic
+import androidx.compose.material.icons.outlined.Stop
+import androidx.compose.foundation.border
+import com.megathon.incidentvoice.ui.components.*
+import com.megathon.incidentvoice.ui.theme.CardShape
+import com.megathon.incidentvoice.ui.theme.Mono
+import com.megathon.incidentvoice.ui.theme.divider
+import com.megathon.incidentvoice.ui.theme.secondaryText
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -27,8 +33,6 @@ import com.megathon.incidentvoice.ask.AskController
 import com.megathon.incidentvoice.ask.AskExchange
 import com.megathon.incidentvoice.ask.AskHit
 import com.megathon.incidentvoice.core.Taxonomy
-import com.megathon.incidentvoice.ui.components.LevelMeter
-import com.megathon.incidentvoice.ui.components.SeverityChip
 import com.megathon.incidentvoice.ui.relativeTime
 import com.megathon.incidentvoice.ui.theme.Grey
 import com.megathon.incidentvoice.ui.theme.SevCritical
@@ -49,40 +53,39 @@ fun AskScreen(ctl: AskController, tx: Taxonomy, showDebug: Boolean, onMic: () ->
     fun send() { if (text.isNotBlank()) { ctl.ask(text); text = "" } }
 
     Column(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
-        Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text("Ask about incidents", style = MaterialTheme.typography.titleLarge)
-                Text(if (ui.vectorSearch) "Answers from this device's reports · meaning + keyword search" else "Answers from this device's reports · keyword search",
-                    style = MaterialTheme.typography.bodySmall, color = Grey)
+                ScreenTitle("Ask about reports")
+                Text(if (ui.vectorSearch) "Answers come from the reports on this device. Search by meaning and by keyword." else "Answers come from the reports on this device. Keyword search.",
+                    style = MaterialTheme.typography.bodySmall, color = secondaryText)
             }
-            if (ui.exchanges.isNotEmpty()) TextButton(ctl::clear) { Text("Clear") }
+            if (ui.exchanges.isNotEmpty()) PlainButton("Clear", ctl::clear)
         }
         if (ui.exchanges.isEmpty()) {
-            Spacer(Modifier.height(16.dp))
-            Text("Try asking", style = MaterialTheme.typography.labelLarge)
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                SUGGESTIONS.forEach { s -> SuggestionChip(onClick = { ctl.ask(s) }, label = { Text(s) }) }
+            SectionHeader("Examples")
+            FlatCard {
+                SUGGESTIONS.forEachIndexed { n, s ->
+                    if (n > 0) QDivider()
+                    Text(s, Modifier.fillMaxWidth().clickable { ctl.ask(s) }.heightIn(min = 48.dp).padding(horizontal = 16.dp, vertical = 12.dp))
+                }
             }
             Spacer(Modifier.weight(1f))
         } else {
             LazyColumn(Modifier.weight(1f).padding(vertical = 8.dp), state = list, verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 items(ui.exchanges, key = { it.id }) { ex -> ExchangeView(ex, tx, showDebug, onOpen) }
-                if (ui.thinking) item { Row(verticalAlignment = Alignment.CenterVertically) { CircularProgressIndicator(Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Searching reports…") } }
+                if (ui.thinking) item { BusyRow("Searching reports") }
             }
         }
         ui.notice?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
-        if (ui.listening) { LevelMeter(ui.level); Text("Listening… ask your question", style = MaterialTheme.typography.bodySmall) }
-        if (ui.transcribing) Text("Transcribing…", style = MaterialTheme.typography.bodySmall)
+        if (ui.listening) { LevelMeter(ui.level); Text("Listening. Ask your question.", style = MaterialTheme.typography.bodySmall, color = secondaryText) }
+        if (ui.transcribing) Text("Transcribing", style = MaterialTheme.typography.bodySmall, color = secondaryText)
         Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             OutlinedTextField(
-                text, { text = it }, Modifier.weight(1f), singleLine = true, placeholder = { Text("Ask a question…") },
+                text, { text = it }, Modifier.weight(1f), singleLine = true, placeholder = { Text("Ask a question") },
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send), keyboardActions = KeyboardActions(onSend = { send() }),
             )
-            IconButton(onClick = { send() }, enabled = text.isNotBlank()) { Icon(Icons.AutoMirrored.Filled.Send, "Send") }
-            FilledIconButton(
-                onClick = onMic,
-                colors = IconButtonDefaults.filledIconButtonColors(containerColor = if (ui.listening) SevCritical else MaterialTheme.colorScheme.primary),
-            ) { Icon(if (ui.listening) Icons.Default.Stop else Icons.Default.Mic, if (ui.listening) "Stop listening" else "Ask by voice") }
+            IconButton(onClick = { send() }, enabled = text.isNotBlank(), modifier = Modifier.size(48.dp)) { Icon(Icons.AutoMirrored.Outlined.Send, "Send") }
+            FilledIconButton(onClick = onMic, modifier = Modifier.size(52.dp)) { Icon(if (ui.listening) Icons.Outlined.Stop else Icons.Outlined.Mic, if (ui.listening) "Stop listening" else "Ask by voice") }
         }
     }
 }
@@ -91,18 +94,17 @@ fun AskScreen(ctl: AskController, tx: Taxonomy, showDebug: Boolean, onMic: () ->
 private fun ExchangeView(ex: AskExchange, tx: Taxonomy, showDebug: Boolean, onOpen: (String) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
-            Text(ex.question, color = MaterialTheme.colorScheme.onPrimary,
-                modifier = Modifier.background(MaterialTheme.colorScheme.primary, RoundedCornerShape(14.dp, 14.dp, 2.dp, 14.dp)).padding(10.dp).widthIn(max = 300.dp))
+            Text(ex.question, modifier = Modifier.widthIn(max = 300.dp).background(MaterialTheme.colorScheme.secondaryContainer, CardShape).padding(horizontal = 12.dp, vertical = 10.dp))
         }
         val a = ex.answer
         when {
             ex.error != null -> Text("Could not search: ${ex.error}", color = MaterialTheme.colorScheme.error)
             a != null -> {
-                Text(a.text, Modifier.background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(14.dp, 14.dp, 14.dp, 2.dp)).padding(10.dp))
-                a.hits.forEach { HitCard(it, tx, showDebug, onOpen) }
-                if (a.total > a.hits.size) Text("+ ${a.total - a.hits.size} more — narrow the question or use the Dashboard", style = MaterialTheme.typography.labelSmall, color = Grey)
+                Text(a.text, Modifier.background(MaterialTheme.colorScheme.surface, CardShape).border(1.dp, divider, CardShape).padding(horizontal = 12.dp, vertical = 10.dp))
+                if (a.hits.isNotEmpty()) FlatCard { a.hits.forEachIndexed { n, h -> if (n > 0) QDivider(); HitCard(h, tx, showDebug, onOpen) } }
+                if (a.total > a.hits.size) Text("${a.total - a.hits.size} more. Narrow the question or use the Dashboard.", style = MaterialTheme.typography.bodySmall, color = secondaryText)
                 if (showDebug) Text("${a.tookMs} ms · ${a.mode} · types=${a.query.types} sev=${a.query.severities} loc=${a.query.locationLabel} time=${a.query.timeLabel} text=\"${a.query.freeText}\"",
-                    style = MaterialTheme.typography.labelSmall, color = Grey, fontStyle = FontStyle.Italic)
+                    style = Mono, color = secondaryText)
             }
         }
     }
@@ -110,16 +112,7 @@ private fun ExchangeView(ex: AskExchange, tx: Taxonomy, showDebug: Boolean, onOp
 
 @Composable
 fun HitCard(h: AskHit, tx: Taxonomy, showDebug: Boolean, onOpen: (String) -> Unit) {
-    Card(Modifier.fillMaxWidth().clickable { onOpen(h.id) }) {
-        Column(Modifier.padding(10.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                SeverityChip(h.severity)
-                Text(tx.category(h.type ?: "")?.label ?: "Incident", style = MaterialTheme.typography.labelMedium, color = Grey, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                h.semantic?.let { Text("${(it * 100).toInt()}% match", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary) }
-                Text(relativeTime(h.whenMs), style = MaterialTheme.typography.labelSmall)
-            }
-            Text(h.title, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            Text(listOfNotNull(h.refNo, h.location).joinToString(" · "), style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        }
-    }
+    IncidentRow(h.severity, h.title, listOfNotNull(h.location, relativeTime(h.whenMs)).joinToString(" · "), h.refNo, { onOpen(h.id) }, extra = {
+        Text(listOfNotNull(tx.category(h.type ?: "")?.label, h.semantic?.let { "${(it * 100).toInt()}% match" }).joinToString(" · "), style = MaterialTheme.typography.bodySmall, color = secondaryText, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    })
 }

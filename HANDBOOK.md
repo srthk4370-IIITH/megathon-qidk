@@ -213,3 +213,48 @@ Status key: PLANNED → BUILT (tests pass) → ON BOARD (verified on the QIDK).
 - **Fine-tune (PRD §27), unattended jobs `scripts/jobs/ft_*.sh`:** data `ml/data_gen/gen_ft_data.py` (regenerated 05:05 with **70 % English / 30 % Hinglish**, more CRITICAL cases and negated-danger sentences → `injuries: NO`, not CRITICAL — both feed the App's Extra 1 *Response clock* trigger), QLoRA on the RTX 4050 (starts when the stock export's Part 3 is uploaded), merge, gate (dev F1 ≥ base + 0.05), `build_ft_ckpt.py` (published w4a16 encodings + merged weights), ft export with its own resume cache. Extra 3's optional LLM summary not trained (latency; optional).
 - **Latency levers:** ft prompt 694 vs 2266 tokens (≈ 3× less prefill); training omits absent fields (shorter outputs); ASR audio_ctx scaling 3.4 → 1.5 s.
 - **ETA:** stock bundle ~06:15; fine-tuned bundle after 09:00 unless Kaggle training is unblocked (accept licence at kaggle.com/models/metaresearch/llama-3.2, then `rm ~/iv/state/ft_kaggle_push.done ~/iv/state/ft_kaggle_fetch.failed`).
+
+
+## Design system (App branch, 2026-10-11)
+
+The app is called **Qalam** ("kalam" = pen; Q for Qualcomm). No tagline anywhere. The look is calm and utilitarian: one accent, neutral surfaces, lists instead of cards, no decoration. This was a visual change only: no screen was added, removed or restructured, and no logic, state, database or engine code was touched.
+
+**Logo.** Source files are in `branding/` (`qalam_icon`, `qalam_mark`, `qalam_mark_white`, `qalam_wordmark`; SVG, plus PNG for the icon and wordmark). The app uses VectorDrawables generated from those SVGs with the shapes unchanged (`res/drawable/ic_qalam_*.xml`). App icon: adaptive, white mark on solid `#E5484D`, scaled so the whole mark sits inside the 66 dp safe zone, plus a single-colour themed-icon layer in which the coral outline around the nib becomes a gap. Splash: the coral icon centred on the background colour, then the same icon with "Qalam" under it, one 200 ms fade.
+
+**Colour.** One accent, coral `#E5484D` (pressed `#C93A3F`), used only for the report button, the selected tab, the primary button, "Required" and critical states.
+
+| Role | Light | Dark |
+|---|---|---|
+| Background | `#F6F7F9` | `#0F1115` |
+| Surface | `#FFFFFF` | `#181B21` |
+| Divider / border | `#E5E7EB` | `#262A33` |
+| Text | `#111827` | `#F3F4F6` |
+| Secondary text | `#6B7280` | `#9CA3AF` |
+| Accent | `#E5484D` | `#FF6B70` |
+
+Severity is a small dot plus a word, never a filled pill: Low `#16A34A`, Medium `#D97706`, High `#EA580C`, Critical `#B91C1C`. The colour is only in the dot, so the word always has full contrast. Emergency banner and response clock: flat `#C62828`, white text, plain white buttons.
+
+**Type.** Inter for everything, JetBrains Mono only for reference numbers, timings and the proof line. Both are bundled in `res/font` (SIL OFL, licence texts in `assets/licenses`); nothing is downloaded at run time. Hierarchy comes from size and weight, not colour: screen title 22 sp semibold · section header 13 sp medium, secondary grey, sentence case · body 15 sp · caption 13 sp · mono 13 sp (12 sp for the proof line).
+
+**Shape and spacing.** 12 dp radius on cards, 10 dp on buttons, fields and chips. Surfaces are flat with a 1 dp border or divider; no drop shadows. 16 dp screen padding, 8 dp spacing grid. Text and content are left-aligned; only the report button is centred.
+
+**Components** (`android/app/.../ui/components`, tokens in `ui/theme/Theme.kt`):
+- `QalamTopBar`: mark + "Qalam" on the left; "On-device" with a dot (green when the engine is ready, grey otherwise) and the settings icon on the right.
+- `MicButton`: solid coral circle with a mic and one thin ring that follows the voice level while listening; static when idle. Caption "Tap to report · or say 'Hey Qalam'" (the second half only when the wake word is enabled).
+- `PrimaryButton`: solid coral, full width, 52 dp, at most one per screen. `SecondaryButton`: outlined. `PlainButton`: text only, in the text colour.
+- `FlatCard` + `QDivider`: a bordered white group; repeated items are rows inside it separated by dividers, not one card per row.
+- `IncidentRow`: severity dot + title, a secondary line (location · relative time), the reference number in mono, a chevron.
+- Form and review fields: label (secondary) above value (primary); "Required" in coral for an empty mandatory field; "Check" in amber for an inferred or assumed value; an edit icon on the right.
+- `Stat`: a big semibold number with a small caption underneath.
+- `SectionHeader`, `ScreenTitle`, `SeverityLabel`, `StatusText`, `BusyRow`, `EmergencyBannerView`, `ResponseClockCard`.
+- `ProofLine` (bottom of Home and Conversation, mono 12 sp): `Hexagon NPU · <tok/s> tok/s · <N> B sent`, or `CPU · <engine> · <N> B sent` when the language model is not on the NPU. Bytes come from `TrafficStats.getUidTxBytes(myUid)`; the app has no INTERNET permission.
+- Icons: Material outlined set, one weight, no tinted circles behind them.
+
+**Rules.**
+- No gradients, glows, glass effects, neon or purple palettes; no sparkle or robot imagery; no emoji in the UI.
+- The only moving element is the ring of the report button while listening. State changes animate for at most 200 ms; the system "remove animations" setting is honoured.
+- Touch targets are at least 48 dp (main actions 52 dp and above). Text contrast is at least 4.5:1; white on coral is used only at 19 sp semibold (large-text rule).
+- Copy is plain and specific ("Report incident", "Needs details", "Saved on device", "Ask about reports"); empty states are one sentence plus one action.
+- Screenshots of every screen taken on the QIDK are in `shots/`.
+
+**Known gaps.** The dark theme is defined but was only checked in light mode on the board. The wide witness table still scrolls sideways on a phone-width screen. The Settings tab stays in the bottom bar and the top-bar settings icon opens the same screen.
