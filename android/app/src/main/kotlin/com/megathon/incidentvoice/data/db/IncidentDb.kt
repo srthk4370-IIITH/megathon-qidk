@@ -14,7 +14,7 @@ import com.megathon.incidentvoice.data.entity.*
         IncidentEntity::class, SecondaryTypeEntity::class, PersonEntity::class, EquipmentEntity::class, ActionTakenEntity::class,
         RecommendationEntity::class, TurnEntity::class, AuditEntity::class, IncidentSearchEntity::class, IncidentVectorEntity::class, ResponseActionEntity::class,
     ],
-    version = 5,
+    version = 6,
     exportSchema = true,
 )
 abstract class IncidentDb : RoomDatabase() {
@@ -26,7 +26,7 @@ abstract class IncidentDb : RoomDatabase() {
                 .addCallback(object : Callback() {
                     override fun onOpen(db: SupportSQLiteDatabase) { db.execSQL("PRAGMA foreign_keys = ON") }
                 })
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
                 .build()
 
         /** v2 adds the vector index table (O-2). Existing reports are kept; their vectors are computed on next start. */
@@ -57,6 +57,14 @@ abstract class IncidentDb : RoomDatabase() {
         val MIGRATION_4_5 = object : androidx.room.migration.Migration(4, 5) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE `incidents` ADD COLUMN `evidence_json` TEXT")
+            }
+        }
+
+        /** v6 (repeat incidents and hotspots): `incidents.is_demo` marks seeded demo rows, `incidents.tags_json` keeps the tags computed on save. */
+        val MIGRATION_5_6 = object : androidx.room.migration.Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `incidents` ADD COLUMN `is_demo` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `incidents` ADD COLUMN `tags_json` TEXT")
             }
         }
 

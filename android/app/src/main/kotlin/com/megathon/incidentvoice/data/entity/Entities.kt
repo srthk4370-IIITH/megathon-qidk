@@ -60,6 +60,10 @@ data class IncidentEntity(
     @ColumnInfo(name = "parent_incident_id") val parentIncidentId: String? = null,
     /** DB v5 ("show your evidence"): field key → transcript spans as JSON; null on reports saved before v5. */
     @ColumnInfo(name = "evidence_json") val evidenceJson: String? = null,
+    /** DB v6: 1 = inserted by "Seed demo data" ("Clear demo data" deletes exactly these rows). */
+    @ColumnInfo(name = "is_demo", defaultValue = "0") val isDemo: Boolean = false,
+    /** DB v6: repeat / hotspot tags as they were when the report was saved. */
+    @ColumnInfo(name = "tags_json") val tagsJson: String? = null,
 )
 
 private const val FK = "incident_id"

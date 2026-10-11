@@ -116,9 +116,16 @@ fun SettingsScreen(c: AppContainer) {
         Text("${c.config.registry.site}: ${c.config.registry.locations.size} locations (read-only)")
 
         SectionHeader("Demo data")
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            SecondaryButton("Load demo reports", { scope.launch { val n = DemoSeeder(c.config, c.repository).seed(s.reporter); seedMsg = "Added $n demo reports" } })
-            seedMsg?.let { Text(it, Modifier.padding(start = 12.dp), style = MaterialTheme.typography.bodySmall, color = secondaryText) }
+        SecondaryButton("Load demo reports", { scope.launch { val n = DemoSeeder(c.config, c.repository).seed(s.reporter); seedMsg = "Added $n demo reports" } })
+        seedMsg?.let { Text(it, Modifier.padding(top = 4.dp), style = MaterialTheme.typography.bodySmall, color = secondaryText) }
+        // Debug builds only: the repeat / hotspot demo set. Every row is marked as demo data; "Clear" removes only those.
+        val debuggable = (androidx.compose.ui.platform.LocalContext.current.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0
+        if (debuggable) {
+            Spacer(Modifier.height(8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                SecondaryButton("Seed demo data", { scope.launch { val n = DemoSeeder(c.config, c.repository).seedHotspots(s.reporter); seedMsg = "Added $n demo reports (2 leaks at Conference Room 2, a Workshop hotspot)" } })
+                SecondaryButton("Clear demo data", { scope.launch { val n = c.repository.clearDemo(com.megathon.incidentvoice.data.Actor.System); seedMsg = "Removed $n demo reports; your own reports are kept" } })
+            }
         }
         var confirmReset by remember { mutableStateOf(false) }
         Spacer(Modifier.height(8.dp))

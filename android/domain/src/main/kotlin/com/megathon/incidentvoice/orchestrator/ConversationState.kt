@@ -56,6 +56,8 @@ data class ConversationUiState(
     val duplicate: DuplicatePrompt? = null,
     /** Extra 3: set once this report was linked to a case. */
     val linkedTo: String? = null,
+    /** After submit: "Recurring hazard: …" when this report is a repeat incident. */
+    val recurring: String? = null,
     val debug: DebugInfo = DebugInfo(),
 ) {
     val canSubmit: Boolean get() = validation?.complete == true && (state == ConvState.REVIEW || state == ConvState.MANUAL_FILL)

@@ -161,7 +161,10 @@ class ConversationOrchestrator(
             repo.saveRecommendations(id, ui.value.recommendations)
             val ref = editingRef ?: repo.submit(id, Actor.User(settings().reporter.empId))
             val wasEdit = editingRef != null
-            update { it.copy(state = ConvState.SUBMITTED, submittedRef = ref, otherIncidents = form.otherIncidents, notice = null) }
+            // "this keeps happening": the 3rd report of the same type at the same place in 7 days gets a card
+            val tags = if (wasEdit) null else runCatching { repo.reportTags(id) }.getOrNull()
+            val recurring = tags?.repeat?.let { r -> Hotspots.recurring(r, tx.category(r.type)?.label ?: r.type, tags.location ?: form.str("location").orEmpty()) }
+            update { it.copy(state = ConvState.SUBMITTED, submittedRef = ref, otherIncidents = form.otherIncidents, notice = null, recurring = recurring) }
             if (!wasEdit) runCatching { proposeDuplicate(id) }
         }
     }

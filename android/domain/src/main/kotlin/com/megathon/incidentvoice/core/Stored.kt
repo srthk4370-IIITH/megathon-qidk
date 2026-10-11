@@ -34,6 +34,10 @@ data class IncidentMeta(
     val responseStartedAt: Long? = null,
     /** Extra 3: the report this one was linked to as a further witness account (null = stands alone). */
     val parentId: String? = null,
+    /** Inserted by "Seed demo data"; "Clear demo data" deletes exactly these. */
+    val demo: Boolean = false,
+    /** Repeat / hotspot tags as they were when the report was saved ([ReportTags]). */
+    val tagsJson: String? = null,
 )
 
 /** Flat mirror of the `incidents` table (Appendix E, minus rowid_pk). */
@@ -47,6 +51,7 @@ data class IncidentRow(
     val responseStartedAt: Long? = null, val parentIncidentId: String? = null,
     /** Evidence spans per field as JSON; null on reports saved before DB v5 (computed when the report is opened). */
     val evidenceJson: String? = null,
+    val isDemo: Boolean = false, val tagsJson: String? = null,
 )
 
 data class PersonRow(val name: String?, val role: String, val injured: Boolean, val injury: String?, val contact: String?)
@@ -107,7 +112,7 @@ object FormMapper {
             emergencyFlag = meta.emergencyFlag, followupRounds = meta.followupRounds, createdAt = meta.createdAt, updatedAt = now,
             reportedAt = meta.reportedAt, submittedAt = meta.submittedAt, modelVersionsJson = meta.modelVersionsJson,
             responseStartedAt = meta.responseStartedAt, parentIncidentId = meta.parentId,
-            evidenceJson = json.encodeToString(evidenceSer, form.evidence),
+            evidenceJson = json.encodeToString(evidenceSer, form.evidence), isDemo = meta.demo, tagsJson = meta.tagsJson,
         )
         return StoredIncident(row, form.secondaryTypes, persons, form.value("equipment").asStringList(), form.value("actions_taken").asStringList())
     }

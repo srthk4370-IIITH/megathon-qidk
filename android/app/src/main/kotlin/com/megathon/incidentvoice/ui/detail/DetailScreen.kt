@@ -52,6 +52,7 @@ fun DetailScreen(
         value = if (all.size < 2) null else MergeEngine.merge(all.map { WitnessAccount.of(it.meta, it.form) }, repo.conflictResolutions(all.first().meta.id)) { tx.category(it)?.label ?: it }
     }
     var confirmDelete by remember { mutableStateOf(false) }
+    val tags by produceState(com.megathon.incidentvoice.core.ReportTags(), id, detail) { value = repo.reportTags(id) ?: com.megathon.incidentvoice.core.ReportTags() }
 
     // nested inside the app Scaffold, which already applies the system-bar insets
     Scaffold(containerColor = MaterialTheme.colorScheme.background, contentWindowInsets = WindowInsets(0), topBar = {
@@ -68,7 +69,7 @@ fun DetailScreen(
     }) { pad ->
         val d = detail
         if (d == null) { Box(Modifier.padding(pad).fillMaxSize(), Alignment.Center) { CircularProgressIndicator() }; return@Scaffold }
-        DetailBody(d, tx, disclaimer, Modifier.padding(pad), similarHits, onOpen, case, { key, value ->
+        DetailBody(d, tx, disclaimer, Modifier.padding(pad), similarHits, onOpen, case, tags, { key, value ->
             scope.launch { case?.accounts?.firstOrNull()?.let { root -> repo.resolveConflict(root.id, key, value, com.megathon.incidentvoice.data.Actor.User(d.meta.reporter.empId.ifBlank { "supervisor" })); caseTick++ } }
         }) { recId, done -> scope.launch { repo.setRecommendationDone(recId, done) } }
     }
@@ -82,7 +83,7 @@ fun DetailScreen(
 }
 
 @Composable
-private fun DetailBody(d: IncidentDetail, tx: Taxonomy, disclaimer: String, modifier: Modifier, similarHits: List<com.megathon.incidentvoice.ask.AskHit>, onOpen: (String) -> Unit, case: MergedCase?, onTrust: (String, String) -> Unit, onTick: (Long, Boolean) -> Unit) {
+private fun DetailBody(d: IncidentDetail, tx: Taxonomy, disclaimer: String, modifier: Modifier, similarHits: List<com.megathon.incidentvoice.ask.AskHit>, onOpen: (String) -> Unit, case: MergedCase?, tags: com.megathon.incidentvoice.core.ReportTags, onTrust: (String, String) -> Unit, onTick: (Long, Boolean) -> Unit) {
     val f = d.form
     // "Show your evidence": tap a short field to see the words it came from in the transcript pinned on top
     var evidenceFor by remember(d.meta.id) { mutableStateOf<String?>(null) }
@@ -96,7 +97,8 @@ private fun DetailBody(d: IncidentDetail, tx: Taxonomy, disclaimer: String, modi
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 SeverityLabel(f.str("severity")); StatusText(d.meta.status.name)
             }
-            Text(f.types.joinToString(" + ") { tx.category(it)?.label ?: it }, style = MaterialTheme.typography.bodySmall, color = secondaryText)
+            Text(f.types.joinToString(" + ") { tx.category(it)?.label ?: it } + (if (d.meta.demo) " · Demo data" else ""), style = MaterialTheme.typography.bodySmall, color = secondaryText)
+            com.megathon.incidentvoice.ui.components.ReportTagChips(tags, { tx.category(it)?.label ?: it }, Modifier.padding(top = 6.dp))
             Spacer(Modifier.height(4.dp))
             Text(f.str("description").orEmpty())
         }
