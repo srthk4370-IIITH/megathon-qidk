@@ -85,17 +85,6 @@ def _install():
                     return m
                 except Exception as e:  # noqa: BLE001
                     _log(f"cached model {mid} unusable ({e}); uploading")
-            else:  # fallback: same-name model uploaded recently (e.g. by a crashed run)
-                try:
-                    base = _os.path.basename(path.rstrip("/"))
-                    for m in self.get_models(limit=50):
-                        if (m.name or "").startswith(base.replace(".zip", "")) and _recent(m.date):
-                            cache["models"][key] = m.model_id
-                            _save(cache)
-                            _log(f"reuse recent upload {base} -> {m.model_id}")
-                            return m
-                except Exception as e:  # noqa: BLE001
-                    _log(f"recent-model lookup failed: {e}")
             m = orig_upload(self, model, model_type, name=name, project=project)
             cache = _load()
             cache["models"][key] = m.model_id
