@@ -30,6 +30,10 @@ data class IncidentMeta(
     val emergencyFlag: Boolean = false,
     val followupRounds: Int = 0,
     val modelVersionsJson: String = "{}",
+    /** Extra 1: when the response clock started for this incident (null = never). */
+    val responseStartedAt: Long? = null,
+    /** Extra 3: the report this one was linked to as a further witness account (null = stands alone). */
+    val parentId: String? = null,
 )
 
 /** Flat mirror of the `incidents` table (Appendix E, minus rowid_pk). */
@@ -40,6 +44,7 @@ data class IncidentRow(
     val nearMiss: Boolean, val hazardOngoing: String?, val detailsJson: String, val fieldMetaJson: String, val otherIncidentsJson: String,
     val lang: String?, val reporterName: String?, val reporterEmpId: String?, val emergencyFlag: Boolean, val followupRounds: Int,
     val createdAt: Long, val updatedAt: Long, val reportedAt: Long, val submittedAt: Long?, val modelVersionsJson: String,
+    val responseStartedAt: Long? = null, val parentIncidentId: String? = null,
 )
 
 data class PersonRow(val name: String?, val role: String, val injured: Boolean, val injury: String?, val contact: String?)
@@ -98,6 +103,7 @@ object FormMapper {
             lang = form.lang, reporterName = meta.reporter.name, reporterEmpId = meta.reporter.empId,
             emergencyFlag = meta.emergencyFlag, followupRounds = meta.followupRounds, createdAt = meta.createdAt, updatedAt = now,
             reportedAt = meta.reportedAt, submittedAt = meta.submittedAt, modelVersionsJson = meta.modelVersionsJson,
+            responseStartedAt = meta.responseStartedAt, parentIncidentId = meta.parentId,
         )
         return StoredIncident(row, form.secondaryTypes, persons, form.value("equipment").asStringList(), form.value("actions_taken").asStringList())
     }

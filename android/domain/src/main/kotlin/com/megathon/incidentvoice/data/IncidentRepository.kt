@@ -33,6 +33,8 @@ data class VectorSource(val incidentId: String, val text: String, val hash: Stri
 data class IncidentListItem(
     val id: String, val refNo: String?, val title: String, val type: String?, val severity: String?, val status: String,
     val location: String?, val createdAt: Long, val emergency: Boolean, val snippet: String? = null,
+    /** Extra 3: witness accounts in this case (1 = a single report), unresolved conflicts between them, and for a linked account the case it belongs to. */
+    val accounts: Int = 1, val conflicts: Int = 0, val parentRef: String? = null,
 )
 
 data class TurnRecord(
@@ -44,7 +46,10 @@ data class TurnRecord(
 
 data class RecRow(val id: Long, val sopId: String, val text: String, val immediate: Boolean, val source: String, val done: Boolean)
 
-data class IncidentDetail(val meta: IncidentMeta, val form: IncidentForm, val turns: List<TurnRecord>, val recommendations: List<RecRow>)
+data class IncidentDetail(
+    val meta: IncidentMeta, val form: IncidentForm, val turns: List<TurnRecord>, val recommendations: List<RecRow>,
+    val responseActions: List<com.megathon.incidentvoice.core.ResponseAction> = emptyList(),
+)
 
 data class DashboardCounts(val total: Int = 0, val critical: Int = 0, val last24h: Int = 0)
 
@@ -79,6 +84,21 @@ interface IncidentRepository {
     suspend fun vectors(modelId: String): Map<String, FloatArray> = emptyMap()
     /** Emits whenever any incident changes (used to keep the vector index fresh). */
     fun observeChanges(): Flow<Long> = kotlinx.coroutines.flow.emptyFlow()
+    // ---- Extra 1: response clock
+    suspend fun setResponseStart(id: String, startedAtMs: Long) {}
+    suspend fun addResponseAction(id: String, action: com.megathon.incidentvoice.core.ResponseAction) {}
+    /** A draft whose response clock started after [sinceMs] (the app was closed mid-emergency), newest first. */
+    suspend fun activeResponseDraft(sinceMs: Long): String? = null
+    // ---- Extra 3: multi-witness merging
+    /** Submitted reports since [sinceMs], newest first (candidates for "is this the same event?"). */
+    suspend fun recentSubmitted(sinceMs: Long, limit: Int = 60): List<IncidentDetail> = emptyList()
+    /** Links [childId] to the case of [parentId] as a further witness account. Never automatic: a person chose it. */
+    suspend fun linkWitness(childId: String, parentId: String, actor: Actor) {}
+    /** Every account of the case [id] belongs to: the first report, then the linked ones in order of submission. */
+    suspend fun caseOf(id: String): List<IncidentDetail> = emptyList()
+    /** A supervisor trusts [value] for a conflicting field of the case; written to the audit log. */
+    suspend fun resolveConflict(rootId: String, field: String, value: String, actor: Actor) {}
+    suspend fun conflictResolutions(rootId: String): Map<String, String> = emptyMap()
     /** Demo reset: removes every report, draft and recording. Returns how many were deleted. */
     suspend fun deleteAll(actor: Actor): Int = 0
 }

@@ -31,15 +31,17 @@ import com.megathon.incidentvoice.ui.theme.SevCritical
 fun ConversationScreen(ui: ConversationUiState, tx: Taxonomy, o: ConversationOrchestrator, showDebug: Boolean) {
     var typed by remember(ui.state) { mutableStateOf("") }
     val listState = rememberLazyListState()
-    LaunchedEffect(ui.timeline.size, ui.emergency != null) { if (ui.timeline.isNotEmpty()) listState.animateScrollToItem(ui.timeline.size - 1 + if (ui.emergency != null) 1 else 0) }
+    LaunchedEffect(ui.timeline.size, ui.emergency != null) { if (ui.timeline.isNotEmpty()) listState.animateScrollToItem(ui.timeline.size - 1 + if (ui.emergency != null && ui.response == null) 1 else 0) }
 
     Column(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
         LinearProgressIndicator(progress = { ui.validation?.progress ?: 0f }, Modifier.fillMaxWidth().padding(top = 8.dp))
         ui.notice?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 4.dp)) }
+        // Extra 1: pinned response clock (replaces the banner, which carries the same steps)
+        ui.response?.let { ResponseClockCard(it, o::onResponseStep, Modifier.padding(top = 6.dp)) }
 
         LazyColumn(Modifier.weight(1f).padding(vertical = 8.dp), state = listState, verticalArrangement = Arrangement.spacedBy(8.dp)) {
             // the banner scrolls with the timeline so it never squeezes the conversation on a landscape monitor
-            ui.emergency?.let { e -> item(key = "emergency") { EmergencyBannerView(e, o::onEmergencyCall, o::onEmergencyDismiss) } }
+            ui.emergency?.takeIf { ui.response == null }?.let { e -> item(key = "emergency") { EmergencyBannerView(e, o::onEmergencyCall, o::onEmergencyDismiss) } }
             items(ui.timeline, key = { it.id }) { b -> BubbleView(b) }
             item { LiveForm(ui, tx) }
         }

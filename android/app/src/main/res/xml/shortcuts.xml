@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Extra 2, Level A: long-press the app icon → "Report incident" (opens the conversation with the mic listening). -->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut android:shortcutId="report" android:enabled="true" android:icon="@drawable/ic_report_mic"
+        android:shortcutShortLabel="@string/quick_report" android:shortcutLongLabel="@string/quick_report_long">
+        <intent android:action="com.megathon.incidentvoice.REPORT" android:targetPackage="com.megathon.incidentvoice"
+            android:targetClass="com.megathon.incidentvoice.MainActivity"/>
+    </shortcut>
+</shortcuts>

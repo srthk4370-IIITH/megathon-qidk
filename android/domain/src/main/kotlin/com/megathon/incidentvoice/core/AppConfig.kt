@@ -15,6 +15,13 @@ data class AppConfig(
     val thermal: Thermal = Thermal(),
     val models: Models = Models(),
     val recommend: Recommend = Recommend(),
+    /** Extras (HANDBOOK "Extra optional work"): every one can be switched off here before a demo. */
+    val features: Features = Features(),
+    @SerialName("response_clock") val responseClock: ResponseClockCfg = ResponseClockCfg(),
+    @SerialName("wake_display") val wakeDisplay: String = "Hey Qalam",
+    @SerialName("wake_variants") val wakeVariants: List<String> = listOf("hey kalam", "hey qalam"),
+    @SerialName("wake_min_conf") val wakeMinConf: Double = 0.6,
+    @SerialName("multi_witness") val multiWitness: MultiWitnessCfg = MultiWitnessCfg(),
 ) {
     @Serializable data class Asr(
         @SerialName("language_mode") val languageMode: String = "auto_en_hi",
@@ -55,6 +62,19 @@ data class AppConfig(
         @SerialName("whisper_dir") val whisperDir: String = "whisper",
         @SerialName("dsp_dir") val dspDir: String = "dsp",
         @SerialName("prompt_variant") val promptVariant: String = "base",
+    )
+    @Serializable data class Features(
+        @SerialName("response_clock") val responseClock: Boolean = true,
+        @SerialName("quick_launch") val quickLaunch: Boolean = true,
+        @SerialName("wake_word") val wakeWord: Boolean = true,
+        @SerialName("multi_witness") val multiWitness: Boolean = true,
+    )
+    @Serializable data class ResponseClockCfg(@SerialName("ert_reminder_s") val ertReminderS: Int = 120)
+    @Serializable data class MultiWitnessCfg(
+        @SerialName("time_window_min") val timeWindowMin: Int = 45,
+        @SerialName("lookback_h") val lookbackH: Int = 12,
+        @SerialName("min_location_score") val minLocationScore: Double = 0.85,
+        @SerialName("min_score") val minScore: Double = 0.6,
     )
     @Serializable data class Recommend(val mode: String = "templates", @SerialName("max_items") val maxItems: Int = 6)
 

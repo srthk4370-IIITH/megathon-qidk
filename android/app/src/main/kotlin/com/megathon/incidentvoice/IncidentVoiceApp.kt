@@ -13,5 +13,6 @@ class IncidentVoiceApp : Application() {
         container.housekeeping()
         container.traceConversation()
         container.startIndexing()
+        container.resumeResponseClock()
     }
 }
