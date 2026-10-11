@@ -70,6 +70,12 @@ def _install():
             # a pre-uploaded zip of the same part is "<same>.zip" → same key
             base = _os.path.basename(path.rstrip("/"))
             key = "part:" + (base[:-4] if base.endswith(".zip") else base)
+            # a side uploader (scripts/jobs/up_part.sh) may be uploading this part right now: wait for it
+            lock = _CACHE.parent / ("uploading_" + key.replace(":", "_").replace("/", "_"))
+            while lock.exists() and not _os.environ.get("IV_SIDE_UPLOAD") and key not in _load()["models"]:
+                _log(f"waiting for side upload of {key}")
+                import time as _t
+                _t.sleep(60)
             cache = _load()
             mid = cache["models"].get(key)
             if mid:
