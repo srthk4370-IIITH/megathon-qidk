@@ -270,3 +270,11 @@ Full table, method and caveats: `eval/asr_benchmark.md` (+ `eval/asr_benchmark.c
 - **Speed on the QIDK, 10.2 s clip, median of 5:** tiny.en 253 ms, base.en 411 ms, small q5_1 1815 ms. The hint costs nothing measurable.
 - **Conclusion:** the shipped choice (small + hint) is the most accurate of the three and still runs about 5.6 times faster than real time. base.en + hint is the fallback if latency ever matters more than accuracy.
 - **Hinglish:** 91–111 % WER in every configuration. Literal Hinglish transcription does not work with these models; this is a known limitation, not something the hint fixes.
+
+
+## Emergency: questions are cut to the minimum (App branch, 2026-10-11)
+
+- **Before:** in an emergency the follow-up loop still asked for every missing common field (severity, injuries, time, location) and only left the category details for review, and it did so only when severity was already CRITICAL.
+- **Now:** an emergency is any of: severity CRITICAL, the red banner, or a running response clock (which the keyword banner starts). In that state the app asks **one** question at most, where it is, and only if the place is missing. Whatever the answer, it then goes to review, where the response clock and Call ERT are pinned on top and every other required field is listed as "Required". Submit stays disabled until those are filled or marked unknown.
+- No new model fields, prompts or config. Change is in `ConversationOrchestrator.validateAndAdvance` / `ask`; two unit tests (`emergency_locationKnown_…`, `emergency_locationMissing_…`).
+- **20-second demo:** Type instead → "There is a fire in the server room and someone is unconscious" → no questions; the review screen opens with the clock running and "Call ERT" on top.

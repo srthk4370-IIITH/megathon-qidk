@@ -166,6 +166,28 @@ class OrchestratorTest {
         assertEquals(listOf<UiEvent>(UiEvent.Dial("112")), events)
     }
 
+    /** Emergency-lite: with the place known, no question at all — straight to review with the clock running. */
+    @Test fun emergency_locationKnown_asksNothing_goesToReviewWithClock() = runTest {
+        val r = rig("there is a fire in the server room and someone is unconscious")
+        r.o.startNew(); r.o.onMicTapped(); advanceUntilIdle()
+        val ui = r.o.ui.value
+        assertEquals(ConvState.REVIEW, ui.state); assertNotNull(ui.response)
+        assertTrue(r.audio.calls.none { it == ListenKind.FOLLOWUP }, "asked: ${r.tts.spoken}")
+        assertFalse(ui.canSubmit)                                        // the other required fields wait in review
+        assertTrue(ui.validation!!.missing.isNotEmpty())
+    }
+
+    /** Emergency-lite: the place is the only thing asked, once, even if other common fields are missing. */
+    @Test fun emergency_locationMissing_asksOnlyWhere_once_thenReview() = runTest {
+        val r = rig("fire fire, someone is unconscious, help")
+        r.engine.enqueue("umm")                                           // an answer that does not give a place
+        r.o.startNew(); r.o.onMicTapped(); advanceUntilIdle()
+        val ui = r.o.ui.value
+        assertEquals(ConvState.REVIEW, ui.state, "spoken=${r.tts.spoken}")
+        assertEquals(1, r.audio.calls.count { it == ListenKind.FOLLOWUP }, "asked: ${r.tts.spoken}")
+        assertTrue("location" in ui.validation!!.missing); assertNotNull(ui.response)
+    }
+
     private fun TestScope.launchCollect(o: ConversationOrchestrator, into: MutableList<UiEvent>) =
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { o.events.collect { into += it } }
 

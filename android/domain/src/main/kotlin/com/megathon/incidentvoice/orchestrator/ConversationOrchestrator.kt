@@ -48,6 +48,7 @@ class ConversationOrchestrator(
     private var question: FollowUpQuestion? = null
     private var lastAskedFields: List<String> = emptyList()
     private var repromptedNoSpeech = false
+    private var emergencyLocationAsked = false
     private var retryAction: (suspend () -> Unit)? = null
     private val userTexts = StringBuilder() // everything the speaker said (grounding)
     private var narrationText = ""
@@ -384,17 +385,21 @@ class ConversationOrchestrator(
         update { it.copy(validation = res, form = form, round = rounds) }
         maybeStartResponseClock()
         persist()
+        // §10.7, emergency: do not hold the reporter in a question loop. Ask only where it is (once, if missing), then go
+        // to review, where the response clock and Call ERT are pinned and every other required field waits as "Required".
+        val emergency = critical || ui.value.response != null || ui.value.emergency?.level == EmergencyLevel.RED
         when {
             res.complete -> goRecommend(fromConversation = true)
-            critical && res.missing.none { tx.field(it)?.isCommon == true } -> goRecommend(fromConversation = true) // §10.7: details later in review
+            emergency && ("location" !in res.missing || emergencyLocationAsked) -> goRecommend(fromConversation = true)
             rounds >= conv.maxFollowupRounds -> gotoManualFill(speak = true)
-            else -> ask(res, critical)
+            else -> ask(res, emergency)
         }
     }
 
     private suspend fun ask(res: ValidationResult, emergencyMode: Boolean) {
-        val q = Validator.nextQuestion(res, form, tx, emergencyMode)
-        if (q == null) { gotoManualFill(speak = true); return }
+        if (emergencyMode) emergencyLocationAsked = true
+        val q = Validator.nextQuestion(if (emergencyMode) res.copy(missing = listOf("location")) else res, form, tx, emergencyMode)
+        if (q == null) { if (emergencyMode) goRecommend(fromConversation = true) else gotoManualFill(speak = true); return }
         form = merger.markAsked(form, q.fields)
         question = q
         repromptedNoSpeech = false
@@ -633,7 +638,7 @@ class ConversationOrchestrator(
 
     private fun reset() {
         form = IncidentForm(); incidentId = null; rounds = 0; emergencyFlag = false; question = null; lastAskedFields = emptyList()
-        repromptedNoSpeech = false; retryAction = null; userTexts.clear(); narrationText = ""; spokeComplete = false; bubbleSeq = 0; editingRef = null
+        repromptedNoSpeech = false; emergencyLocationAsked = false; retryAction = null; userTexts.clear(); narrationText = ""; spokeComplete = false; bubbleSeq = 0; editingRef = null
         responseStart = null; responseActions.clear(); hintCategory = null; reminderJob?.cancel(); reminderJob = null
         _ui.value = ConversationUiState()
     }
