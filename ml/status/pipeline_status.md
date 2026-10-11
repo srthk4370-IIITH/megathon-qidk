@@ -105,3 +105,25 @@
 - 11 06:33 [ft_data] data: {"train_extract": 2350, "train_patch": 778, "dev": 181, "rejected": {"near_eval": 5, "dup": 22}, "lang": {"en": 1629, "hinglish": 721}, "noisy_frac": 0.455, "ca
 - 11 06:33 [ft_data] DONE
 - 11 06:34 [ft_kaggle_push] GAVE UP: v2 subset  (rm ~/iv/state/ft_kaggle_push.failed to retry)
+- 11 06:42 [up_part] side upload attempt 1 failed: part:Llama3_2_3B_Part3_Of_3_w4a16.aimet
+- 11 06:44 [up_part] side upload attempt 2 failed: part:Llama3_2_3B_Part3_Of_3_w4a16.aimet
+-  [up_part] side upload attempt 3 failed: part:Llama3_2_3B_Part3_Of_3_w4a16.aimet
+- 11 06:50 [export_llama] venv /home/hp_srthk4370/venvs/qaihm_pin: torch 2.10.0+cpu transformers 4.45.0 
+- 11 06:50 [export_llama] export start: llama_v3_2_3b_instruct (expect 3–5 h: local ONNX export, upload, cloud compile, download)
+- 11 07:06 [up_part] side upload attempt 1 failed: part:Llama3_2_3B_Part3_Of_3_w4a16.aimet
+- 11 07:16 [ft_merge] merge start
+- 11 07:19 [ft_merge] merge failed — retry next tick
+- 11 07:23 [ft_merge] merge start
+- 11 07:25 [ft_merge] merge start
+- 11 07:29 [ft_merge] merge failed — retry next tick
+- 11 07:29 [ft_merge] merge start
+- 11 07:32 [ft_merge] merge start
+- 11 07:37 [ft_merge] merge failed — retry next tick
+- 11 07:39 [ft_merge] merge start
+- 11 07:39 [ft_merge] merge failed — retry next tick
+- 11 07:40 [ft_merge] merge start
+- 11 07:40 [ft_merge] merge failed — retry next tick
+- 11 07:40 [ft_merge] merge start
+- 11 07:40 [ft_merge] merge failed — retry next tick
+- 11 07:54 [ft_merge] merged: {"tie": true, "layers": true, "hidden": true, "heads": true, "rope": true, "chat_template": true, "no_lm_head": true}
+- 11 07:54 [ft_merge] DONE

@@ -7,7 +7,7 @@
 JOB=ft_export; source $HOME/iv/jobs/common.sh
 V=$HOME/venvs/qaihm_pin; CK=$HOME/iv_ft/ft_ckpt_w4a16; OUT=$HOME/iv_exports/llama_ft_v79
 cp "$REPO/ml/export/iv_resume_hub.py" "$(ls -d "$V"/lib/python3.*/site-packages)/sitecustomize.py"
-export HF_TOKEN=$(cat ~/.cache/huggingface/token) HF_HUB_OFFLINE=1 IV_HUB_CACHE=$HOME/iv/state/hub_cache_ft.json
+export HF_TOKEN=$(cat ~/.cache/huggingface/token) HF_HUB_OFFLINE=1 IV_HUB_CACHE=$HOME/iv/state/hub_cache_ft.json IV_ASYNC_UPLOAD=1
 if find "$OUT" -name genie_config.json 2>/dev/null | grep -q .; then status "ft bundle present: $OUT"; mark_done; exit 0; fi
 if [ ! -f "$CK/SCALES_OK" ]; then
   status "building ft AIMET-ONNX checkpoint (ONNX export from merged weights, ~30–60 min)"

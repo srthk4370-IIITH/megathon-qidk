@@ -62,8 +62,51 @@ def _install():
     C._iv_resume = True
 
     orig_upload = C._upload_model_if_needed
+    from qai_hub.client import Model as _Model
+    import concurrent.futures as _cf
+    import shutil as _shutil
+    _pool = _cf.ThreadPoolExecutor(3)
+    import threading as _th
+    _tl = _th.local()
+
+    def _bg(self, dst, model_type, name, project):
+        _tl.sync = True
+        return _upload_model_if_needed(self, dst, model_type, name, project)
+
+    class _Pending(_Model):
+        """Upload running in the background (IV_ASYNC_UPLOAD=1): the export serializes the next part
+        meanwhile; resolved when a compile job is submitted with it."""
+
+        def __init__(self, fut, model_type, label):  # noqa: D107 (no super().__init__: lazy)
+            self._fut, self.model_type, self._label = fut, model_type, label
+
+        def resolve(self):
+            return self._fut.result()
+
+        def __getattr__(self, k):
+            if k.startswith("_"):
+                raise AttributeError(k)
+            return getattr(self._fut.result(), k)
 
     def _upload_model_if_needed(self, model, model_type, name=None, project=None):
+        if isinstance(model, _Pending):
+            _log(f"waiting for background upload {model._label}")
+            return model.resolve()
+        if (_os.environ.get("IV_ASYNC_UPLOAD") == "1" and not getattr(_tl, "sync", False) and isinstance(model, (str, _Path))
+                and _os.path.isdir(_os.path.expanduser(str(model)))):
+            src = _os.path.expanduser(str(model)).rstrip("/")
+            base = _os.path.basename(src)
+            key = "part:" + base
+            cached = _load()["models"].get(key)
+            if cached:
+                _log(f"reuse cached upload {key} -> {cached}")
+                return self.get_model(cached)
+            dst = _os.path.join(str(_Path.home()), "iv", "async_up", base)
+            _shutil.rmtree(dst, ignore_errors=True)
+            _shutil.copytree(src, dst)  # the export deletes its temp dir as soon as we return
+            _log(f"background upload start {base}")
+            fut = _pool.submit(_bg, self, dst, model_type, name, project)
+            return _Pending(fut, model_type, base)
         if isinstance(model, (str, _Path)) and _os.path.exists(_os.path.expanduser(str(model))):
             path = _os.path.expanduser(str(model))
             # qai_hub_models serializes part N to <tmp>/Llama3_2_3B_PartN_Of_3_w4a16.aimet (dir);

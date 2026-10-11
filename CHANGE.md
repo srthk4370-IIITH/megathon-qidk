@@ -126,3 +126,14 @@ Only two branches: **App** and **ML**. No separate web/dashboard branch.
 - **Genie session bug to know about:** with this bundle and Genie 1.20, a prompt longer than about 500 tokens breaks the dialog for every later query (`GenieDialog_query status=-1`, "batch dispatch failed"), even after `GenieDialog_reset`. `iv_cli llm-batch` is affected (first case works, the rest fail); the eval was run with one `iv_cli llm` process per case. The app re-creates the session after each call (`MlEngineAdapter`). A proper fix belongs in `native/src/llm_engine.cpp` (re-create the dialog instead of resetting it) and needs a native rebuild.
 - **Prompt builder:** chat template is chosen by model family (`ModelFamily.LLAMA` unchanged, `QWEN` = ChatML with an empty think block). `PromptBuilder.extract` takes an optional keyword hint, used only for Qwen.
 - **Not touched:** `native/`, `android/core`, `android/engine` sources, the Llama prompts, schemas, taxonomy.
+
+## 2026-10-11 10:10 — ML (Saarthak) — ASR latency fix: Genie "poll" was starving whisper.cpp (22 s → ~2.5 s)
+- **Root cause (measured on the QIDK):** the LLM bundle's `genie_config.json` has `"poll": true` with `"cpu-mask": "0xe0"` → 3 Genie worker threads (libGenie.so) busy-spin on the prime cores 5–7 all the time, even when idle (app at 100–200 % CPU idle). whisper.cpp's 6 threads then wait on those cores: in-app ASR 22.8 s for a 5 s utterance; `iv_cli` with the app running 11 s; app stopped 2.5 s. Prompt hint costs nothing (2.50 vs 2.51 s).
+- **Fixed now on the board** (no rebuild): `poll` → `false` in `models/llama/genie_config.json` (backup `genie_config.poll_true.bak`). App idle CPU 11 %, ASR with the app running **2.6 s** (11 s clip).
+- **Permanent:** native loader forces `poll:false` for any bundle (`IV_GENIE_POLL=1` restores); `libiv_native.so` rebuilt in `android/engine/src/main/jniLibs`. `apply.py` also patches the board's config on every run.
+- **Action (App):** rebuild + `install -r` from main (or just `python apply.py`). If you re-push a Genie bundle, keep `poll:false`.
+
+## 2026-10-11 10:25 — ML (Saarthak) — LLM: real stop at max_tokens + stop when the tool-call JSON closes
+- Measured in the app after the poll fix: **ASR 1.5–1.7 s per utterance** (was 22 s), PATCH 1.7 s (33 tok), but **EXTRACT 16.2 s = 320 tokens = the max_tokens cap**.
+- Native bug: at the cap the token callback only *ignored* further tokens; Genie kept generating. Now it signals Genie to stop. Also stops the moment the top-level JSON object closes (`IV_JSON_EARLY_STOP=0` disables). Verified on the QIDK with the Qwen bundle: 23.6 tok/s decode, TTFT 71 ms, 73-token tool call in 3.1 s.
+- **Action (App):** rebuild + `install -r` (new `libiv_native.so` in jniLibs). Please log the raw EXTRACT output once (logcat) — if Qwen really writes ~320 tokens for the form, trim the extract prompt / omit-empty-fields rule (fewer fields emitted = proportionally faster: ~20 tok/s).
