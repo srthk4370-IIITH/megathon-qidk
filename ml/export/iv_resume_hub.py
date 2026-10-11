@@ -148,3 +148,73 @@ try:
     _install()
 except Exception as _e:  # never break the interpreter
     _log(f"install failed: {_e}")
+
+
+def _install_robust_upload():
+    """Replace qai_hub.s3_transfer.upload_file: per-part retries so one dropped connection
+    (SSL EOF on the hotspot) never restarts a multi-GB file. 16 MiB parts, IV_UP_THREADS threads."""
+    try:
+        from qai_hub import s3_transfer as st
+    except Exception:
+        return
+    if getattr(st, "_iv_robust", False):
+        return
+    st._iv_robust = True
+    import concurrent.futures as cf
+    import threading
+    import time
+
+    def upload_file(credentials, path, verbose, progress_bar_description, logger=None):
+        size = _os.path.getsize(path)
+        part = 16 * 1024 * 1024
+        n = (size + part - 1) // part
+        ctype = st.api_utils.guess_file_http_content_type(path)
+        tl = threading.local()
+
+        def client():
+            if not hasattr(tl, "c"):
+                tl.c = st._build_client(credentials)
+            return tl.c
+
+        mpu = client().create_multipart_upload(Bucket=credentials.bucket, Key=credentials.key, ContentType=ctype)
+        uid = mpu["UploadId"]
+        done = {}
+        lock = threading.Lock()
+        t0 = time.time()
+
+        def put(i):
+            with open(path, "rb") as f:
+                f.seek(i * part)
+                data = f.read(part)
+            for attempt in range(40):
+                try:
+                    r = client().upload_part(Bucket=credentials.bucket, Key=credentials.key, UploadId=uid,
+                                             PartNumber=i + 1, Body=data)
+                    with lock:
+                        done[i + 1] = r["ETag"]
+                        if len(done) % 10 == 0 or len(done) == n:
+                            mb = len(done) * part / 1e6
+                            _log(f"robust upload {_os.path.basename(path)}: {len(done)}/{n} parts, "
+                                 f"{mb / max(1, time.time() - t0):.2f} MB/s")
+                    return
+                except Exception as e:  # noqa: BLE001
+                    if hasattr(tl, "c"):
+                        del tl.c  # fresh connection pool after SSL/connection errors
+                    time.sleep(min(30, 2 ** min(attempt, 5)))
+                    if attempt == 39:
+                        raise RuntimeError(f"part {i + 1} failed 40 times: {e}")
+
+        with cf.ThreadPoolExecutor(int(_os.environ.get("IV_UP_THREADS", "32"))) as ex:
+            list(ex.map(put, range(n)))
+        client().complete_multipart_upload(
+            Bucket=credentials.bucket, Key=credentials.key, UploadId=uid,
+            MultipartUpload={"Parts": [{"PartNumber": k, "ETag": done[k]} for k in sorted(done)]})
+        _log(f"robust upload complete {_os.path.basename(path)} ({size / 1e9:.2f} GB, {time.time() - t0:.0f}s)")
+
+    st.upload_file = upload_file
+
+
+try:
+    _install_robust_upload()
+except Exception as _e:
+    _log(f"robust upload install failed: {_e}")

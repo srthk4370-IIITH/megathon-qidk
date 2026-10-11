@@ -6,7 +6,7 @@ JOB=up_part; source $HOME/iv/jobs/common.sh
 Z=$1; KEY=$2
 LOCK=$ST/uploading_$(echo "$KEY" | tr ':/' '__')
 touch "$LOCK"
-for i in 1 2 3; do
+for i in 1 2 3 4 5; do
   if IV_SIDE_UPLOAD=1 $HOME/venvs/qaihm_pin/bin/python -c "import qai_hub as hub,sys; m=hub.upload_model(sys.argv[1]); print('UPLOADED', m.model_id)" "$Z"; then
     rm -f "$LOCK"; status "side upload OK: $KEY"; exit 0
   fi

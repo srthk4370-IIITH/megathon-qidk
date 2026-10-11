@@ -133,3 +133,7 @@ Done on every screen (Home, Conversation, Review, Emergency, Dashboard, Detail, 
 | Small talk is not filed; self-introduction sets the reporter | Done, unit-tested, checked on the QIDK by typing | HANDBOOK "Small talk" |
 | Model failure → rules engine for that turn; silence answered once | Done, unit-tested (cannot be forced on the board) | HANDBOOK "Error handling" |
 | Follow-ups in the reporter's language; description in their words | Done, unit-tested | HANDBOOK "Language matching" |
+
+### 07:20 — Model plan (two laptops)
+- **Mac (second laptop): Qwen3-4B precompiled = the fallback LLM.** Qualcomm's ready-made Genie bundle for Snapdragon 8 Elite (V79), QAIRT 2.45 (loads on our 2.50 runtime): `https://qaihub-public-assets.s3.us-west-2.amazonaws.com/qai-hub-models/models/qwen3_4b/releases/v0.63.0/qwen3_4b-genie-w4a16-qualcomm_snapdragon_8_elite_for_galaxy.zip` (2.54 GB). Note: Qwen3 needs its own chat template (`<|im_start|>` … and disable thinking: `/no_think` or empty `<think></think>`), not the Llama template in RENDERING.md.
+- **ML laptop: fine-tuned Llama 3.2 3B (our task, 70 % English, short 694-token prompt) only.** Stock Llama export dropped (multi-GB uploads kept dying on the hotspot). Adapter trained on Kaggle T4 (dev loss 0.035, JSON valid 8/8) → merge (07:16) → AIMET-ONNX checkpoint → AI Hub compile (QAIRT 2.50, same as our runtime) → bundle. Target 10:00. Lands as the "models: Llama V79 bundle metadata" commit → `python apply.py --llama`. Prompt variant **ft** (`MANIFEST.json prompt_variant=ft`).
