@@ -427,12 +427,15 @@ class ConversationOrchestrator(
         } else { markSpeakingDone(); update { it.copy(state = ConvState.TYPING, question = null, form = form) } }
     }
 
-    private suspend fun extract(text: String) {
-        retryAction = { extract(text) }
+    private suspend fun extract(spoken: String) {
+        retryAction = { extract(spoken) }
+        val text = SelfCorrection.apply(spoken)      // "at 10, no, 11" → "at 11" for the model and the rules; the stored words stay as spoken
         update { it.copy(state = ConvState.EXTRACTING, streamingFields = emptySet(), error = null) }
         val gen = generateWithRetry(LlmTask.EXTRACT, prompts.extract(text, rules.categoryHint(text)), SamplerName.GREEDY, cfg.app.llm.maxTokens.extract, preview = true) { rules.extract(text).toString() } ?: return
         var call = parseWithRepair(gen.text, Tools.FILL, null)
         // the model itself found nothing to file (no type, no description)
+        // injuries / severity from the model count only when the words say so; otherwise the app asks
+        call = call?.let { c -> c.copy(fields = EvidenceGuard.filter(c.fields, (rules.extract(text)["parameters"] as? kotlinx.serialization.json.JsonObject) ?: kotlinx.serialization.json.JsonObject(emptyMap()), emergencyDetector.scan(text) != null).let { EvidenceGuard.filterUnsaid(it, text) }) }
         val said = (call?.fields?.get("description") as? JsonPrimitive)?.content
         val nothing = call != null && (SmallTalk.isSentinel(said) || (call.fields["incident_type"] == null && said == null && !hasIncidentCue(text)))
         if (nothing) { form = IncidentForm(lang = form.lang); update { it.copy(streamingFields = emptySet(), form = form) }; noIncident(text); return }
@@ -531,8 +534,9 @@ class ConversationOrchestrator(
             ?: (parser.parse(rules.patch(q.fields, text).toString(), Tools.UPDATE, form.types) as? ParseOutcome.Ok)?.call?.also { update { u -> u.copy(notice = FALLBACK_NOTICE) } })
             ?.let { c -> if (SmallTalk.isSentinel((c.fields["description"] as? JsonPrimitive)?.content)) c.copy(fields = emptyMap()) else c }   // sentinel in an answer = no new info, never a description
         if (call != null) {
+            val langNow = form.lang
             val m = merger.merge(form, call, FieldSource.LLM_PATCH, null, userTexts.toString(), clock())
-            form = m.form
+            form = m.form.copy(lang = langNow)          // the reporter's words decide the language, not the model's tag
             rememberTool(gen, "Form updated: " + (m.changed.filter { it != "lang" }).joinToString { tx.label(it) }.ifBlank { "nothing new" })
         } else {
             rememberTool(gen, "Couldn't read that answer")

@@ -64,12 +64,16 @@ class LlmEvalTool {
     }
 
     private val matcher = LocationMatcher(Fx.registry)
+    private val guardRules = RuleBasedLlm(Fx.tx, Fx.registry)
+    private val guardEmergency = EmergencyDetector(Fx.tx)
 
     /** One case, one engine → every number the report needs. Description is scored on its own, never inside the field counts. */
     private fun detail(c: JsonObject, raw: String?, stats: JsonObject?): JsonObject {
         val gold = c["gold"]!!.jsonObject; val now = OffsetDateTime.parse(c["now"]!!.jsonPrimitive.content).toInstant()
         val call = raw?.let { (Fx.parser.parse(it, Tools.FILL) as? ParseOutcome.Ok)?.call }
-        val got = call?.fields ?: emptyMap()
+        val tr0 = c["transcript"]!!.jsonPrimitive.content
+        // same evidence check the app applies to model output (IV_EVAL_GUARD=0 scores the raw parser output instead)
+        val got = (call?.fields ?: emptyMap()).let { f -> if (System.getenv("IV_EVAL_GUARD") == "0") f else EvidenceGuard.filter(f, (guardRules.extract(tr0)["parameters"] as? JsonObject) ?: JsonObject(emptyMap()), guardEmergency.scan(tr0) != null).let { EvidenceGuard.filterUnsaid(it, tr0) } }
         val want = flat(gold)
         var tp = 0; val wrong = ArrayList<String>(); val missing = ArrayList<String>(); val madeUp = ArrayList<String>()
         for ((k, w) in want) { val g = got[k]; if (g == null) missing += k else if (same(k, w, g, now)) tp++ else wrong += "$k: expected ${str2(w)}, got ${str2(g)}" }
