@@ -89,7 +89,7 @@ private fun DetailBody(d: IncidentDetail, tx: Taxonomy, disclaimer: String, modi
     var evidenceFor by remember(d.meta.id) { mutableStateOf<String?>(null) }
     val said = remember(d.turns) { d.turns.filter { it.role == "USER" }.map { it.text } }
     Column(modifier.fillMaxSize()) {
-    if (said.isNotEmpty()) com.megathon.incidentvoice.ui.components.TranscriptCard(said, evidenceFor?.let { f.evidence[it] }.orEmpty(), evidenceFor?.let { tx.label(it) }, Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp))
+    if (said.isNotEmpty()) com.megathon.incidentvoice.ui.components.TranscriptCard(said, evidenceFor?.let { f.evidence[it] }.orEmpty(), evidenceFor?.let { tx.label(it) }, Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 4.dp))
     LazyColumn(Modifier.weight(1f).fillMaxWidth().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(vertical = 16.dp)) {
         item {
             Text(f.str("title") ?: "Report", style = MaterialTheme.typography.titleLarge)

@@ -52,7 +52,7 @@ fun ReviewScreen(ui: ConversationUiState, cfg: AppConfigBundle, o: ConversationO
     Column(Modifier.fillMaxSize()) {
     // Extra 1: the response clock stays pinned while the form scrolls underneath
     ui.response?.let { com.megathon.incidentvoice.ui.components.ResponseClockCard(it, o::onResponseStep, Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp)) }
-    if (ui.userTurns.isNotEmpty()) TranscriptCard(ui.userTurns, evidenceFor?.let { f.evidence[it] }.orEmpty(), evidenceFor?.let { tx.label(it) }, Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp))
+    if (ui.userTurns.isNotEmpty()) TranscriptCard(ui.userTurns, evidenceFor?.let { f.evidence[it] }.orEmpty(), evidenceFor?.let { tx.label(it) }, Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 4.dp))
     LazyColumn(Modifier.weight(1f).fillMaxWidth().padding(horizontal = 16.dp), contentPadding = PaddingValues(bottom = 16.dp)) {
         item {
             ScreenTitle(if (ui.editingExisting) "Edit report" else "Review report")

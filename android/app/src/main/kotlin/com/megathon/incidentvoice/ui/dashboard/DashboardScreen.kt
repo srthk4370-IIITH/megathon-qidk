@@ -143,14 +143,14 @@ private fun HotspotRow(h: HotspotStat, tx: Taxonomy, selected: Boolean, onClick:
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f)) {
-            Text(h.location, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(h.location, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(when (h.trend) { Trend.MORE -> "↑ more"; Trend.FEWER -> "↓ fewer"; Trend.SAME -> "→ same" }, style = MaterialTheme.typography.labelMedium,
+                    color = if (h.trend == Trend.MORE) MaterialTheme.colorScheme.primary else secondaryText)
+            }
             Text("${h.total} report${if (h.total != 1) "s" else ""} in ${HotspotRules.HOTSPOT_WINDOW_DAYS} days" + (h.topType?.let { " · mostly " + Hotspots.shortType(tx.category(it)?.label ?: it) } ?: ""),
                 style = MaterialTheme.typography.bodySmall, color = secondaryText, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        }
-        Column(horizontalAlignment = Alignment.End) {
-            Text("${h.last7} in last ${HotspotRules.TREND_DAYS} days", style = MaterialTheme.typography.labelMedium)
-            Text(when (h.trend) { Trend.MORE -> "↑ more"; Trend.FEWER -> "↓ fewer"; Trend.SAME -> "→ same" } + " than the week before", style = MaterialTheme.typography.bodySmall,
-                color = if (h.trend == Trend.MORE) MaterialTheme.colorScheme.primary else secondaryText)
+            Text("${h.last7} in the last ${HotspotRules.TREND_DAYS} days, ${h.prev7} in the ${HotspotRules.TREND_DAYS} before", style = MaterialTheme.typography.bodySmall, color = secondaryText, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }
