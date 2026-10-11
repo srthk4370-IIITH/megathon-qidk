@@ -133,3 +133,7 @@ Done on every screen (Home, Conversation, Review, Emergency, Dashboard, Detail, 
 | Small talk is not filed; self-introduction sets the reporter | Done, unit-tested, checked on the QIDK by typing | HANDBOOK "Small talk" |
 | Model failure → rules engine for that turn; silence answered once | Done, unit-tested (cannot be forced on the board) | HANDBOOK "Error handling" |
 | Follow-ups in the reporter's language; description in their words | Done, unit-tested | HANDBOOK "Language matching" |
+
+## On-device LLM (App branch, 2026-10-11 08:50)
+
+Qualcomm's pre-compiled Qwen3-4B (Genie, w4a16) runs on the QIDK's Hexagon NPU inside the app: 22–23 tok/s, extraction about 4.4 s, a follow-up answer about 1.8 s. Auto uses it when the bundle is in `models/llama`; the rules engine supplies a category hint, checks the model's output and answers a turn if the model fails. Accuracy and test results: `eval/RESULTS.md`. How to install the bundle, the chat template and known limits: HANDBOOK "On-device LLM: Qwen3-4B on the Hexagon NPU".
