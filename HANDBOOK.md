@@ -328,3 +328,18 @@ Changed for this task: case 1 (the rules engine now takes over automatically; be
 - **Limit that matters:** speech recognition runs with English forced (the benchmark shows literal Hinglish transcription does not work with these models), so *spoken* Hinglish mostly arrives as English text and gets English questions. Hinglish questions appear when the text itself is Hinglish: typed reports, or the Hindi words Whisper happens to keep. The marker-word list is short and can misjudge a very short sentence.
 - **Tests:** `followUps_matchTheReportersLanguage_andTheTranscriptIsKeptVerbatim`, `language_followsTheReportersWords`, `description_lightCleanupOnly`, `description_keepsTheReportersWords_unlessTheModelStayedClose`.
 - **20-second demo:** Type instead → "Pantry ke paas paani leak ho raha hai" → the next question is in Hinglish and the description keeps "paani leak ho raha hai". Open any report → "Transcript, word for word".
+
+
+## One-tap entry points and wake word: re-check after the restyle (App branch, 2026-10-11 06:45)
+
+Checked on the QIDK with the current build, starting from the launcher each time:
+
+| Entry point | App not running | App in the background | Result |
+|---|---|---|---|
+| Quick Settings tile "Report incident" | opens and is listening after the cold start | opens listening | works |
+| App shortcut (long-press the icon → Report incident), same intent as the widget | opens listening | opens listening | works |
+| Home-screen widget (one REPORT button) | one widget is placed on the board; its button sends the same intent as the shortcut | | not tapped by hand in this check |
+
+If a report is already in progress, a quick-launch request does not interrupt it (by design). No fix was needed.
+
+**"Hey Qalam"** was already implemented before this check (Extra 2, Level B above) and is still running: the foreground service is up and Settings shows "Listening · grammar on sound-alikes". Its hit rate could **not** be re-measured in this session because the test relies on the laptop speaker, which was muted; the last measurement (about 3 of 4 with a synthetic voice) predates the stricter rule for the name said without "hey". It needs a few tries by a person before the demo.
