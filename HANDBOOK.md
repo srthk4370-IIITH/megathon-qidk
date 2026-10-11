@@ -290,3 +290,31 @@ Full table, method and caveats: `eval/asr_benchmark.md` (+ `eval/asr_benchmark.c
 - **Also fixed here:** a report with a running response clock that the reporter closed is no longer reopened at the next launch.
 - **Known limits:** keyword-based, so a real incident described with none of the known words gets one "What happened?" before it is accepted; a joke that contains an incident word ("my code is on fire") is filed.
 - **20-second demo:** Type instead → "hi wassup this is Ravi" → the reply is "Hi Ravi. I didn't catch an incident. What happened?" and the form stays empty → type the water-leak sentence → the report is filled, reporter "Ravi".
+
+
+## Error handling: every case and what the user sees (App branch, 2026-10-11)
+
+Rule: a failure never loses the report and never leaves a dead end. The draft (form, every turn, the recording path) is written to the database after each step and again when an error is raised.
+
+| # | What goes wrong | What the app does | What the user sees or hears |
+|---|---|---|---|
+| 1 | Language model fails on a turn (NPU busy, session lost, empty output) | Retries after 3, 7 and 15 s if the error is retryable. If it still fails, or is not retryable, the keyword rules engine (`RuleBasedLlm`) produces the same tool call **for that one turn**; the next turn tries the model again | "Engine busy — retrying (n/3)…" while retrying, then a small plain line "Using offline fallback". It disappears when the model answers again |
+| 2 | Model output cannot be parsed (extraction) | One repair request to the model. If that fails too: the transcript becomes the description and the form opens for manual filling | "Couldn't understand fully — please check the form." and the review screen with the gaps marked "Required" |
+| 3 | Model output cannot be parsed (a follow-up answer) | One repair request; if that fails the answer is kept in the transcript, the fields stay missing and the loop moves on | "Couldn't read that answer" in the timeline; the field is asked again or left for review |
+| 4 | No speech at the start | Says it once and listens once more; a second silence returns to the start | Spoken and shown: "Sorry, I didn't catch that." Then: "Sorry, I didn't catch that. Tap the button and try again." |
+| 5 | No speech after a question | Repeats the question once with the same phrase; a second silence counts as skipped | "Sorry, I didn't catch that. <question>" |
+| 6 | Speech with no recognisable words | Treated like no speech (4 or 5) | "I couldn't make out any words. Please try again." at the start |
+| 7 | Not an incident (small talk, joke, cut-off sentence) | Form untouched; asks again, up to three times | "I didn't catch an incident. What happened?" |
+| 8 | Speech recognition fails (engine error on transcribe) | Same retries as 1; there is no fallback for speech, so the error card is shown | Error card with Retry, Fill manually, and Type instead |
+| 9 | Microphone unavailable or permission denied | Error card | "Try mic again", "Open settings", "Fill manually" |
+| 10 | Text-to-speech not ready | A short chime replaces the voice; the question stays on screen and the microphone still opens | The question as text |
+| 11 | Follow-up limit reached (3 rounds) or nothing left that can be asked | Goes to manual fill | "Please check the highlighted fields on the screen." |
+| 12 | Required fields still empty at submit | Submit is refused | "Fill the highlighted fields first: …"; each field can also be marked Unknown |
+| 13 | Engine fails to load at start | App stays usable for typing and manual filling | Home shows the error with "Retry engine" and "Use mock engine"; the top-bar dot is grey |
+| 14 | App killed during an emergency | The draft and its response clock are picked up at the next launch (within an hour), unless the reporter had closed it | "Picked up the report that was in progress." |
+| 15 | No dialler on the device | The call button does not crash | Toast with the number to call from a phone |
+| 16 | Device clock wrong | Relative times would be wrong | Red strip on Home: "Device clock is wrong." |
+
+Changed for this task: case 1 (the rules engine now takes over automatically; before, the error card appeared and the user had to choose), case 4 (spoken once and one more try; before, straight back to the start), the draft is saved explicitly on every error path, and status notices are shown in plain text instead of red. Cases 2, 3, 5–7 and 9–16 already behaved this way. Tests: `modelFailure_usesRulesForThatTurn_…`, `modelFailure_onAnAnswer_alsoFallsBack`, `silenceAtTheStart_…`.
+
+**20-second demo:** Settings → Engine → Mock, start a report and tap stop without speaking → "Sorry, I didn't catch that." is spoken once and it listens again. The model-failure fallback cannot be triggered by hand on the board; it is covered by the unit tests.

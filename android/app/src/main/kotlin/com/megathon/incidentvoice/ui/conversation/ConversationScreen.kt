@@ -37,7 +37,8 @@ fun ConversationScreen(ui: ConversationUiState, tx: Taxonomy, o: ConversationOrc
         // how complete the form is; neutral, the accent is kept for the report button
         LinearProgressIndicator(progress = { ui.validation?.progress ?: 0f }, Modifier.fillMaxWidth().padding(top = 8.dp).height(4.dp).clip(RoundedCornerShape(2.dp)),
             color = MaterialTheme.colorScheme.onSurface, trackColor = divider, drawStopIndicator = {})
-        ui.notice?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 4.dp)) }
+        // status notices ("Using offline fallback", "retrying") are plain; they are information, not alarms
+        ui.notice?.let { Text(it, color = secondaryText, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 4.dp)) }
         // Extra 1: pinned response clock (replaces the banner, which carries the same steps)
         ui.response?.let { ResponseClockCard(it, o::onResponseStep, Modifier.padding(top = 8.dp)) }
 

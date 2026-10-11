@@ -219,24 +219,38 @@ class OrchestratorTest {
         assertEquals(ConvState.REVIEW, r.o.ui.value.state)
     }
 
-    @Test fun engineHardError_showsErrorEngine_thenManualFallbackKeepsTranscript() = runTest {
-        val r = rig("water leak near the pantry")
+    /** Model failure after the retries: the keyword rules answer that turn, the screen says so, and the next turn uses the model again. */
+    @Test fun modelFailure_usesRulesForThatTurn_withPlainNotice_thenModelAgain() = runTest {
+        val r = rig("water leak near the pantry around 9 AM", "no one hurt, minor", "the tap, it has stopped")
+        val notices = mutableListOf<String?>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { r.o.ui.collect { notices += it.notice } }
         r.engine.failNextGenerate = EngineError("IV-E603", "no device", retryable = false)
         r.o.startNew(); r.o.onMicTapped(); advanceUntilIdle()
-        assertEquals(ConvState.ERROR_ENGINE, r.o.ui.value.state)
-        r.o.onManualFallback(); advanceUntilIdle()
+        assertTrue(ConversationOrchestrator.FALLBACK_NOTICE in notices, notices.distinct().toString())
         val ui = r.o.ui.value
-        assertEquals(ConvState.MANUAL_FILL, ui.state); assertEquals("water leak near the pantry", ui.form.str("description"))
-        assertEquals(FieldStatus.DEFAULTED, ui.form.state("description")!!.status)
+        assertEquals(ConvState.REVIEW, ui.state); assertEquals("WATER", ui.form.incidentType); assertNull(ui.error)
+        assertNull(ui.notice)                                              // cleared once the model answered the next turn
+        assertNotNull(r.inc.form.incidentType)                              // and the draft was saved
     }
 
-    @Test fun retryAfterHardError_works() = runTest {
+    @Test fun modelFailure_onAnAnswer_alsoFallsBack() = runTest {
         val r = rig("water leak near the pantry around 9 AM", "no one hurt, minor", "the tap, it has stopped")
-        r.engine.failNextGenerate = EngineError("IV-E603", "x", retryable = false)
+        r.o.startNew(); r.o.onMicTapped()
+        testScheduler.runCurrent()
+        // let the extraction through, then fail the first patch
+        while (r.o.ui.value.state != ConvState.ASKING && r.o.ui.value.state != ConvState.LISTENING) testScheduler.advanceTimeBy(50)
+        r.engine.failNextGenerate = EngineError("IV-E603", "no device", retryable = false)
+        advanceUntilIdle()
+        assertEquals(ConvState.REVIEW, r.o.ui.value.state); assertEquals("NO", r.o.ui.value.form.str("injuries"))
+    }
+
+    @Test fun silenceAtTheStart_saysSorryOnce_thenGoesBackWithANotice() = runTest {
+        val r = rig()
+        r.audio.results += ListenResult.NoSpeech; r.audio.results += ListenResult.NoSpeech
         r.o.startNew(); r.o.onMicTapped(); advanceUntilIdle()
-        assertEquals(ConvState.ERROR_ENGINE, r.o.ui.value.state)
-        r.o.onRetry(); advanceUntilIdle()
-        assertEquals(ConvState.REVIEW, r.o.ui.value.state)
+        assertEquals(listOf("Sorry, I didn't catch that."), r.tts.spoken)
+        assertEquals(ConvState.IDLE, r.o.ui.value.state); assertTrue(r.o.ui.value.notice!!.startsWith("Sorry, I didn't catch that"))
+        assertEquals(2, r.audio.calls.size)
     }
 
     @Test fun emptyEngineOutput_isEngineErrorNotParseError() = runTest {

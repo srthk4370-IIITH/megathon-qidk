@@ -52,6 +52,7 @@ class ConversationOrchestrator(
     private var repromptedNoSpeech = false
     private var emergencyLocationAsked = false
     private var lastFromVoice = true
+    private var narrationReprompted = false
     private var noIncidentCount = 0
     private var spokenReporter: String? = null
     private var retryAction: (suspend () -> Unit)? = null
@@ -288,9 +289,23 @@ class ConversationOrchestrator(
         val maxMs = cfg.app.asr.maxNarrationS * 1000L // rev 1.1 R1-08: one Whisper window (30 s)
         when (val r = audio.listen(ListenKind.NARRATION, maxMs, settings().endSilenceMs, id) { lvl, ms -> update { u -> u.copy(level = lvl, elapsedMs = ms) } }) {
             is ListenResult.Speech -> transcribeAndHandle(r, narration = true)
-            ListenResult.NoSpeech -> update { it.copy(state = ConvState.IDLE, notice = "I didn't hear anything. Tap the mic and try again.") }
+            ListenResult.NoSpeech -> {
+                if (!narrationReprompted) {
+                    // say it once and listen once more; a second silence goes back to the start
+                    narrationReprompted = true
+                    val msg = if (form.lang == "en" || form.lang.isBlank()) "Sorry, I didn't catch that." else "Maaf kijiye, sunaai nahi diya."
+                    say(msg); update { it.copy(state = ConvState.ASKING) }
+                    if (settings().speakQuestions) tts.speak(msg, form.lang)
+                    markSpeakingDone(); delay(conv.ttsPostGapMs.toLong())
+                    listenNarration()
+                } else {
+                    runCatching { persist() }
+                    reset()
+                    update { it.copy(notice = "Sorry, I didn't catch that. Tap the button and try again.") }
+                }
+            }
             ListenResult.Cancelled -> {}
-            is ListenResult.Failure -> update { it.copy(state = ConvState.ERROR_AUDIO, error = r.message) }
+            is ListenResult.Failure -> { runCatching { persist() }; update { it.copy(state = ConvState.ERROR_AUDIO, error = r.message) } }
         }
     }
 
@@ -409,7 +424,7 @@ class ConversationOrchestrator(
     private suspend fun extract(text: String) {
         retryAction = { extract(text) }
         update { it.copy(state = ConvState.EXTRACTING, streamingFields = emptySet(), error = null) }
-        val gen = generateWithRetry(LlmTask.EXTRACT, prompts.extract(text), SamplerName.GREEDY, cfg.app.llm.maxTokens.extract, preview = true) ?: return
+        val gen = generateWithRetry(LlmTask.EXTRACT, prompts.extract(text), SamplerName.GREEDY, cfg.app.llm.maxTokens.extract, preview = true) { rules.extract(text).toString() } ?: return
         var call = parseWithRepair(gen.text, Tools.FILL, null)
         // the model itself found nothing to file (no type, no description)
         if (call != null && noIncidentCount < 3 && call.fields["incident_type"] == null && call.fields["description"] == null && !hasIncidentCue(text)) { update { it.copy(streamingFields = emptySet()) }; noIncident(text); return }
@@ -489,7 +504,7 @@ class ConversationOrchestrator(
         addBubble(BubbleRole.USER, text)
         update { it.copy(state = ConvState.PATCHING, error = null) }
         val prompt = prompts.patch(form, q.text(form.lang), q.fields, text)
-        val gen = generateWithRetry(LlmTask.PATCH, prompt, SamplerName.GREEDY, cfg.app.llm.maxTokens.patch, preview = false) ?: return
+        val gen = generateWithRetry(LlmTask.PATCH, prompt, SamplerName.GREEDY, cfg.app.llm.maxTokens.patch, preview = false) { rules.patch(q.fields, text).toString() } ?: return
         val call = parseWithRepair(gen.text, Tools.UPDATE, form.types)
         if (call != null) {
             val m = merger.merge(form, call, FieldSource.LLM_PATCH, null, userTexts.toString(), clock())
@@ -600,15 +615,25 @@ class ConversationOrchestrator(
         update { it.copy(form = pv, streamingFields = out.call.fields.keys) }
     }
 
-    private suspend fun generateWithRetry(task: LlmTask, prompt: String, sampler: SamplerName, maxTokens: Int, preview: Boolean): Gen? =
-        withEngineRetry {
+    /**
+     * One generation with the §31.3 retries. If the model still fails and [fallback] is given, the keyword rules answer
+     * this one turn instead (same tool-call format) and the screen says so; the next turn tries the model again.
+     */
+    private suspend fun generateWithRetry(task: LlmTask, prompt: String, sampler: SamplerName, maxTokens: Int, preview: Boolean, fallback: (() -> String)? = null): Gen? {
+        val gen = withEngineRetry(giveUpQuietly = fallback != null) {
             generateOnce(task, prompt, sampler, maxTokens, preview).also { g ->
                 update { it.copy(debug = it.debug.copy(llmMs = g.ms, tokensOut = g.stats?.tokensOut ?: 0, decodeTps = g.stats?.decodeTps ?: 0.0, lastToolJson = g.text, lastTask = task.name)) }
             }
         }
+        if (gen != null) { if (ui.value.notice == FALLBACK_NOTICE) update { it.copy(notice = null) }; return gen }   // the model is back
+        if (fallback == null) return null
+        val text = fallback()
+        update { it.copy(notice = FALLBACK_NOTICE, streamingFields = emptySet(), debug = it.debug.copy(llmMs = 0, tokensOut = 0, decodeTps = 0.0, lastToolJson = text, lastTask = task.name + " (rules)")) }
+        return Gen(text, null, 0)
+    }
 
     /** §31.3: retryable engine errors retry after 3/7/15 s, then surface ERROR_ENGINE. Returns null after reporting. */
-    private suspend fun <T> withEngineRetry(block: suspend () -> T): T? {
+    private suspend fun <T> withEngineRetry(giveUpQuietly: Boolean = false, block: suspend () -> T): T? {
         var attempt = 0
         while (true) {
             try { return block() }
@@ -618,7 +643,10 @@ class ConversationOrchestrator(
                     update { it.copy(notice = "Engine busy — retrying (${attempt + 1}/${retryDelaysMs.size})…") }
                     delay(retryDelaysMs[attempt]); attempt++
                 } else {
-                    update { it.copy(state = ConvState.ERROR_ENGINE, error = "On-device AI engine unavailable (${e.error.code}).", retryable = true, notice = null, streamingFields = emptySet()) }
+                    if (!giveUpQuietly) {
+                        update { it.copy(state = ConvState.ERROR_ENGINE, error = "On-device AI engine unavailable (${e.error.code}).", retryable = true, notice = null, streamingFields = emptySet()) }
+                        runCatching { persist() }      // the draft is saved whatever happens
+                    }
                     return null
                 }
             }
@@ -694,10 +722,10 @@ class ConversationOrchestrator(
 
     private fun reset() {
         form = IncidentForm(); incidentId = null; rounds = 0; emergencyFlag = false; question = null; lastAskedFields = emptyList()
-        repromptedNoSpeech = false; emergencyLocationAsked = false; noIncidentCount = 0; spokenReporter = null; lastFromVoice = true; retryAction = null; userTexts.clear(); narrationText = ""; spokeComplete = false; bubbleSeq = 0; editingRef = null
+        repromptedNoSpeech = false; emergencyLocationAsked = false; noIncidentCount = 0; spokenReporter = null; narrationReprompted = false; lastFromVoice = true; retryAction = null; userTexts.clear(); narrationText = ""; spokeComplete = false; bubbleSeq = 0; editingRef = null
         responseStart = null; responseActions.clear(); hintCategory = null; reminderJob?.cancel(); reminderJob = null
         _ui.value = ConversationUiState()
     }
 
-    private companion object { const val CLOSED = "CLOSED" }
+    companion object { private const val CLOSED = "CLOSED"; const val FALLBACK_NOTICE = "Using offline fallback" }
 }
