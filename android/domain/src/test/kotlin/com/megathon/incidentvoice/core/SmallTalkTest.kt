@@ -100,6 +100,17 @@ class SmallTalkTest {
         assertEquals(setOf("location", "occurred_at"), EvidenceGuard.filterUnsaid(f("location" to "Bay 4", "occurred_at" to "at 11 in the morning"), "A forklift hit the rack in Bay 4 at 11 in the morning").keys)
     }
 
+    @Test fun evidenceGuard_lifeAtRiskIsCritical_whateverTheModelSaid() {
+        val text = "fire is spreading, someone is unconscious"
+        val rp = rules.extract(text)["parameters"] as kotlinx.serialization.json.JsonObject
+        val out = EvidenceGuard.filterUnsaid(EvidenceGuard.filter(mapOf("severity" to kotlinx.serialization.json.JsonPrimitive("MEDIUM"), "injuries" to kotlinx.serialization.json.JsonPrimitive("YES")), rp, emergency.scan(text) != null), text)
+        assertEquals("CRITICAL", (out["severity"] as kotlinx.serialization.json.JsonPrimitive).content)
+        // an ordinary report keeps what the speaker said
+        val calm = "water leak near the pantry, it is minor, nobody is hurt"
+        val out2 = EvidenceGuard.filterUnsaid(EvidenceGuard.filter(mapOf("severity" to kotlinx.serialization.json.JsonPrimitive("LOW")), rules.extract(calm)["parameters"] as kotlinx.serialization.json.JsonObject, false), calm)
+        assertEquals("LOW", (out2["severity"] as kotlinx.serialization.json.JsonPrimitive).content)
+    }
+
     // ---- language matching and the reporter's own words
     @Test fun language_followsTheReportersWords() {
         assertEquals("hinglish", LangDetector.ofSpeech("Pantry ke paas paani leak ho raha hai"))

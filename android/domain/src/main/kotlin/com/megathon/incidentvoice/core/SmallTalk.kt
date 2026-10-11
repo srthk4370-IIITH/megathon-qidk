@@ -14,6 +14,7 @@ object EvidenceGuard {
     }
 
     private val timeWords = Regex("\\d|\\b(morning|afternoon|evening|night|noon|midnight|today|yesterday|tonight|ago|just now|minute|minutes|hour|hours|o'clock|am|pm|subah|dopahar|shaam|raat|kal|aaj|abhi|baje|ghanta|ghante|pehle|der)\\b", RegexOption.IGNORE_CASE)
+    private val lifeAtRisk = Regex("\\b(unconscious|not breathing|no pulse|behosh|saans nahi|trapped|phans\\w*|(fire|aag)\\b.{0,30}\\b(spreading|out of control|fail\\w*|badh\\w*))\\b", RegexOption.IGNORE_CASE)
     private val placeStop = setOf("the", "near", "behind", "inside", "outside", "next", "floor", "room", "area", "side", "building", "block", "site", "office", "plant", "and", "for")
 
     /**
@@ -29,6 +30,8 @@ object EvidenceGuard {
             if (!heard) out.remove("location")
         }
         if (out.containsKey("occurred_at") && !timeWords.containsMatchIn(transcript)) out.remove("occurred_at")
+        // life-at-risk wording is CRITICAL whatever the model said: raise, never lower
+        if (lifeAtRisk.containsMatchIn(transcript)) out["severity"] = kotlinx.serialization.json.JsonPrimitive("CRITICAL")
         return out
     }
 }

@@ -24,6 +24,7 @@ Other keys. Include a key ONLY if the transcript states it. Never guess. Never c
 "severity": LOW, MEDIUM, HIGH or CRITICAL, only if the speaker says how serious it is. CRITICAL = life at risk (unconscious, not breathing, fire spreading, trapped).
 "injuries": "YES" if anyone is hurt, "NO" if the speaker says nobody is hurt. "injured_count": number. "persons": [{"name":"..."}] for people named.
 "equipment": machines with their tags. "actions_taken": what has already been done.
+"other_incidents": ["one short sentence"] only when the speaker also reports a second, separate incident somewhere else; describe only the first incident in the other keys.
 No incident at all (greeting, mic test, small talk, joke, question to you): reply exactly {"name":"fill_incident_form","parameters":{"incident_type":"OTHER","description":"NO_INCIDENT","lang":"en"}}.
 
 Format examples (the values are only examples):

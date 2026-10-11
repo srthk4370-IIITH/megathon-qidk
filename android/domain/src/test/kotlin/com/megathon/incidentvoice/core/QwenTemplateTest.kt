@@ -32,7 +32,7 @@ class QwenTemplateTest {
         assertTrue(p.contains("Transcript:\n<<<\nThere was a water leak near Conference Room 2 around 10 AM.\n>>>"))
         assertTrue(p.endsWith("<|im_start|>assistant\n<think>\n\n</think>\n\n"))
         val systemChars = p.substringAfter("<|im_start|>system\n").substringBefore("<|im_end|>").length
-        assertTrue(systemChars < 3700, "system prompt is $systemChars characters (about ${systemChars / 4} tokens); keep it near 800 tokens")
+        assertTrue(systemChars < 3900, "system prompt is $systemChars characters (about ${systemChars / 4} tokens); keep it under about 950 tokens")
         for (other in listOf(qwen.patch(Fx.form("incident_type" to "WATER"), "Was anyone hurt?", listOf("injuries"), "no"), qwen.repair(Tools.FILL, "{broken"), qwen.warmup()))
             assertTrue(other.contains("<|im_start|>user\n") && other.endsWith("</think>\n\n") && !other.contains("start_header_id"))
         // both examples in the prompt are themselves valid tool calls
