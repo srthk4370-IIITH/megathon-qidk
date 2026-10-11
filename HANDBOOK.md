@@ -332,3 +332,17 @@ Changed for this task: case 1 (the rules engine now takes over automatically; be
 - Small talk / mic tests / noise now extract to `{"incident_type":"OTHER","description":"NO_INCIDENT","lang":..}` (prompt rule in base + ft prompts; parser/validator/scorer aware; eval `eval/smalltalk_cases.jsonl`); App must not draft on it (CHANGE.md).
 - FT data now has +200 NO_INCIDENT (70/30 en/hinglish) + 150 mixed samples, but the v2 Kaggle continuation run was CANCELLED by user decision; v1 adapter ships, small talk relies on the prompt rule. v2 tooling (continue-from-adapter in train_lora.py, versioned fetch) kept for later.
 - Supervisor: ft_export waits until ft_kaggle_fetch is done/failed (already done → v1 proceeds); optional `~/iv/state/ft_v2_deadline` guard (not set).
+
+## One-tap entry points and wake word: re-check after the restyle (App branch, 2026-10-11 06:45)
+
+Checked on the QIDK with the current build, starting from the launcher each time:
+
+| Entry point | App not running | App in the background | Result |
+|---|---|---|---|
+| Quick Settings tile "Report incident" | opens and is listening after the cold start | opens listening | works |
+| App shortcut (long-press the icon → Report incident), same intent as the widget | opens listening | opens listening | works |
+| Home-screen widget (one REPORT button) | one widget is placed on the board; its button sends the same intent as the shortcut | | not tapped by hand in this check |
+
+If a report is already in progress, a quick-launch request does not interrupt it (by design). No fix was needed.
+
+**"Hey Qalam"** was already implemented before this check (Extra 2, Level B above) and is still running: the foreground service is up and Settings shows "Listening · grammar on sound-alikes". Its hit rate could **not** be re-measured in this session because the test relies on the laptop speaker, which was muted; the last measurement (about 3 of 4 with a synthetic voice) predates the stricter rule for the name said without "hey". It needs a few tries by a person before the demo.
