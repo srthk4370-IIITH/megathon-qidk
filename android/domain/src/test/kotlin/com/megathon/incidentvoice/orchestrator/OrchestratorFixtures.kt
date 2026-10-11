@@ -23,7 +23,7 @@ class InMemoryRepo(private val now: () -> Long = { Fx.now.toEpochMilli() }) : In
     override suspend fun setRecommendationDone(recId: Long, done: Boolean) {}
     override suspend fun submit(id: String, actor: Actor, atMs: Long?): String {
         val ref = "INC-20261010-" + (store.values.count { it.meta.refNo != null } + 1).toString().padStart(4, '0')
-        store[id]!!.meta = store[id]!!.meta.copy(status = IncidentStatus.SUBMITTED, refNo = ref); return ref
+        store[id]!!.meta = store[id]!!.meta.copy(status = IncidentStatus.SUBMITTED, refNo = ref, submittedAt = atMs ?: now()); return ref
     }
     override suspend fun setStatus(id: String, status: IncidentStatus, actor: Actor) {}
     override suspend fun delete(id: String, actor: Actor) { store.remove(id) }
@@ -35,6 +35,9 @@ class InMemoryRepo(private val now: () -> Long = { Fx.now.toEpochMilli() }) : In
     override suspend fun latestDraft(maxAgeMs: Long): String? = null
     override suspend fun purgeOldDrafts(maxAgeMs: Long): Int = 0
     override suspend fun countAll(): Int = store.size
+    override suspend fun recentSubmitted(sinceMs: Long, limit: Int): List<IncidentDetail> = store.values.filter { it.meta.status == IncidentStatus.SUBMITTED }.mapNotNull { load(it.meta.id) }
+    override suspend fun linkWitness(childId: String, parentId: String, actor: Actor) { store[childId]!!.meta = store[childId]!!.meta.copy(parentId = parentId) }
+    override suspend fun caseOf(id: String): List<IncidentDetail> { val root = store[id]?.meta?.let { it.parentId ?: it.id } ?: return emptyList(); return store.values.filter { it.meta.id == root || it.meta.parentId == root }.mapNotNull { load(it.meta.id) } }
 }
 
 class FakeTts(ready: Boolean = true) : TtsSpeaker {

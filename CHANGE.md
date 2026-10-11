@@ -92,3 +92,11 @@ Only two branches: **App** and **ML**. No separate web/dashboard branch.
 - **Database v3 (not in PRD Appendix E):** `ALTER TABLE incidents ADD COLUMN response_started_at INTEGER` and new table `response_actions(id INTEGER PK AUTOINCREMENT, incident_id TEXT NOT NULL, step_id TEXT NOT NULL, label TEXT NOT NULL, done_at INTEGER NOT NULL, source TEXT NOT NULL)` with index `idx_response_incident(incident_id)`. Room migration 2→3; ran on the board's existing data.
 - **Behaviour:** see HANDBOOK "Extra optional work → Extra 1". Steps come only from `config/sop.json` (`immediate: true`) plus a fixed "Call ERT". Switch off with `features.response_clock = false`.
 - Who is affected: nobody on the ML side; noted for whoever edits `app_config.json` or the schema next.
+
+## 2026-10-11 05:55 — App branch — Extras 2 and 3: wake word, multi-witness merging (schema change)
+- **Database v4 (not in PRD Appendix E):** `ALTER TABLE incidents ADD COLUMN parent_incident_id TEXT` + `CREATE INDEX idx_incidents_parent ON incidents(parent_incident_id)`. Room migration 3→4; existing reports are kept (checked on the board). Null = the report stands alone; otherwise the id of the first report of the case it was linked to as a witness account. No foreign key: deleting the first report sets the column back to null on the others.
+- **Audit log, new `action` values:** `WITNESS_LINK`, `WITNESS_ADDED`, `MERGE_RESOLVE` (field = form key, new_value = the value a supervisor trusts).
+- **`IncidentRepository` (app-side interface), additive with defaults:** `recentSubmitted`, `linkWitness`, `caseOf`, `resolveConflict`, `conflictResolutions`; `IncidentListItem` gained `accounts`, `conflicts`, `parentRef`.
+- **APK:** + Vosk (`com.alphacephei:vosk-android:0.3.47`, JNA 5.13.0) and the model `assets/model-en-in` (about 54 MB). New permissions: `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_MICROPHONE`, `POST_NOTIFICATIONS`, `SYSTEM_ALERT_WINDOW`. Still no `INTERNET`.
+- **Microphone:** the wake-word listener and the report flow never hold it together; the report flow makes the listener release first. If ML code ever records audio itself, it must do the same (`AppContainer.wake.release()`).
+- Who is affected: nobody on the ML side. Switch off with `features.wake_word` / `features.multi_witness` in `config/app_config.json`.

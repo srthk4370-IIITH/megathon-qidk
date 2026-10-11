@@ -28,8 +28,8 @@ class WakeWordTest {
     }
     @Test fun grammarMode_nameAloneCounts_butNotInsideASentence() {
         val m = WakeMatcher(cfg.wakeVariants, cfg.wakeMinConf)
-        assertEquals("hey column", m.matchAlone("column", 0.8)); assertEquals("hey column", m.matchAlone("hey column", 0.8))
-        assertNull(m.matchAlone("column", 0.5)); assertNull(m.matchAlone("[unk] column [unk] [unk]", 0.9)); assertNull(m.matchAlone("hey", 0.9)); assertNull(m.matchAlone("a", 0.9))
+        assertEquals("hey column", m.matchAlone("column", 0.97)); assertEquals("hey column", m.matchAlone("hey column", 0.8))
+        assertNull(m.matchAlone("column", 0.83)); assertNull(m.matchAlone("column", null)); assertNull(m.matchAlone("[unk] column [unk] [unk]", 0.9)); assertNull(m.matchAlone("hey", 0.9)); assertNull(m.matchAlone("a", 0.9))
         assertNull(m.matchAlone("[unk] hey column", 0.9))
     }
     @Test fun strategy_grammarOnlyWhenTheNameIsInTheVocabulary() {

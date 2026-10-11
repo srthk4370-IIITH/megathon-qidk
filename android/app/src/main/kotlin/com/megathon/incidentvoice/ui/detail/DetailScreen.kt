@@ -14,6 +14,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.megathon.incidentvoice.core.FieldStatus
+import com.megathon.incidentvoice.core.MergeEngine
+import com.megathon.incidentvoice.core.MergedCase
+import com.megathon.incidentvoice.core.WitnessAccount
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import com.megathon.incidentvoice.core.Taxonomy
 import com.megathon.incidentvoice.data.IncidentDetail
 import com.megathon.incidentvoice.data.IncidentRepository
@@ -34,6 +41,12 @@ fun DetailScreen(
     val similarHits by produceState(initialValue = emptyList<com.megathon.incidentvoice.ask.AskHit>(), id) { value = similar(id) }
     val detail by remember(id) { repo.observeDetail(id) }.collectAsState(initial = null)
     val scope = rememberCoroutineScope()
+    // Extra 3: the witness accounts of this case, merged; recomputed when the report or a resolution changes
+    var caseTick by remember { mutableIntStateOf(0) }
+    val case by produceState<MergedCase?>(null, id, detail, caseTick) {
+        val all = repo.caseOf(id)
+        value = if (all.size < 2) null else MergeEngine.merge(all.map { WitnessAccount.of(it.meta, it.form) }, repo.conflictResolutions(all.first().meta.id)) { tx.category(it)?.label ?: it }
+    }
     var confirmDelete by remember { mutableStateOf(false) }
 
     // nested inside the app Scaffold, which already applies the system-bar insets
@@ -50,7 +63,9 @@ fun DetailScreen(
     }) { pad ->
         val d = detail
         if (d == null) { Box(Modifier.padding(pad).fillMaxSize(), Alignment.Center) { CircularProgressIndicator() }; return@Scaffold }
-        DetailBody(d, tx, disclaimer, Modifier.padding(pad), similarHits, onOpen) { recId, done -> scope.launch { repo.setRecommendationDone(recId, done) } }
+        DetailBody(d, tx, disclaimer, Modifier.padding(pad), similarHits, onOpen, case, { key, value ->
+            scope.launch { case?.accounts?.firstOrNull()?.let { root -> repo.resolveConflict(root.id, key, value, com.megathon.incidentvoice.data.Actor.User(d.meta.reporter.empId.ifBlank { "supervisor" })); caseTick++ } }
+        }) { recId, done -> scope.launch { repo.setRecommendationDone(recId, done) } }
     }
 
     if (confirmDelete) AlertDialog(
@@ -62,7 +77,7 @@ fun DetailScreen(
 }
 
 @Composable
-private fun DetailBody(d: IncidentDetail, tx: Taxonomy, disclaimer: String, modifier: Modifier, similarHits: List<com.megathon.incidentvoice.ask.AskHit>, onOpen: (String) -> Unit, onTick: (Long, Boolean) -> Unit) {
+private fun DetailBody(d: IncidentDetail, tx: Taxonomy, disclaimer: String, modifier: Modifier, similarHits: List<com.megathon.incidentvoice.ask.AskHit>, onOpen: (String) -> Unit, case: MergedCase?, onTrust: (String, String) -> Unit, onTick: (Long, Boolean) -> Unit) {
     val f = d.form
     LazyColumn(modifier.fillMaxSize().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(vertical = 12.dp)) {
         item {
@@ -75,6 +90,7 @@ private fun DetailBody(d: IncidentDetail, tx: Taxonomy, disclaimer: String, modi
             Spacer(Modifier.height(4.dp))
             Text(f.str("description").orEmpty())
         }
+        if (case != null) item(key = "case") { WitnessTable(case, d.meta.id, onOpen, onTrust) }
         item { SectionTitle("Details") }
         items(FormDisplay.rows(f, tx), key = { it.key }) { r ->
             Row(Modifier.fillMaxWidth()) {
@@ -116,6 +132,52 @@ private fun DetailBody(d: IncidentDetail, tx: Taxonomy, disclaimer: String, modi
             SectionTitle("Reporter")
             Text("${d.meta.reporter.name.ifBlank { "—" }} ${d.meta.reporter.empId}".trim() + " · reported ${fmtDateTime(d.meta.reportedAt)}")
         }
+    }
+}
+
+/** Extra 3: Field × Witness table. A conflicting row is highlighted; tapping one of its cells marks that value as trusted (audit-logged). */
+@Composable
+private fun WitnessTable(case: MergedCase, currentId: String, onOpen: (String) -> Unit, onTrust: (String, String) -> Unit) {
+    var showSummary by remember { mutableStateOf(false) }
+    val open = case.openConflicts
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        SectionTitle("Witness accounts · ${case.accounts.size} accounts · $open conflict${if (open != 1) "s" else ""}" + (if (case.conflicts > open) " (${case.conflicts - open} resolved)" else ""))
+        Text("Each column is one person's report. Rows in amber disagree: tap the value you trust.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        val labelW = 84.dp; val cellW = 112.dp
+        Column(Modifier.horizontalScroll(rememberScrollState())) {
+            Row {
+                Text("Field", Modifier.width(labelW).padding(4.dp), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                case.accounts.forEachIndexed { n, a ->
+                    Column(Modifier.width(cellW).clickable(enabled = a.id != currentId) { onOpen(a.id) }.padding(4.dp)) {
+                        Text(a.reporter.ifBlank { "Witness ${n + 1}" }, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, maxLines = 1)
+                        Text((a.refNo?.takeLast(9) ?: "") + if (a.id == currentId) " · this" else "", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                    }
+                }
+                Text("Merged", Modifier.width(cellW).padding(4.dp), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+            }
+            case.fields.forEach { f ->
+                HorizontalDivider()
+                val unresolved = f.conflict && f.resolved == null
+                Row(Modifier.background(if (unresolved) Amber.copy(alpha = 0.22f) else androidx.compose.ui.graphics.Color.Transparent)) {
+                    Text(f.label + if (f.conflict) " ⚠" else "", Modifier.width(labelW).padding(4.dp), style = MaterialTheme.typography.labelMedium)
+                    f.values.forEach { v ->
+                        val trusted = f.resolved != null && v == f.resolved
+                        Text(
+                            (if (trusted) "✓ " else "") + v,
+                            Modifier.width(cellW).clickable(enabled = f.conflict && v != MergeEngine.NONE) { onTrust(f.key, v) }.padding(4.dp),
+                            style = MaterialTheme.typography.bodySmall, fontWeight = if (trusted || unresolved) FontWeight.Bold else FontWeight.Normal,
+                            maxLines = if (f.key == "description") 6 else 3, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                        )
+                    }
+                    Text(
+                        if (f.key == "description") "${case.accounts.size} accounts, kept side by side" else f.merged + (if (f.resolved != null) "  (trusted)" else ""),
+                        Modifier.width(cellW).padding(4.dp), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold,
+                    )
+                }
+            }
+        }
+        TextButton({ showSummary = !showSummary }) { Text(if (showSummary) "Hide summary" else "Summarise accounts") }
+        if (showSummary) Text(MergeEngine.summary(case), style = MaterialTheme.typography.bodyMedium)
     }
 }
 

@@ -14,7 +14,7 @@ import com.megathon.incidentvoice.data.entity.*
         IncidentEntity::class, SecondaryTypeEntity::class, PersonEntity::class, EquipmentEntity::class, ActionTakenEntity::class,
         RecommendationEntity::class, TurnEntity::class, AuditEntity::class, IncidentSearchEntity::class, IncidentVectorEntity::class, ResponseActionEntity::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = true,
 )
 abstract class IncidentDb : RoomDatabase() {
@@ -26,7 +26,7 @@ abstract class IncidentDb : RoomDatabase() {
                 .addCallback(object : Callback() {
                     override fun onOpen(db: SupportSQLiteDatabase) { db.execSQL("PRAGMA foreign_keys = ON") }
                 })
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                 .build()
 
         /** v2 adds the vector index table (O-2). Existing reports are kept; their vectors are computed on next start. */
@@ -42,6 +42,14 @@ abstract class IncidentDb : RoomDatabase() {
                 db.execSQL("ALTER TABLE `incidents` ADD COLUMN `response_started_at` INTEGER")
                 db.execSQL("CREATE TABLE IF NOT EXISTS `response_actions` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `incident_id` TEXT NOT NULL, `step_id` TEXT NOT NULL, `label` TEXT NOT NULL, `done_at` INTEGER NOT NULL, `source` TEXT NOT NULL)")
                 db.execSQL("CREATE INDEX IF NOT EXISTS `idx_response_incident` ON `response_actions` (`incident_id`)")
+            }
+        }
+
+        /** v4 (Extra 3, multi-witness merging): `incidents.parent_incident_id`. Not in PRD Appendix E. */
+        val MIGRATION_3_4 = object : androidx.room.migration.Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `incidents` ADD COLUMN `parent_incident_id` TEXT")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `idx_incidents_parent` ON `incidents` (`parent_incident_id`)")
             }
         }
 

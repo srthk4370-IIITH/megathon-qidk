@@ -241,6 +241,20 @@ class OrchestratorTest {
         assertEquals(emptyList(), r.o.ui.value.otherIncidents)
     }
 
+    /** Extra 3: a second report of the same event is offered as a witness account; nothing is linked until the reporter says so. */
+    @Test fun secondReportOfSameEvent_isProposedAsWitnessAccount_andLinkedOnlyOnRequest() = runTest {
+        val r = rig(*(MockInferenceEngine.DEMO_UTTERANCES + MockInferenceEngine.DEMO_UTTERANCES).toTypedArray())
+        r.o.startNew(); r.o.onMicTapped(); advanceUntilIdle(); r.o.onSubmit(); advanceUntilIdle()
+        assertNull(r.o.ui.value.duplicate)                                  // the first report has nothing to match
+        r.o.onReportAnother(); r.o.onMicTapped(); advanceUntilIdle(); r.o.onSubmit(); advanceUntilIdle()
+        val ids = r.repo.store.keys.toList()
+        val d = r.o.ui.value.duplicate
+        assertNotNull(d); assertEquals(ids[0], d!!.parentId); assertTrue(d.question.startsWith("This looks like the same ") && d.question.contains(r.repo.store[ids[0]]!!.meta.refNo!!), d.question)
+        assertNull(r.repo.store[ids[1]]!!.meta.parentId)                    // never automatic
+        r.o.onLinkWitness(); advanceUntilIdle()
+        assertEquals(ids[0], r.repo.store[ids[1]]!!.meta.parentId); assertNull(r.o.ui.value.duplicate); assertNotNull(r.o.ui.value.linkedTo)
+    }
+
     @Test fun editSubmittedIncident_keepsReference_andSavesChanges() = runTest {
         val r = rig()
         r.o.startNew(); r.o.onMicTapped(); advanceUntilIdle(); r.o.onSubmit(); advanceUntilIdle()
