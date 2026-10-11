@@ -26,6 +26,18 @@ removes them).
 Optional: when the folder is served over https, `manifest.json` and `sw.js` (cache-first) make the page installable
 and keep it available after the first visit. The single file does not need them.
 
+## Put it on the web (Cloudflare Pages or any static host)
+
+```
+bash web/make_deploy.sh        # writes web/deploy/: index.html (the reader), manifest.json, sw.js, icon.svg, _headers
+```
+
+Upload the **`web/deploy`** folder as it is: Cloudflare dashboard → Workers & Pages → Create → Pages → "Upload assets" →
+drop the folder → Deploy. There is no build command and no framework preset; the output directory is the folder itself.
+With Wrangler: `npx wrangler pages deploy web/deploy --project-name qalam-reader`. The site root opens the reader.
+Served over https the live camera works on phones and the page stays available offline after the first visit. The
+page makes no network request of its own; hosting it only makes it easy to open.
+
 ## Payload format (the contract with the app)
 
 ```

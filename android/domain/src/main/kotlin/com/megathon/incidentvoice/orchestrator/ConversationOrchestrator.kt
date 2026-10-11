@@ -439,7 +439,7 @@ class ConversationOrchestrator(
         var call = parseWithRepair(gen.text, Tools.FILL, null)
         // the model itself found nothing to file (no type, no description)
         // injuries / severity from the model count only when the words say so; otherwise the app asks
-        call = call?.let { c -> c.copy(fields = EvidenceGuard.filter(c.fields, (rules.extract(text)["parameters"] as? kotlinx.serialization.json.JsonObject) ?: kotlinx.serialization.json.JsonObject(emptyMap()), emergencyDetector.scan(text) != null).let { EvidenceGuard.filterUnsaid(it, text) }) }
+        call = call?.let { c -> c.copy(fields = EvidenceGuard.filter(c.fields, (rules.extract(text)["parameters"] as? kotlinx.serialization.json.JsonObject) ?: kotlinx.serialization.json.JsonObject(emptyMap()), emergencyDetector.scan(text) != null).let { EvidenceGuard.filterUnsaid(it, text) }.let { EvidenceGuard.category(it, rules.categoryHint(text)) }) }
         val said = (call?.fields?.get("description") as? JsonPrimitive)?.content
         val nothing = call != null && (SmallTalk.isSentinel(said) || (call.fields["incident_type"] == null && said == null && !hasIncidentCue(text)))
         if (nothing) { form = IncidentForm(lang = form.lang); update { it.copy(streamingFields = emptySet(), form = form) }; noIncident(text); return }

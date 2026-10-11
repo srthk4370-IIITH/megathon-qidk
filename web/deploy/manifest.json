@@ -1,0 +1,13 @@
+{
+  "name": "Qalam Reader",
+  "short_name": "Qalam Reader",
+  "description": "Reads the offline QR code of a Qalam incident report and makes a PDF. Works with no network.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#F6F7F9",
+  "theme_color": "#E5484D",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}
