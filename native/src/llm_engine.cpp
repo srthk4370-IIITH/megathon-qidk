@@ -5,6 +5,7 @@
 #include <fstream>
 #include <sstream>
 #include <stdexcept>
+#include <thread>
 
 #include "GenieCommon.h"
 #include "GenieDialog.h"
@@ -65,7 +66,18 @@ struct QueryCtx {
     int max_tokens = 0;
     std::atomic<bool>* abort;
     bool hit_max = false;
+    void* dialog = nullptr;     // for an early stop signalled from the callback
+    int depth = 0;              // JSON brace depth of the emitted text (strings skipped)
+    bool in_str = false, esc = false, started = false;
+    std::atomic<bool> stopped{false};  // we asked Genie to stop (JSON closed or token cap): not an error
 };
+
+// Ask Genie to stop from another thread (signalling inside the token callback could deadlock).
+void request_stop(QueryCtx* q) {
+    if (q->stopped.exchange(true) || !q->dialog) return;
+    void* d = q->dialog;
+    std::thread([d] { GenieDialog_signal(static_cast<GenieDialog_Handle_t>(d), GENIE_DIALOG_ACTION_ABORT); }).detach();
+}
 
 void on_piece(const char* response, const GenieDialog_SentenceCode_t code, const void* user) {
     auto* q = const_cast<QueryCtx*>(static_cast<const QueryCtx*>(user));
@@ -74,12 +86,23 @@ void on_piece(const char* response, const GenieDialog_SentenceCode_t code, const
     if (piece.empty()) return;
     if (q->ttft_ms < 0) q->ttft_ms = ms_since(q->t0);
     q->pieces++;
-    if (q->pieces > q->max_tokens || q->abort->load()) {  // soft cap: ignore beyond cap
+    if (q->stopped.load()) return;
+    if (q->pieces > q->max_tokens || q->abort->load()) {  // cap reached: actually stop generating (was: ignore only)
         q->hit_max = q->pieces > q->max_tokens;
+        request_stop(q);
         return;
     }
     q->text->append(piece);
     if (q->on_token && *q->on_token) (*q->on_token)(piece);
+    // Tool calls are one JSON object: stop the moment it closes (models may keep talking until the cap).
+    static const bool early = !(getenv("IV_JSON_EARLY_STOP") && getenv("IV_JSON_EARLY_STOP")[0] == '0');
+    if (!early) return;
+    for (char ch : piece) {
+        if (q->in_str) { if (q->esc) q->esc = false; else if (ch == '\\') q->esc = true; else if (ch == '"') q->in_str = false; continue; }
+        if (ch == '"' && q->started) q->in_str = true;
+        else if (ch == '{') { q->depth++; q->started = true; }
+        else if (ch == '}' && q->started && --q->depth == 0) { request_stop(q); return; }
+    }
 }
 
 }  // namespace
@@ -159,6 +182,7 @@ GenStats LlmEngine::generate(const std::string& prompt, const std::string& task,
 
     std::string text;
     QueryCtx q{&on_token, &text, Clock::now(), -1, 0, max_tokens, &abort_, false};
+    q.dialog = const_cast<void*>(static_cast<const void*>(d));
     Genie_Status_t st = GenieDialog_query(d, prompt.c_str(), GENIE_DIALOG_SENTENCE_COMPLETE, on_piece, &q);
     gs.wall_ms = ms_since(q.t0);
     gs.tokens_out = q.pieces;
@@ -166,7 +190,7 @@ GenStats LlmEngine::generate(const std::string& prompt, const std::string& task,
     const double dec_ms = gs.wall_ms - gs.ttft_ms;
     gs.decode_tps = (q.pieces > 1 && dec_ms > 0) ? (q.pieces - 1) * 1000.0 / dec_ms : 0;
     gs.aborted = abort_.load();
-    if (st != GENIE_STATUS_SUCCESS && !gs.aborted) {
+    if (st != GENIE_STATUS_SUCCESS && !gs.aborted && !q.stopped.load()) {
         gs.stop = "ERROR";
         GenieDialog_reset(d);
         throw std::runtime_error("IV-E301 GenieDialog_query status=" + std::to_string(st));

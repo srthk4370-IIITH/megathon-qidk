@@ -132,3 +132,8 @@ Only two branches: **App** and **ML**. No separate web/dashboard branch.
 - **Fixed now on the board** (no rebuild): `poll` → `false` in `models/llama/genie_config.json` (backup `genie_config.poll_true.bak`). App idle CPU 11 %, ASR with the app running **2.6 s** (11 s clip).
 - **Permanent:** native loader forces `poll:false` for any bundle (`IV_GENIE_POLL=1` restores); `libiv_native.so` rebuilt in `android/engine/src/main/jniLibs`. `apply.py` also patches the board's config on every run.
 - **Action (App):** rebuild + `install -r` from main (or just `python apply.py`). If you re-push a Genie bundle, keep `poll:false`.
+
+## 2026-10-11 10:25 — ML (Saarthak) — LLM: real stop at max_tokens + stop when the tool-call JSON closes
+- Measured in the app after the poll fix: **ASR 1.5–1.7 s per utterance** (was 22 s), PATCH 1.7 s (33 tok), but **EXTRACT 16.2 s = 320 tokens = the max_tokens cap**.
+- Native bug: at the cap the token callback only *ignored* further tokens; Genie kept generating. Now it signals Genie to stop. Also stops the moment the top-level JSON object closes (`IV_JSON_EARLY_STOP=0` disables). Verified on the QIDK with the Qwen bundle: 23.6 tok/s decode, TTFT 71 ms, 73-token tool call in 3.1 s.
+- **Action (App):** rebuild + `install -r` (new `libiv_native.so` in jniLibs). Please log the raw EXTRACT output once (logcat) — if Qwen really writes ~320 tokens for the form, trim the extract prompt / omit-empty-fields rule (fewer fields emitted = proportionally faster: ~20 tok/s).
