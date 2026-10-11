@@ -494,3 +494,15 @@ Rules on the local database, no model. Every threshold is in `core/HotspotRules.
 2. F2: seed demo data, report a water leak at Conference Room 2 by voice, confirm the card and the dashboard section.
 3. F3: photograph the board's QR screen with a phone and decode it in `reader.html`; try the live camera scan.
 4. Rebase on the latest main (the Qwen commits touch `ConversationOrchestrator.kt`, which these features also edit in a few lines), rerun the tests, merge what passes.
+
+
+## Merge of the feature branch, system-level eval and the QR ↔ web check (App branch, 2026-10-11 09:30)
+
+- **Merged:** evidence view ("tap a field, its words light up"), repeat incidents and hotspots, offline QR handoff, and the Qalam Reader web page (`web/`). Database is now version 6; the board's existing database (version 4, 89 rows) migrated on first start with nothing lost.
+- **One check per feature on the QIDK, final build:** app starts after the migration with no crash · Dashboard shows the Hotspots block ("Conference Room 2 · 2 reports in 30 days · mostly water leak") · report detail shows the transcript with "Tap a field to see its evidence" · "Share offline" shows a full-screen QR code (632 bytes for the report tried).
+- **QR and web reader together:** a screenshot of the QR code on the board's screen was read with the web page's own decoder (jsQR + `src/decode.js`, script `web/test/device_shot.mjs`): prefix `QALAM1:`, decoded, **integrity check passed**, all fields of the report present. The page's own tests also pass (decode of the samples written by the Kotlin encoder, QR-image round trip, headless-browser run with PDF download). Not done: scanning the board's screen with a phone camera through the hosted page.
+- **Engine name in the QR payload** now says what is actually running ("Qwen3-4B on Hexagon NPU + Whisper small (CPU)", or the rules engine), instead of the native library's default model name.
+- **Hosting the reader:** `bash web/make_deploy.sh` writes `web/deploy/` (index.html, manifest.json, sw.js, icon.svg, _headers); upload that folder to Cloudflare Pages as static assets, no build step. Details in `web/README.md`.
+- **Category check:** when the model answers OTHER or no category and the keyword rules recognise one, the rules' category is used; a category the model chose is never overruled.
+- **System-level eval:** `eval/RESULTS.md` section 0. On the 108 held-out cases with the improved prompt: incident type 95.4 % for the whole system, the same as rules-only and above the raw model (90.7 %); field F1 0.53 for the system against 0.71 for rules-only, on sentences the rules were tuned on. Free-form human-written cases were not available and were not run.
+- **Seen twice, not explained:** the first Gradle run after a source change ended with "BUILD FAILED" without a compiler or test error in the filtered output, and the immediate re-run passed (440 of 440 tests). The APK from the passing run is the one installed.
