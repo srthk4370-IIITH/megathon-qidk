@@ -25,6 +25,8 @@ tmp = a.out + ".tmp"
 shutil.rmtree(tmp, ignore_errors=True)
 m = AutoModelForCausalLM.from_pretrained(a.base, torch_dtype=torch.float16, low_cpu_mem_usage=True)  # no device_map: peft would re-dispatch + disk-offload
 emb0 = m.get_input_embeddings().weight[:4, :8].clone()
+if hasattr(m, "hf_device_map"):
+    del m.hf_device_map  # else peft 0.13 re-dispatches with disk offload
 m = PeftModel.from_pretrained(m, a.adapter, torch_device="cpu").merge_and_unload()  # CPU only (6 GB GPU would force offload)
 assert torch.equal(emb0, m.get_input_embeddings().weight[:4, :8]), "embeddings changed — adapter must not touch embed/lm_head"
 assert m.lm_head.weight.data_ptr() == m.get_input_embeddings().weight.data_ptr(), "lm_head no longer tied"

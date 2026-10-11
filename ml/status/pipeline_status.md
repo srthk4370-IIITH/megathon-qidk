@@ -118,3 +118,12 @@
 - 11 07:29 [ft_merge] merge failed — retry next tick
 - 11 07:29 [ft_merge] merge start
 - 11 07:32 [ft_merge] merge start
+- 11 07:37 [ft_merge] merge failed — retry next tick
+- 11 07:39 [ft_merge] merge start
+- 11 07:39 [ft_merge] merge failed — retry next tick
+- 11 07:40 [ft_merge] merge start
+- 11 07:40 [ft_merge] merge failed — retry next tick
+- 11 07:40 [ft_merge] merge start
+- 11 07:40 [ft_merge] merge failed — retry next tick
+- 11 07:54 [ft_merge] merged: {"tie": true, "layers": true, "hidden": true, "heads": true, "rope": true, "chat_template": true, "no_lm_head": true}
+- 11 07:54 [ft_merge] DONE
