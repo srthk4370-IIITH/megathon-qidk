@@ -67,23 +67,41 @@ class LlmEvalTool {
     private val guardRules = RuleBasedLlm(Fx.tx, Fx.registry)
     private val guardEmergency = EmergencyDetector(Fx.tx)
 
+    /**
+     * The app's own post-processing of one model answer, same code and same order as `ConversationOrchestrator.extract`:
+     * spoken self-correction, tool-call parser (rules engine if the answer cannot be parsed), evidence checks, category
+     * check, then the merger (normalisation, grounding, location and time resolution). Returns the form's filled values.
+     */
+    private fun systemFields(c: JsonObject, raw: String?, now: java.time.Instant): Pair<Boolean, Map<String, JsonElement>> {
+        val spoken = c["transcript"]!!.jsonPrimitive.content
+        val text = SelfCorrection.apply(spoken)
+        var call = raw?.let { (Fx.parser.parse(it, Tools.FILL) as? ParseOutcome.Ok)?.call }
+        val valid = call != null
+        if (call == null) call = (Fx.parser.parse(guardRules.extract(text).toString(), Tools.FILL) as? ParseOutcome.Ok)?.call
+        if (call == null) return valid to emptyMap()
+        val rp = (guardRules.extract(text)["parameters"] as? JsonObject) ?: JsonObject(emptyMap())
+        val f = EvidenceGuard.category(EvidenceGuard.filterUnsaid(EvidenceGuard.filter(call.fields, rp, guardEmergency.scan(text) != null), text), guardRules.categoryHint(text))
+        val form = Fx.merger.merge(IncidentForm(), call.copy(fields = f), FieldSource.LLM_EXTRACT, null, spoken, now).form
+        return valid to form.fields.filterValues { it.value != null && it.status != FieldStatus.MISSING && it.status != FieldStatus.UNKNOWN }.mapValues { it.value.value!! }
+    }
+
     /** One case, one engine → every number the report needs. Description is scored on its own, never inside the field counts. */
-    private fun detail(c: JsonObject, raw: String?, stats: JsonObject?): JsonObject {
+    private fun detail(c: JsonObject, raw: String?, stats: JsonObject?, system: Boolean = false): JsonObject {
         val gold = c["gold"]!!.jsonObject; val now = OffsetDateTime.parse(c["now"]!!.jsonPrimitive.content).toInstant()
-        val call = raw?.let { (Fx.parser.parse(it, Tools.FILL) as? ParseOutcome.Ok)?.call }
-        val tr0 = c["transcript"]!!.jsonPrimitive.content
-        // same evidence check the app applies to model output (IV_EVAL_GUARD=0 scores the raw parser output instead)
-        val got = (call?.fields ?: emptyMap()).let { f -> if (System.getenv("IV_EVAL_GUARD") == "0") f else EvidenceGuard.filter(f, (guardRules.extract(tr0)["parameters"] as? JsonObject) ?: JsonObject(emptyMap()), guardEmergency.scan(tr0) != null).let { EvidenceGuard.filterUnsaid(it, tr0) } }
+        val parsed = raw?.let { (Fx.parser.parse(it, Tools.FILL) as? ParseOutcome.Ok)?.call }
+        val sys = if (system) systemFields(c, raw, now) else null
+        val got: Map<String, JsonElement> = sys?.second ?: (parsed?.fields ?: emptyMap())
+        val validCall = sys?.first ?: (parsed != null)
         val want = flat(gold)
         var tp = 0; val wrong = ArrayList<String>(); val missing = ArrayList<String>(); val madeUp = ArrayList<String>()
-        for ((k, w) in want) { val g = got[k]; if (g == null) missing += k else if (same(k, w, g, now)) tp++ else wrong += "$k: expected ${str2(w)}, got ${str2(g)}" }
+        for ((k, w) in want) { val g = got[k]; if (g == null) missing += k else if (if (system && k == "occurred_at") sameResolved(w, g, now) else same(k, w, g, now)) tp++ else wrong += "$k: expected ${str2(w)}, got ${str2(g)}" }
         val predicted = got.keys.filter { it !in skip }
         for (k in predicted) if (k !in want) madeUp += "$k=${str2(got[k]!!)}"
         val gd = (gold["description"] as? JsonPrimitive)?.content; val pd = (got["description"] as? JsonPrimitive)?.content
         val tr = c["transcript"]!!.jsonPrimitive.content
         return JsonObject(mapOf(
             "id" to c["id"]!!, "lang" to c["lang"]!!, "category" to gold["incident_type"]!!, "transcript" to JsonPrimitive(tr),
-            "valid" to JsonPrimitive(call != null), "pred_type" to (got["incident_type"] ?: JsonNull),
+            "valid" to JsonPrimitive(validCall), "pred_type" to (got["incident_type"] ?: JsonNull),
             "expected" to JsonPrimitive(want.size), "predicted" to JsonPrimitive(predicted.size), "tp" to JsonPrimitive(tp),
             "wrong" to JsonArray(wrong.map { JsonPrimitive(it) }), "missing" to JsonArray(missing.map { JsonPrimitive(it) }), "made_up" to JsonArray(madeUp.map { JsonPrimitive(it) }),
             "desc_present" to JsonPrimitive(!pd.isNullOrBlank()), "desc_expected" to JsonPrimitive(gd != null),
@@ -92,6 +110,12 @@ class LlmEvalTool {
             "raw" to JsonPrimitive(raw.orEmpty().take(600)), "stats" to (stats ?: JsonNull),
         ))
     }
+    /** The merged form stores the time as a resolved instant; the reference is a phrase. */
+    private fun sameResolved(want: JsonElement, got: JsonElement, now: java.time.Instant): Boolean {
+        val g = (got as? JsonPrimitive)?.longOrNull ?: return sameTime(want, got, now)
+        val b = Fx.times.resolve(str(want), now)
+        return kotlin.math.abs(g - b.instant.toEpochMilli()) <= 15 * 60_000
+    }
     private fun str2(e: JsonElement) = if (e is JsonPrimitive) e.content else e.toString()
 
     @Test fun score() {
@@ -99,10 +123,12 @@ class LlmEvalTool {
         val out = File(System.getenv("IV_EVAL_DETAIL") ?: error("IV_EVAL_DETAIL not set"))
         val outs = File(file).readLines().filter { it.isNotBlank() }.map { Json.parseToJsonElement(it).jsonObject }.associateBy { it["id"]!!.jsonPrimitive.content }
         val rb = RuleBasedLlm(Fx.tx, Fx.registry)
-        val rows = cases.map { c ->
+        val only = System.getenv("IV_EVAL_ONLY_SCORED") == "1"
+        val rows = cases.filter { !only || outs.containsKey(it["id"]!!.jsonPrimitive.content) }.map { c ->
             val o = outs[c["id"]!!.jsonPrimitive.content]
             val t0 = System.nanoTime(); val r = rb.extract(c["transcript"]!!.jsonPrimitive.content).toString(); val ms = (System.nanoTime() - t0) / 1e6
-            JsonObject(mapOf("qwen" to detail(c, o?.get("text")?.jsonPrimitive?.contentOrNull, o?.get("stats") as? JsonObject),
+            val qraw = o?.get("text")?.jsonPrimitive?.contentOrNull
+            JsonObject(mapOf("qwen" to detail(c, qraw, o?.get("stats") as? JsonObject), "system" to detail(c, qraw, o?.get("stats") as? JsonObject, system = true),
                 "rules" to detail(c, r, JsonObject(mapOf("wall_ms" to JsonPrimitive(ms))))))
         }
         out.writeText(JsonArray(rows).toString())

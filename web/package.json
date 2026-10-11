@@ -1,0 +1,20 @@
+{
+  "name": "qalam-reader",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Qalam Reader: one self-contained offline HTML page that reads Qalam incident QR codes",
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "test": "node test/decode.test.mjs && node test/photo.test.mjs && node test/browser.test.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "0.24.0",
+    "jspdf": "2.5.2",
+    "jsqr": "1.4.0",
+    "pako": "2.1.0",
+    "playwright-core": "1.48.2",
+    "pngjs": "7.0.0",
+    "qrcode": "1.5.4"
+  }
+}

@@ -1,6 +1,13 @@
 package com.megathon.incidentvoice.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import com.megathon.incidentvoice.core.Hotspots
+import com.megathon.incidentvoice.core.ReportTags
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -30,3 +37,19 @@ fun SeverityLabel(severity: String?, modifier: Modifier = Modifier) {
 @Composable
 fun StatusText(status: String, modifier: Modifier = Modifier) =
     Text(status.lowercase().replaceFirstChar { it.uppercase() }, modifier, style = MaterialTheme.typography.bodySmall, color = secondaryText)
+
+/** A small flat outlined label. */
+@Composable
+fun Pill(text: String, color: androidx.compose.ui.graphics.Color, modifier: Modifier = Modifier) =
+    Text(text, modifier.border(1.dp, color, RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 1.dp), style = MaterialTheme.typography.labelSmall, color = color, maxLines = 1)
+
+/** "Repeat incident · 3rd water leak here in 7 days" in coral, "Hotspot" in the text colour. Nothing when the report has neither. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun ReportTagChips(tags: ReportTags, typeLabel: (String) -> String, modifier: Modifier = Modifier) {
+    if (tags.repeat == null && !tags.hotspot) return
+    FlowRow(modifier, horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        tags.repeat?.let { Pill("Repeat incident · " + Hotspots.chip(it, typeLabel(it.type)), MaterialTheme.colorScheme.primary) }
+        if (tags.hotspot) Pill("Hotspot", MaterialTheme.colorScheme.onSurface)
+    }
+}

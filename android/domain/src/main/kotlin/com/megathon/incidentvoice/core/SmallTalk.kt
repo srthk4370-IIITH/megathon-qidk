@@ -13,6 +13,16 @@ object EvidenceGuard {
         return out
     }
 
+    /**
+     * Category check: when the model could not decide (no type, or OTHER) but the keyword rules recognise a category,
+     * the rules' category is used. A category the model did choose is never overruled here.
+     */
+    fun category(fields: Map<String, kotlinx.serialization.json.JsonElement>, keywordCategory: String?): Map<String, kotlinx.serialization.json.JsonElement> {
+        val t = (fields["incident_type"] as? kotlinx.serialization.json.JsonPrimitive)?.content
+        if (keywordCategory == null || keywordCategory == "OTHER" || (t != null && t != "OTHER")) return fields
+        return LinkedHashMap(fields).also { it["incident_type"] = kotlinx.serialization.json.JsonPrimitive(keywordCategory) }
+    }
+
     private val timeWords = Regex("\\d|\\b(morning|afternoon|evening|night|noon|midnight|today|yesterday|tonight|ago|just now|minute|minutes|hour|hours|o'clock|am|pm|subah|dopahar|shaam|raat|kal|aaj|abhi|baje|ghanta|ghante|pehle|der)\\b", RegexOption.IGNORE_CASE)
     private val lifeAtRisk = Regex("\\b(unconscious|not breathing|no pulse|behosh|saans nahi|trapped|phans\\w*|(fire|aag)\\b.{0,30}\\b(spreading|out of control|fail\\w*|badh\\w*))\\b", RegexOption.IGNORE_CASE)
     private val placeStop = setOf("the", "near", "behind", "inside", "outside", "next", "floor", "room", "area", "side", "building", "block", "site", "office", "plant", "and", "for")

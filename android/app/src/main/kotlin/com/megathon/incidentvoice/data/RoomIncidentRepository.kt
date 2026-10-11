@@ -27,6 +27,7 @@ class RoomIncidentRepository(
     private val dao = db.dao()
     private val json = Json { ignoreUnknownKeys = true }
     private val listSer = ListSerializer(String.serializer())
+    private val places = LocationKeys(registry)
 
     // ---------------------------------------------------------------------------------------
     override suspend fun createDraft(reporter: Reporter, atMs: Long?): String {
@@ -54,6 +55,7 @@ class RoomIncidentRepository(
             dao.upsert(toEntity(stored, rowid))
             writeChildren(id, stored)
             dao.insertAudit(auditDiff(id, FormMapper.toForm(old), form, actor, now))
+            if (oldRow.status != IncidentStatus.DRAFT.name) dao.setTags(id, tagsNow(id, now)?.toJson()) // the place or type may have been corrected
             reindexInTx(id)
         }
     }
@@ -92,6 +94,7 @@ class RoomIncidentRepository(
         val prefix = "INC-$day-"
         val ref = prefix + (dao.countRefs(prefix) + 1).toString().padStart(4, '0')
         dao.markSubmitted(id, IncidentStatus.SUBMITTED.name, ref, now)
+        dao.setTags(id, tagsNow(id, now)?.toJson())
         dao.insertAudit(listOf(
             AuditEntity(incidentId = id, at = now, actor = actor.tag, action = "STATUS_CHANGE", field = "status", oldValue = "DRAFT", newValue = "SUBMITTED"),
             AuditEntity(incidentId = id, at = now, actor = actor.tag, action = "SUBMIT", field = "ref_no", oldValue = null, newValue = ref),
@@ -136,11 +139,11 @@ class RoomIncidentRepository(
     // ---- queries ----------------------------------------------------------------------------
 
     override fun observeList(filter: DashboardFilter, limit: Int): Flow<List<IncidentListItem>> =
-        dao.observeList(listQuery(null, filter, limit)).map { rows -> withCases(rows.map(::toItem), rows) }
+        dao.observeList(listQuery(null, filter, limit)).map { rows -> tagged(withCases(rows.map(::toItem), rows), rows, filter) }
 
     override fun search(text: String, filter: DashboardFilter, limit: Int): Flow<List<IncidentListItem>> {
         val q = SearchQueryBuilder.build(text) ?: return observeList(filter, limit)
-        return dao.observeList(listQuery(q, filter, limit)).map { rows -> withCases(rows.map(::toItem), rows) }
+        return dao.observeList(listQuery(q, filter, limit)).map { rows -> tagged(withCases(rows.map(::toItem), rows), rows, filter) }
     }
 
     override fun observeDetail(id: String): Flow<IncidentDetail?> =
@@ -155,7 +158,10 @@ class RoomIncidentRepository(
         }
         val recs = dao.recs(id).map { RecRow(it.id, it.sopId, it.text, it.immediate, it.source, it.done) }
         val actions = dao.responseActions(id).map { ResponseAction(it.stepId, it.label, it.doneAt, it.source) }
-        return IncidentDetail(metaOf(st.row), FormMapper.toForm(st), turns, recs, actions)
+        var form = FormMapper.toForm(st)
+        // a report saved before evidence was stored: work the spans out from its transcript (kept once the report is saved again)
+        if (st.row.evidenceJson == null) form = Evidence.attach(form, turns.filter { it.role == "USER" }.map { it.text }, tx, Instant.ofEpochMilli(st.row.reportedAt))
+        return IncidentDetail(metaOf(st.row), form, turns, recs, actions)
     }
 
     override fun observeCounts(): Flow<DashboardCounts> = combine(
@@ -171,7 +177,7 @@ class RoomIncidentRepository(
 
     // ---- Ask tab / vector index (PRD §37 O-2) -----------------------------------------------
 
-    override suspend fun listFiltered(filter: DashboardFilter, limit: Int): List<IncidentListItem> = dao.listOnce(listQuery(null, filter, limit)).map(::toItem)
+    override suspend fun listFiltered(filter: DashboardFilter, limit: Int): List<IncidentListItem> = dao.listOnce(listQuery(null, filter, limit)).let { rows -> tagged(rows.map(::toItem), rows, filter) }
 
     override suspend fun keywordIds(ftsQuery: String): Set<String> = runCatching { dao.searchIds(ftsQuery).toSet() }.getOrDefault(emptySet())
 
@@ -207,6 +213,35 @@ class RoomIncidentRepository(
 
     override suspend fun vectors(modelId: String): Map<String, FloatArray> =
         dao.vectors(modelId).associate { it.incidentId to com.megathon.incidentvoice.ask.Vectors.fromBytes(it.vec) }
+
+    // ---- Repeat incidents and hotspots ------------------------------------------------------------
+
+    private fun occurrence(r: com.megathon.incidentvoice.data.dao.OccurrenceRow): Occurrence {
+        val k = places.of(r.locationId, r.locationText)
+        return Occurrence(r.id, r.incidentType, k?.first, k?.second, r.createdAt)
+    }
+
+    private suspend fun tagsNow(id: String, now: Long): ReportTags? {
+        val all = dao.occurrences().map(::occurrence)
+        val me = all.firstOrNull { it.id == id } ?: return null
+        return Hotspots.tags(me, all, Hotspots.hotspots(all, now).map { it.key }.toSet())
+    }
+
+    override suspend fun reportTags(id: String): ReportTags? = tagsNow(id, nowMs())
+
+    override fun observeHotspots(): Flow<List<HotspotStat>> = dao.observeOccurrences().map { rows -> Hotspots.top(rows.map(::occurrence), nowMs()) }.distinctUntilChanged()
+
+    override suspend fun markDemo(id: String) = dao.markDemo(id)
+
+    override suspend fun clearDemo(actor: Actor): Int { val ids = dao.demoIds(); ids.forEach { delete(it, actor) }; return ids.size }
+
+    /** Adds the Repeat / Hotspot chips (counted now, so they stay right when reports are added or deleted) and applies the place filter. */
+    private suspend fun tagged(items: List<IncidentListItem>, rows: List<IncidentListRow>, f: DashboardFilter): List<IncidentListItem> {
+        val tags = Hotspots.tags(dao.occurrences().map(::occurrence), nowMs())
+        val byId = rows.associateBy { it.id }
+        return items.filter { i -> f.locationKey == null || byId[i.id]?.let { places.of(it.locationId, it.locationText)?.first } == f.locationKey }
+            .map { i -> i.copy(tags = tags[i.id] ?: ReportTags(), demo = byId[i.id]?.isDemo == true) }
+    }
 
     // ---- Extra 3: multi-witness merging ---------------------------------------------------------
 
@@ -270,7 +305,7 @@ class RoomIncidentRepository(
         val args = ArrayList<Any?>()
         val sb = StringBuilder(
             "SELECT i.id, i.ref_no, i.title, i.description, i.incident_type, i.severity, i.status, i.location_text, " +
-                "i.created_at, i.occurred_at, i.emergency_flag, i.parent_incident_id, "
+                "i.created_at, i.occurred_at, i.emergency_flag, i.parent_incident_id, i.location_id, i.is_demo, "
         )
         sb.append(if (match != null) "snippet(incident_search, '[', ']', '…', 0, 10) AS snip " else "NULL AS snip ")
         sb.append("FROM incidents i ")
@@ -295,7 +330,7 @@ class RoomIncidentRepository(
         f.injuries?.let { sb.append("AND i.injuries = ? "); args.add(it) }
         f.fromMs?.let { sb.append("AND i.created_at >= ? "); args.add(it) }
         f.toMs?.let { sb.append("AND i.created_at <= ? "); args.add(it) }
-        sb.append("ORDER BY i.created_at DESC LIMIT ?"); args.add(limit)
+        sb.append("ORDER BY i.created_at DESC LIMIT ?"); args.add(if (f.locationKey != null) maxOf(limit, 1000) else limit) // the place filter is applied after the query
         return SimpleSQLiteQuery(sb.toString(), args.toTypedArray())
     }
 
@@ -342,14 +377,14 @@ class RoomIncidentRepository(
     private fun metaOf(r: IncidentRow) = IncidentMeta(
         r.id, runCatching { IncidentStatus.valueOf(r.status) }.getOrDefault(IncidentStatus.DRAFT), r.refNo,
         Reporter(r.reporterName.orEmpty(), r.reporterEmpId.orEmpty()), r.createdAt, r.reportedAt, r.submittedAt, r.emergencyFlag,
-        r.followupRounds, r.modelVersionsJson, r.responseStartedAt, r.parentIncidentId,
+        r.followupRounds, r.modelVersionsJson, r.responseStartedAt, r.parentIncidentId, r.isDemo, r.tagsJson,
     )
 
     private fun toRow(e: IncidentEntity) = IncidentRow(
         e.id, e.refNo, e.status, e.incidentType, e.title, e.description, e.severity, e.severitySource, e.locationText, e.locationId,
         e.occurredAt, e.occurredAtApprox, e.timeExpression, e.injuries, e.injuredCount, e.nearMiss, e.hazardOngoing, e.detailsJson,
         e.fieldMetaJson, e.otherIncidentsJson, e.lang, e.reporterName, e.reporterEmpId, e.emergencyFlag, e.followupRounds, e.createdAt,
-        e.updatedAt, e.reportedAt, e.submittedAt, e.modelVersionsJson, e.responseStartedAt, e.parentIncidentId,
+        e.updatedAt, e.reportedAt, e.submittedAt, e.modelVersionsJson, e.responseStartedAt, e.parentIncidentId, e.evidenceJson, e.isDemo, e.tagsJson,
     )
 
     private fun toEntity(st: StoredIncident, rowid: Long): IncidentEntity {
@@ -358,7 +393,7 @@ class RoomIncidentRepository(
             rowid, r.id, r.refNo, r.status, r.incidentType, r.title, r.description, r.severity, r.severitySource, r.locationText,
             r.locationId, r.occurredAt, r.occurredAtApprox, r.timeExpression, r.injuries, r.injuredCount, r.nearMiss, r.hazardOngoing,
             r.detailsJson, r.fieldMetaJson, r.otherIncidentsJson, r.lang, r.reporterName, r.reporterEmpId, r.emergencyFlag,
-            r.followupRounds, r.createdAt, r.updatedAt, r.reportedAt, r.submittedAt, r.modelVersionsJson, responseStartedAt = r.responseStartedAt, parentIncidentId = r.parentIncidentId,
+            r.followupRounds, r.createdAt, r.updatedAt, r.reportedAt, r.submittedAt, r.modelVersionsJson, responseStartedAt = r.responseStartedAt, parentIncidentId = r.parentIncidentId, evidenceJson = r.evidenceJson, isDemo = r.isDemo, tagsJson = r.tagsJson,
         )
     }
 

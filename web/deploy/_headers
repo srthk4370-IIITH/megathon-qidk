@@ -1,0 +1,6 @@
+/*
+  Permissions-Policy: camera=(self)
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: no-referrer
+/sw.js
+  Cache-Control: no-cache
