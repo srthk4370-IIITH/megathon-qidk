@@ -40,6 +40,7 @@ import kotlinx.coroutines.launch
 fun DetailScreen(
     id: String, repo: IncidentRepository, tx: Taxonomy, disclaimer: String,
     similar: suspend (String) -> List<com.megathon.incidentvoice.ask.AskHit> = { emptyList() }, onOpen: (String) -> Unit = {},
+    registry: com.megathon.incidentvoice.core.SiteRegistry = com.megathon.incidentvoice.core.SiteRegistry(), engineName: () -> String = { "" },
     onBack: () -> Unit, onDeleted: () -> Unit, onEdit: (String) -> Unit,
 ) {
     val similarHits by produceState(initialValue = emptyList<com.megathon.incidentvoice.ask.AskHit>(), id) { value = similar(id) }
@@ -52,6 +53,7 @@ fun DetailScreen(
         value = if (all.size < 2) null else MergeEngine.merge(all.map { WitnessAccount.of(it.meta, it.form) }, repo.conflictResolutions(all.first().meta.id)) { tx.category(it)?.label ?: it }
     }
     var confirmDelete by remember { mutableStateOf(false) }
+    var sharing by remember { mutableStateOf(false) }
     val tags by produceState(com.megathon.incidentvoice.core.ReportTags(), id, detail) { value = repo.reportTags(id) ?: com.megathon.incidentvoice.core.ReportTags() }
 
     // nested inside the app Scaffold, which already applies the system-bar insets
@@ -69,9 +71,14 @@ fun DetailScreen(
     }) { pad ->
         val d = detail
         if (d == null) { Box(Modifier.padding(pad).fillMaxSize(), Alignment.Center) { CircularProgressIndicator() }; return@Scaffold }
-        DetailBody(d, tx, disclaimer, Modifier.padding(pad), similarHits, onOpen, case, tags, { key, value ->
+        DetailBody(d, tx, disclaimer, Modifier.padding(pad), similarHits, onOpen, case, tags, { sharing = true }, { key, value ->
             scope.launch { case?.accounts?.firstOrNull()?.let { root -> repo.resolveConflict(root.id, key, value, com.megathon.incidentvoice.data.Actor.User(d.meta.reporter.empId.ifBlank { "supervisor" })); caseTick++ } }
         }) { recId, done -> scope.launch { repo.setRecommendationDone(recId, done) } }
+    }
+
+    detail?.takeIf { sharing }?.let { d ->
+        val code = remember(d, tags) { com.megathon.incidentvoice.core.QrCodec.encode(com.megathon.incidentvoice.core.QrReportBuilder.build(d, tx, registry, tags, engineName())) }
+        com.megathon.incidentvoice.ui.share.QrShareDialog(code, d.meta.refNo ?: "Report") { sharing = false }
     }
 
     if (confirmDelete) AlertDialog(
@@ -83,7 +90,7 @@ fun DetailScreen(
 }
 
 @Composable
-private fun DetailBody(d: IncidentDetail, tx: Taxonomy, disclaimer: String, modifier: Modifier, similarHits: List<com.megathon.incidentvoice.ask.AskHit>, onOpen: (String) -> Unit, case: MergedCase?, tags: com.megathon.incidentvoice.core.ReportTags, onTrust: (String, String) -> Unit, onTick: (Long, Boolean) -> Unit) {
+private fun DetailBody(d: IncidentDetail, tx: Taxonomy, disclaimer: String, modifier: Modifier, similarHits: List<com.megathon.incidentvoice.ask.AskHit>, onOpen: (String) -> Unit, case: MergedCase?, tags: com.megathon.incidentvoice.core.ReportTags, onShare: () -> Unit, onTrust: (String, String) -> Unit, onTick: (Long, Boolean) -> Unit) {
     val f = d.form
     // "Show your evidence": tap a short field to see the words it came from in the transcript pinned on top
     var evidenceFor by remember(d.meta.id) { mutableStateOf<String?>(null) }
@@ -101,6 +108,8 @@ private fun DetailBody(d: IncidentDetail, tx: Taxonomy, disclaimer: String, modi
             com.megathon.incidentvoice.ui.components.ReportTagChips(tags, { tx.category(it)?.label ?: it }, Modifier.padding(top = 6.dp))
             Spacer(Modifier.height(4.dp))
             Text(f.str("description").orEmpty())
+            // Offline handoff: the whole report as one QR code, read by web/reader.html on any phone with no network
+            if (d.meta.status != com.megathon.incidentvoice.core.IncidentStatus.DRAFT) com.megathon.incidentvoice.ui.components.SecondaryButton("Share offline", onShare, Modifier.padding(top = 12.dp))
         }
         if (case != null) item(key = "case") { WitnessTable(case, d.meta.id, onOpen, onTrust) }
         item { SectionTitle("Details") }
