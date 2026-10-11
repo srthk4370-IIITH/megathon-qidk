@@ -45,3 +45,7 @@ eval/clips/raw/*.m4a
 models_dist/whisper/*.bin
 models_dist/llama/
 hs_err_pid*.log
+
+# model weights are never committed (see HANDBOOK "On-device LLM: Qwen3-4B")
+*.bin
+iv_exports/

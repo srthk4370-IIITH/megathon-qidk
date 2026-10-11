@@ -25,6 +25,8 @@ data class DashboardFilter(
     val locationIds: Set<String> = emptySet(),
     val locationText: String? = null,
     val injuries: String? = null,
+    /** Dashboard hotspot tapped: only reports at this place ([com.megathon.incidentvoice.core.LocationKeys] key). */
+    val locationKey: String? = null,
 )
 
 /** Text that is embedded for one incident, with a hash so unchanged incidents are not re-embedded. */
@@ -35,6 +37,8 @@ data class IncidentListItem(
     val location: String?, val createdAt: Long, val emergency: Boolean, val snippet: String? = null,
     /** Extra 3: witness accounts in this case (1 = a single report), unresolved conflicts between them, and for a linked account the case it belongs to. */
     val accounts: Int = 1, val conflicts: Int = 0, val parentRef: String? = null,
+    /** Repeat incident / hotspot chips, and whether the report is seeded demo data. */
+    val tags: com.megathon.incidentvoice.core.ReportTags = com.megathon.incidentvoice.core.ReportTags(), val demo: Boolean = false,
 )
 
 data class TurnRecord(
@@ -101,6 +105,14 @@ interface IncidentRepository {
     /** A supervisor trusts [value] for a conflicting field of the case; written to the audit log. */
     suspend fun resolveConflict(rootId: String, field: String, value: String, actor: Actor) {}
     suspend fun conflictResolutions(rootId: String): Map<String, String> = emptyMap()
+    // ---- Repeat incidents and hotspots (rules on the local database, no model)
+    /** Repeat / hotspot tags of one submitted report, as of now. */
+    suspend fun reportTags(id: String): com.megathon.incidentvoice.core.ReportTags? = null
+    /** The top hotspot locations, refreshed whenever a report changes. */
+    fun observeHotspots(): Flow<List<com.megathon.incidentvoice.core.HotspotStat>> = kotlinx.coroutines.flow.emptyFlow()
+    suspend fun markDemo(id: String) {}
+    /** Deletes only the reports marked as demo data. Returns how many. */
+    suspend fun clearDemo(actor: Actor): Int = 0
     /** Demo reset: removes every report, draft and recording. Returns how many were deleted. */
     suspend fun deleteAll(actor: Actor): Int = 0
 }

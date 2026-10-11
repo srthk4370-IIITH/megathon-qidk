@@ -1,0 +1,46 @@
+{
+  "date": "2026-10-11",
+  "set": "eval/text_cases.jsonl",
+  "engines": {
+    "Qwen3-4B (Genie, NPU, on the QIDK)": {
+      "n": 150,
+      "type_ok": 80,
+      "valid": 147,
+      "tp": 368,
+      "expected": 1182,
+      "predicted": 685,
+      "made_up": 180,
+      "precision": 0.537,
+      "recall": 0.311,
+      "f1": 0.394,
+      "desc_present": 147,
+      "desc_own_words": 0.974,
+      "desc_vs_gold": 0.302
+    },
+    "Rules engine (stand-in)": {
+      "n": 150,
+      "type_ok": 144,
+      "valid": 150,
+      "tp": 709,
+      "expected": 1182,
+      "predicted": 759,
+      "made_up": 17,
+      "precision": 0.934,
+      "recall": 0.6,
+      "f1": 0.731,
+      "desc_present": 150,
+      "desc_own_words": 1.0,
+      "desc_vs_gold": 0.286
+    }
+  },
+  "qwen_latency": {
+    "n": 150,
+    "wall_p50": 5002,
+    "wall_p90": 6062,
+    "ttft_p50": 511,
+    "ttft_p90": 526,
+    "tps_p50": 22.7,
+    "tps_p10": 22.5,
+    "tokens_out_p50": 103
+  }
+}

@@ -40,6 +40,7 @@ import kotlinx.coroutines.launch
 fun DetailScreen(
     id: String, repo: IncidentRepository, tx: Taxonomy, disclaimer: String,
     similar: suspend (String) -> List<com.megathon.incidentvoice.ask.AskHit> = { emptyList() }, onOpen: (String) -> Unit = {},
+    registry: com.megathon.incidentvoice.core.SiteRegistry = com.megathon.incidentvoice.core.SiteRegistry(), engineName: () -> String = { "" },
     onBack: () -> Unit, onDeleted: () -> Unit, onEdit: (String) -> Unit,
 ) {
     val similarHits by produceState(initialValue = emptyList<com.megathon.incidentvoice.ask.AskHit>(), id) { value = similar(id) }
@@ -52,6 +53,8 @@ fun DetailScreen(
         value = if (all.size < 2) null else MergeEngine.merge(all.map { WitnessAccount.of(it.meta, it.form) }, repo.conflictResolutions(all.first().meta.id)) { tx.category(it)?.label ?: it }
     }
     var confirmDelete by remember { mutableStateOf(false) }
+    var sharing by remember { mutableStateOf(false) }
+    val tags by produceState(com.megathon.incidentvoice.core.ReportTags(), id, detail) { value = repo.reportTags(id) ?: com.megathon.incidentvoice.core.ReportTags() }
 
     // nested inside the app Scaffold, which already applies the system-bar insets
     Scaffold(containerColor = MaterialTheme.colorScheme.background, contentWindowInsets = WindowInsets(0), topBar = {
@@ -68,9 +71,14 @@ fun DetailScreen(
     }) { pad ->
         val d = detail
         if (d == null) { Box(Modifier.padding(pad).fillMaxSize(), Alignment.Center) { CircularProgressIndicator() }; return@Scaffold }
-        DetailBody(d, tx, disclaimer, Modifier.padding(pad), similarHits, onOpen, case, { key, value ->
+        DetailBody(d, tx, disclaimer, Modifier.padding(pad), similarHits, onOpen, case, tags, { sharing = true }, { key, value ->
             scope.launch { case?.accounts?.firstOrNull()?.let { root -> repo.resolveConflict(root.id, key, value, com.megathon.incidentvoice.data.Actor.User(d.meta.reporter.empId.ifBlank { "supervisor" })); caseTick++ } }
         }) { recId, done -> scope.launch { repo.setRecommendationDone(recId, done) } }
+    }
+
+    detail?.takeIf { sharing }?.let { d ->
+        val code = remember(d, tags) { com.megathon.incidentvoice.core.QrCodec.encode(com.megathon.incidentvoice.core.QrReportBuilder.build(d, tx, registry, tags, engineName())) }
+        com.megathon.incidentvoice.ui.share.QrShareDialog(code, d.meta.refNo ?: "Report") { sharing = false }
     }
 
     if (confirmDelete) AlertDialog(
@@ -82,18 +90,26 @@ fun DetailScreen(
 }
 
 @Composable
-private fun DetailBody(d: IncidentDetail, tx: Taxonomy, disclaimer: String, modifier: Modifier, similarHits: List<com.megathon.incidentvoice.ask.AskHit>, onOpen: (String) -> Unit, case: MergedCase?, onTrust: (String, String) -> Unit, onTick: (Long, Boolean) -> Unit) {
+private fun DetailBody(d: IncidentDetail, tx: Taxonomy, disclaimer: String, modifier: Modifier, similarHits: List<com.megathon.incidentvoice.ask.AskHit>, onOpen: (String) -> Unit, case: MergedCase?, tags: com.megathon.incidentvoice.core.ReportTags, onShare: () -> Unit, onTrust: (String, String) -> Unit, onTick: (Long, Boolean) -> Unit) {
     val f = d.form
-    LazyColumn(modifier.fillMaxSize().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(vertical = 16.dp)) {
+    // "Show your evidence": tap a short field to see the words it came from in the transcript pinned on top
+    var evidenceFor by remember(d.meta.id) { mutableStateOf<String?>(null) }
+    val said = remember(d.turns) { d.turns.filter { it.role == "USER" }.map { it.text } }
+    Column(modifier.fillMaxSize()) {
+    if (said.isNotEmpty()) com.megathon.incidentvoice.ui.components.TranscriptCard(said, evidenceFor?.let { f.evidence[it] }.orEmpty(), evidenceFor?.let { tx.label(it) }, Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 4.dp))
+    LazyColumn(Modifier.weight(1f).fillMaxWidth().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(vertical = 16.dp)) {
         item {
             Text(f.str("title") ?: "Report", style = MaterialTheme.typography.titleLarge)
             Spacer(Modifier.height(8.dp))
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 SeverityLabel(f.str("severity")); StatusText(d.meta.status.name)
             }
-            Text(f.types.joinToString(" + ") { tx.category(it)?.label ?: it }, style = MaterialTheme.typography.bodySmall, color = secondaryText)
+            Text(f.types.joinToString(" + ") { tx.category(it)?.label ?: it } + (if (d.meta.demo) " · Demo data" else ""), style = MaterialTheme.typography.bodySmall, color = secondaryText)
+            com.megathon.incidentvoice.ui.components.ReportTagChips(tags, { tx.category(it)?.label ?: it }, Modifier.padding(top = 6.dp))
             Spacer(Modifier.height(4.dp))
             Text(f.str("description").orEmpty())
+            // Offline handoff: the whole report as one QR code, read by web/reader.html on any phone with no network
+            if (d.meta.status != com.megathon.incidentvoice.core.IncidentStatus.DRAFT) com.megathon.incidentvoice.ui.components.SecondaryButton("Share offline", onShare, Modifier.padding(top = 12.dp))
         }
         if (case != null) item(key = "case") { WitnessTable(case, d.meta.id, onOpen, onTrust) }
         item { SectionTitle("Details") }
@@ -101,10 +117,14 @@ private fun DetailBody(d: IncidentDetail, tx: Taxonomy, disclaimer: String, modi
             FlatCard {
                 FormDisplay.rows(f, tx).forEachIndexed { n, r ->
                     if (n > 0) QDivider()
-                    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    val tappable = r.key in com.megathon.incidentvoice.core.Evidence.FIELDS && said.isNotEmpty()
+                    Column(Modifier.fillMaxWidth().background(if (evidenceFor == r.key) MaterialTheme.colorScheme.primary.copy(alpha = 0.08f) else androidx.compose.ui.graphics.Color.Transparent)
+                        .then(if (tappable) Modifier.clickable(onClickLabel = "Show evidence for ${r.label}") { evidenceFor = if (evidenceFor == r.key) null else r.key } else Modifier)
+                        .padding(horizontal = 16.dp, vertical = 8.dp)) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                             Text(r.label, style = MaterialTheme.typography.bodySmall, color = secondaryText)
-                            if (r.status == FieldStatus.DEFAULTED || r.status == FieldStatus.INFERRED) Text("Check", style = MaterialTheme.typography.labelMedium, color = Amber)
+                            if (tappable && com.megathon.incidentvoice.core.Evidence.needsReview(f, r.key)) com.megathon.incidentvoice.ui.components.NeedsReviewChip()
+                            else if (r.status == FieldStatus.DEFAULTED || r.status == FieldStatus.INFERRED) Text("Check", style = MaterialTheme.typography.labelMedium, color = Amber)
                         }
                         Text(r.value)
                     }
@@ -154,6 +174,7 @@ private fun DetailBody(d: IncidentDetail, tx: Taxonomy, disclaimer: String, modi
             SectionTitle("Reporter")
             Text("${d.meta.reporter.name.ifBlank { "—" }} ${d.meta.reporter.empId}".trim() + " · reported ${fmtDateTime(d.meta.reportedAt)}")
         }
+    }
     }
 }
 

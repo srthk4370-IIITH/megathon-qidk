@@ -38,7 +38,7 @@ sealed interface ParseOutcome {
 class ToolCallParser(private val tx: Taxonomy) {
 
     fun parse(raw: String, expectedTool: String, activeTypes: List<String>? = null): ParseOutcome {
-        val objText = PartialJson.extractObject(raw) ?: return ParseOutcome.Fail("no JSON object")
+        val objText = PartialJson.extractObject(ModelOutput.clean(raw)) ?: return ParseOutcome.Fail("no JSON object")
         val root = LenientParse.parse(objText) as? JsonObject ?: return ParseOutcome.Fail("unparseable JSON")
         var env: JsonObject = root
         (root["function"] as? JsonObject)?.let { env = it }

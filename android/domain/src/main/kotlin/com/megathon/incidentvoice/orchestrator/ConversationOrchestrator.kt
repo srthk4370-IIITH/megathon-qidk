@@ -25,11 +25,15 @@ class ConversationOrchestrator(
     private val clock: () -> Instant = { Instant.now() },
     /** §31.3 back-off between engine retries; tests pass an empty list. */
     private val retryDelaysMs: List<Long> = listOf(3_000, 7_000, 15_000),
+    /** Which chat template the loaded model needs (detected from the bundle on the device). */
+    private val modelFamily: () -> ModelFamily = { ModelFamily.LLAMA },
+    /** Hard limit for one model call; after it the call is aborted and the rules engine answers that turn. */
+    private val llmTimeoutMs: Long = 20_000,
 ) {
     private val tx = cfg.taxonomy
     private val parser = ToolCallParser(tx)
     private val merger = FormMerger(tx, TimeResolver(), LocationMatcher(cfg.registry))
-    private val prompts = PromptBuilder(tx, cfg.templates, cfg.app.models.promptVariant)
+    private val prompts = PromptBuilder(tx, cfg.templates, cfg.app.models.promptVariant, modelFamily)
     private val sop = SopSelector(cfg.sop, cfg.app.recommend.maxItems)
     private val emergencyDetector = EmergencyDetector(tx)
     /** Keyword rules: tell an incident from small talk, and stand in for the model for one turn if it fails. */
@@ -57,6 +61,7 @@ class ConversationOrchestrator(
     private var spokenReporter: String? = null
     private var retryAction: (suspend () -> Unit)? = null
     private val userTexts = StringBuilder() // everything the speaker said (grounding)
+    private val userTurns = ArrayList<String>() // the same, one entry per utterance, in the order of the stored USER turns (evidence spans)
     private var narrationText = ""
     private var edited = false
     private var cont: CompletableDeferred<Unit>? = null
@@ -118,12 +123,12 @@ class ConversationOrchestrator(
 
     fun onFieldEdited(key: String, value: JsonElement?) {
         form = merger.userEdit(form, key, value, clock())
-        form = merger.applyRules(form, clock()).first
+        form = merger.applyRules(form, clock()).first.let { it.copy(evidence = it.evidence - key) }
         afterReviewEdit(key, if (value == null) "cleared" else "edited")
     }
 
     fun onFieldUnknown(key: String) {
-        form = merger.userUnknown(form, key)
+        form = merger.userUnknown(form, key).let { it.copy(evidence = it.evidence - key) }
         afterReviewEdit(key, "unknown")
     }
 
@@ -140,9 +145,9 @@ class ConversationOrchestrator(
             val d = repo.load(id) ?: return@step
             incidentId = id; form = d.form; rounds = d.meta.followupRounds; emergencyFlag = d.meta.emergencyFlag
             editingRef = d.meta.refNo
-            d.turns.filter { it.role == "USER" }.forEach { userTexts.append(it.text).append(' ') }
+            d.turns.filter { it.role == "USER" }.forEach { userTexts.append(it.text).append(' '); userTurns += it.text }
             update {
-                it.copy(state = ConvState.REVIEW, incidentId = id, form = form, validation = Validator.validate(form, tx, clock()),
+                it.copy(state = ConvState.REVIEW, incidentId = id, form = form, userTurns = userTurns.toList(), validation = Validator.validate(form, tx, clock()),
                     recommendations = d.recommendations.map { r -> Recommendation(r.sopId, r.text, r.immediate, r.source, r.done) }, editingExisting = editingRef != null)
             }
         }
@@ -160,7 +165,10 @@ class ConversationOrchestrator(
             repo.saveRecommendations(id, ui.value.recommendations)
             val ref = editingRef ?: repo.submit(id, Actor.User(settings().reporter.empId))
             val wasEdit = editingRef != null
-            update { it.copy(state = ConvState.SUBMITTED, submittedRef = ref, otherIncidents = form.otherIncidents, notice = null) }
+            // "this keeps happening": the 3rd report of the same type at the same place in 7 days gets a card
+            val tags = if (wasEdit) null else runCatching { repo.reportTags(id) }.getOrNull()
+            val recurring = tags?.repeat?.let { r -> Hotspots.recurring(r, tx.category(r.type)?.label ?: r.type, tags.location ?: form.str("location").orEmpty()) }
+            update { it.copy(state = ConvState.SUBMITTED, submittedRef = ref, otherIncidents = form.otherIncidents, notice = null, recurring = recurring) }
             if (!wasEdit) runCatching { proposeDuplicate(id) }
         }
     }
@@ -374,7 +382,7 @@ class ConversationOrchestrator(
             }
             finalText = narrationText.trim().ifEmpty { text }
         }
-        userTexts.append(finalText).append(' ')
+        userTexts.append(finalText).append(' '); heard(finalText)
         val id = incidentId!!
         repo.appendTurn(id, TurnRecord("USER", "NARRATION", textRaw = text, textEdited = finalText.takeIf { it != text }, lang = form.lang,
             audioPath = audioPath, audioMs = audioMs, asrMs = asrMs))
@@ -423,16 +431,24 @@ class ConversationOrchestrator(
         } else { markSpeakingDone(); update { it.copy(state = ConvState.TYPING, question = null, form = form) } }
     }
 
-    private suspend fun extract(text: String) {
-        retryAction = { extract(text) }
+    private suspend fun extract(spoken: String) {
+        retryAction = { extract(spoken) }
+        val text = SelfCorrection.apply(spoken)      // "at 10, no, 11" → "at 11" for the model and the rules; the stored words stay as spoken
         update { it.copy(state = ConvState.EXTRACTING, streamingFields = emptySet(), error = null) }
-        val gen = generateWithRetry(LlmTask.EXTRACT, prompts.extract(text), SamplerName.GREEDY, cfg.app.llm.maxTokens.extract, preview = true) { rules.extract(text).toString() } ?: return
+        val gen = generateWithRetry(LlmTask.EXTRACT, prompts.extract(text, rules.categoryHint(text)), SamplerName.GREEDY, cfg.app.llm.maxTokens.extract, preview = true) { rules.extract(text).toString() } ?: return
         var call = parseWithRepair(gen.text, Tools.FILL, null)
         // the model itself found nothing to file (no type, no description)
+        // injuries / severity from the model count only when the words say so; otherwise the app asks
+        call = call?.let { c -> c.copy(fields = EvidenceGuard.filter(c.fields, (rules.extract(text)["parameters"] as? kotlinx.serialization.json.JsonObject) ?: kotlinx.serialization.json.JsonObject(emptyMap()), emergencyDetector.scan(text) != null).let { EvidenceGuard.filterUnsaid(it, text) }.let { EvidenceGuard.category(it, rules.categoryHint(text)) }) }
         val said = (call?.fields?.get("description") as? JsonPrimitive)?.content
         val nothing = call != null && (SmallTalk.isSentinel(said) || (call.fields["incident_type"] == null && said == null && !hasIncidentCue(text)))
         if (nothing) { form = IncidentForm(lang = form.lang); update { it.copy(streamingFields = emptySet(), form = form) }; noIncident(text); return }
-        if (call == null) { // §13.7: unparseable after one repair → manual fill with the transcript
+        if (call == null) { // unparseable after one repair → the rules engine answers this turn, and the screen says so
+            call = (parser.parse(rules.extract(text).toString(), Tools.FILL, null) as? ParseOutcome.Ok)?.call
+            if (call != null) update { it.copy(notice = FALLBACK_NOTICE, debug = it.debug.copy(lastTask = "EXTRACT (rules)")) }
+        }
+        if (call != null && SmallTalk.isSentinel((call.fields["description"] as? JsonPrimitive)?.content)) { form = IncidentForm(lang = form.lang); update { it.copy(streamingFields = emptySet(), form = form) }; noIncident(text); return }
+        if (call == null) { // §13.7: still nothing → manual fill with the transcript
             ensureDescriptionFromTranscript()
             update { it.copy(state = ConvState.ERROR_PARSE, error = "Couldn't understand fully — please check the form.", streamingFields = emptySet()) }
             persist()
@@ -441,6 +457,7 @@ class ConversationOrchestrator(
         }
         val merged = merger.merge(form, call, FieldSource.LLM_EXTRACT, null, userTexts.toString(), clock())
         form = merger.applyTimeDefault(merged.form, clock())
+        form = Evidence.attach(form, userTurns, tx, clock())
         // answer in the language the reporter used (their words decide, not the model's label)
         form = form.copy(lang = LangDetector.ofSpeech(text))
         // the description stays in the reporter's own words: a model rewrite that drifted from them is replaced by the lightly cleaned narration
@@ -512,17 +529,19 @@ class ConversationOrchestrator(
         retryAction = { handleAnswer(text, audioPath, audioMs, asrMs) }
         val id = ensureDraft()
         scanEmergency(text)
-        userTexts.append(text).append(' ')
+        userTexts.append(text).append(' '); heard(text)
         repo.appendTurn(id, TurnRecord("USER", "FOLLOWUP_A", textRaw = text, lang = form.lang, audioPath = audioPath, audioMs = audioMs, asrMs = asrMs, askedFields = q.fields))
         addBubble(BubbleRole.USER, text)
         update { it.copy(state = ConvState.PATCHING, error = null) }
         val prompt = prompts.patch(form, q.text(form.lang), q.fields, text)
         val gen = generateWithRetry(LlmTask.PATCH, prompt, SamplerName.GREEDY, cfg.app.llm.maxTokens.patch, preview = false) { rules.patch(q.fields, text).toString() } ?: return
-        val call = parseWithRepair(gen.text, Tools.UPDATE, form.types)
+        val call = (parseWithRepair(gen.text, Tools.UPDATE, form.types)
+            ?: (parser.parse(rules.patch(q.fields, text).toString(), Tools.UPDATE, form.types) as? ParseOutcome.Ok)?.call?.also { update { u -> u.copy(notice = FALLBACK_NOTICE) } })
             ?.let { c -> if (SmallTalk.isSentinel((c.fields["description"] as? JsonPrimitive)?.content)) c.copy(fields = emptyMap()) else c }   // sentinel in an answer = no new info, never a description
         if (call != null) {
+            val langNow = form.lang
             val m = merger.merge(form, call, FieldSource.LLM_PATCH, null, userTexts.toString(), clock())
-            form = m.form
+            form = Evidence.attach(m.form.copy(lang = langNow), userTurns, tx, clock(), changed = m.changed, answerTurn = userTurns.lastIndex)   // the reporter's words decide the language, not the model's tag
             rememberTool(gen, "Form updated: " + (m.changed.filter { it != "lang" }).joinToString { tx.label(it) }.ifBlank { "nothing new" })
         } else {
             rememberTool(gen, "Couldn't read that answer")
@@ -608,6 +627,7 @@ class ConversationOrchestrator(
         val t0 = System.nanoTime()
         generating = true
         try {
+        val finished = withTimeoutOrNull(llmTimeoutMs) {
         engine.generate(GenRequest(task, prompt, sampler, maxTokens)).collect { ev ->
             when (ev) {
                 is GenEvent.Token -> {
@@ -617,6 +637,12 @@ class ConversationOrchestrator(
                 is GenEvent.Done -> { stats = ev.stats; if (sb.isBlank() && !ev.text.isNullOrBlank()) sb.append(ev.text) }
                 is GenEvent.Error -> throw EngineException(ev.error)
             }
+        }
+        true
+        }
+        if (finished == null) {     // never hang: stop the model and let the caller fall back
+            runCatching { engine.abort() }
+            throw EngineException(EngineError("IV-E604", "The model did not answer within ${llmTimeoutMs / 1000} s", retryable = false))
         }
         } finally { generating = false }
         if (sb.isBlank()) throw EngineException(EngineError("IV-E601", "Empty output from the engine", retryable = true))
@@ -713,6 +739,8 @@ class ConversationOrchestrator(
         addBubble(BubbleRole.SYSTEM, note)
     }
 
+    private fun heard(text: String) { userTurns += text; update { it.copy(userTurns = userTurns.toList()) } }
+
     private fun say(text: String) { addBubble(BubbleRole.ASSISTANT, text, speaking = true) }
     private fun markSpeakingDone() = update { u -> u.copy(timeline = u.timeline.map { if (it.speaking) it.copy(speaking = false) else it }) }
     private fun addBubble(role: BubbleRole, text: String, speaking: Boolean = false) =
@@ -738,7 +766,7 @@ class ConversationOrchestrator(
 
     private fun reset() {
         form = IncidentForm(); incidentId = null; rounds = 0; emergencyFlag = false; question = null; lastAskedFields = emptyList()
-        repromptedNoSpeech = false; emergencyLocationAsked = false; noIncidentCount = 0; spokenReporter = null; narrationReprompted = false; lastFromVoice = true; retryAction = null; userTexts.clear(); narrationText = ""; spokeComplete = false; bubbleSeq = 0; editingRef = null
+        repromptedNoSpeech = false; emergencyLocationAsked = false; noIncidentCount = 0; spokenReporter = null; narrationReprompted = false; lastFromVoice = true; retryAction = null; userTexts.clear(); userTurns.clear(); narrationText = ""; spokeComplete = false; bubbleSeq = 0; editingRef = null
         responseStart = null; responseActions.clear(); hintCategory = null; reminderJob?.cancel(); reminderJob = null
         _ui.value = ConversationUiState()
     }

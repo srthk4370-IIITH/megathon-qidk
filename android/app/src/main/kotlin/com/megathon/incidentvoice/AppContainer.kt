@@ -82,7 +82,7 @@ class AppContainer(val context: Context) {
         // transcript instead of replaying one canned scene.
         JniInferenceEngine(context, modelsDir, whisperModel = config.app.asr.whisperCppModel, llmFallback = DomainToMlEngine(mockEngine))
     }
-    private val jniEngine: InferenceEngine by lazy { MlEngineAdapter(jni, appScope, "on-device") }
+    private val jniEngine: InferenceEngine by lazy { MlEngineAdapter(jni, appScope, "on-device") { modelFamily.value == com.megathon.incidentvoice.core.ModelFamily.QWEN } }
 
     /** "NPU" when Llama runs on the Hexagon NPU, "FALLBACK" when ASR is real but the LLM is the mock, "" for Mock engine. */
     val llmBackend = MutableStateFlow("")
@@ -93,6 +93,19 @@ class AppContainer(val context: Context) {
 
     /** Model files the JNI engine needs (same check as JniInferenceEngine.init). */
     fun whisperPresent(): Boolean = File(modelsDir, "${config.app.models.whisperDir}/${config.app.asr.whisperCppModel}").exists()
+    /** Chat template of the bundle in the model folder (Llama or Qwen); re-read whenever the engine is (re)selected. */
+    val modelFamily = MutableStateFlow(com.megathon.incidentvoice.core.ModelFamily.LLAMA)
+    fun detectModelFamily() {
+        val dir = File(modelsDir, config.app.models.llamaDir)
+        fun read(n: String) = runCatching { File(dir, n).takeIf { it.exists() }?.readText() }.getOrNull()
+        modelFamily.value = com.megathon.incidentvoice.core.ModelFamily.detect(read("model.json"), read("genie_config.json"))
+    }
+    /** What is filling forms right now, in plain words (goes into the offline QR payload). */
+    fun engineLabel(): String = when {
+        engineKind.value != "JNI" -> "Mock engine"
+        llmBackend.value == "NPU" -> "${modelFamily.value.display} on Hexagon NPU + Whisper small (CPU)"
+        else -> "Rules engine + Whisper small (CPU)"
+    }
     fun llamaPresent(): Boolean = File(modelsDir, "${config.app.models.llamaDir}/genie_config.json").exists()
 
     /** The on-device engine can start as soon as the Whisper model is there (LLM falls back until the bundle arrives). */
@@ -101,6 +114,7 @@ class AppContainer(val context: Context) {
     /** AUTO → on-device engine when its model files are on the board, else Mock. */
     fun selectEngine(mode: String) {
         writeAsrPrompt()
+        detectModelFamily()
         // `adb shell touch <externalFilesDir>/force_mock` keeps AUTO on the Mock engine (so installing the app
         // never grabs the NPU while the ML owner is running jobs on the board).
         val forceMock = File(context.getExternalFilesDir(null), "force_mock").exists()
@@ -111,7 +125,7 @@ class AppContainer(val context: Context) {
         appScope.launch {
             val r = runCatching { engine.init() }
             val ok = r.isSuccess
-            android.util.Log.i("IV", "selectEngine mode=$mode useJni=$useJni forceMock=$forceMock init=${r.getOrNull() ?: r.exceptionOrNull()} status=${engine.status.value}")
+            android.util.Log.i("IV", "selectEngine family=${modelFamily.value} mode=$mode useJni=$useJni forceMock=$forceMock init=${r.getOrNull() ?: r.exceptionOrNull()} status=${engine.status.value}")
             if (useJni && ok) llmBackend.value = if (jni.llmOnNpu()) "NPU" else "FALLBACK"
             runCatching { engine.warmup() }
             if (useJni && ok && !jni.llmOnNpu()) watchForLlama()
@@ -140,7 +154,8 @@ class AppContainer(val context: Context) {
                 kotlinx.coroutines.delay(15_000)
                 if (!llamaPresent() || engineKind.value != "JNI" || engine.delegate !== jniEngine) continue
                 kotlinx.coroutines.delay(10_000) // let an in-progress adb push finish
-                android.util.Log.i("IV", "llama bundle appeared -> re-init on-device engine")
+                detectModelFamily()
+                android.util.Log.i("IV", "LLM bundle appeared (${modelFamily.value.display}) -> re-init on-device engine")
                 runCatching { engine.init() }
                 llmBackend.value = if (jni.llmOnNpu()) "NPU" else "FALLBACK"
                 if (jni.llmOnNpu()) runCatching { engine.warmup() } else break
@@ -168,6 +183,7 @@ class AppContainer(val context: Context) {
                 val s = settingsSnapshot.value
                 OrchestratorSettings(s.reporter, s.ertNumber, s.speakQuestions, s.vadEndSilenceMs)
             },
+            modelFamily = { modelFamily.value },
         )
     }
 

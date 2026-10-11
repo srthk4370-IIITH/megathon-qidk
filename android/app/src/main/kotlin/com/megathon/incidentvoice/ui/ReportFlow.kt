@@ -7,6 +7,8 @@ import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -96,7 +98,7 @@ fun ReportFlow(c: AppContainer, onOpenDetail: (String) -> Unit, onGoDashboard: (
                 else HomeScreen(c, onMic = onMic, onTypeInstead = o::onTypeInsteadRequested, notice = ui.notice, onOpen = onOpenDetail)
             ConvState.MANUAL_FILL, ConvState.RECOMMENDING, ConvState.REVIEW -> ReviewScreen(ui, c.config, o)
             ConvState.SUBMITTED -> {
-                SubmittedScreen(ui.submittedRef.orEmpty(), ui.form.str("severity"), ui.otherIncidents, ui.editingExisting, o::onReportAnother, onGoDashboard, ui.linkedTo)
+                SubmittedScreen(ui.submittedRef.orEmpty(), ui.form.str("severity"), ui.otherIncidents, ui.editingExisting, o::onReportAnother, onGoDashboard, ui.linkedTo, ui.recurring)
                 // Extra 3: the app proposes, the reporter decides; nothing is ever linked automatically
                 ui.duplicate?.let { d ->
                     AlertDialog(
@@ -113,7 +115,7 @@ fun ReportFlow(c: AppContainer, onOpenDetail: (String) -> Unit, onGoDashboard: (
 }
 
 @Composable
-private fun SubmittedScreen(ref: String, severity: String?, others: List<String>, updated: Boolean, onAnother: (String?) -> Unit, onDashboard: () -> Unit, linkedTo: String? = null) {
+private fun SubmittedScreen(ref: String, severity: String?, others: List<String>, updated: Boolean, onAnother: (String?) -> Unit, onDashboard: () -> Unit, linkedTo: String? = null, recurring: String? = null) {
     Column(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
         ScreenTitle(if (updated) "Report updated" else "Report saved")
         Text("Saved on device", color = secondaryText)
@@ -125,6 +127,15 @@ private fun SubmittedScreen(ref: String, severity: String?, others: List<String>
                 Spacer(Modifier.height(8.dp))
                 SeverityLabel(severity)
                 linkedTo?.let { Spacer(Modifier.height(8.dp)); Text("Added as a witness account to $it", style = MaterialTheme.typography.bodySmall, color = secondaryText) }
+            }
+        }
+        // "this keeps happening": the same type of incident at the same place, three or more times in 7 days
+        recurring?.let { text ->
+            Spacer(Modifier.height(12.dp))
+            Column(Modifier.fillMaxWidth().border(1.5.dp, MaterialTheme.colorScheme.primary, com.megathon.incidentvoice.ui.theme.CardShape).background(MaterialTheme.colorScheme.surface, com.megathon.incidentvoice.ui.theme.CardShape).padding(16.dp)) {
+                Text("Recurring hazard", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                Spacer(Modifier.height(4.dp))
+                Text(text.removePrefix("Recurring hazard: "), style = MaterialTheme.typography.bodyLarge, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium)
             }
         }
         others.firstOrNull()?.let { other ->

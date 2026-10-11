@@ -11,6 +11,8 @@ class DemoSeeder(private val cfg: AppConfigBundle, private val repo: IncidentRep
     private val merger = FormMerger(cfg.taxonomy, times, LocationMatcher(cfg.registry))
     private val sop = SopSelector(cfg.sop)
 
+    private companion object { const val DAY = 24L * 60 }
+
     private class Demo(val ageMin: Long, val transcript: String, val json: String, val patch: String? = null)
 
     private fun fill(body: String) = """{"name":"fill_incident_form","parameters":{$body}}"""
@@ -40,9 +42,47 @@ class DemoSeeder(private val cfg: AppConfigBundle, private val repo: IncidentRep
             fill(""""lang":"hinglish","incident_type":"ELECTRICAL","title":"Sparking socket at reception","description":"Sparking from a socket at the reception and a power cut. Power has been switched off.","location":"reception","time":"yesterday morning","severity":"MEDIUM","injuries":"NO","details":{"electrical_hazard":"SPARKING","power_isolated":"YES"}"""), null),
     )
 
-    suspend fun seed(reporter: Reporter, now: Long = System.currentTimeMillis()): Int {
+    /**
+     * "Seed demo data" (Settings, debug builds): 12 reports spread over the last 30 days that make the repeat and hotspot
+     * rules visible. Two water leaks at Conference Room 2 inside the last 7 days (the next one there is the 3rd: the
+     * recurring-hazard card), five reports at the Workshop (a hotspot), two at the Loading Dock, three single ones.
+     */
+    private val hotspotDemos = listOf(
+        Demo(5 * DAY, "Water is dripping from the ceiling in Conference Room 2 since this morning, we have put a bucket under it. Nobody is hurt.",
+            fill(""""lang":"en","incident_type":"WATER","title":"Ceiling drip in Conference Room 2","description":"Water is dripping from the ceiling in Conference Room 2. A bucket has been placed under it.","location":"Conference Room 2","time":"this morning","severity":"LOW","injuries":"NO","actions_taken":["Bucket placed under the drip"],"details":{"leak_source":"ceiling","leak_status":"CONTROLLED"}""")),
+        Demo(2 * DAY, "There is a water leak again in conf room 2, the carpet near the window is wet. Maintenance has been informed, no one is hurt.",
+            fill(""""lang":"en","incident_type":"WATER","title":"Water leak in Conference Room 2 again","description":"A water leak in Conference Room 2 again; the carpet near the window is wet. Maintenance has been informed.","location":"conf room 2","time":"just now","severity":"LOW","injuries":"NO","actions_taken":["Maintenance informed"],"details":{"leak_source":"near the window","leak_status":"ONGOING"}""")),
+        Demo(26 * DAY, "The lathe machine in the workshop jammed and stopped about an hour ago, nobody was hurt.",
+            fill(""""lang":"en","incident_type":"EQUIPMENT","title":"Lathe jammed in the workshop","description":"The lathe machine in the workshop jammed and stopped. Nobody was hurt.","location":"Workshop","time":"about an hour ago","severity":"MEDIUM","injuries":"NO","equipment":["lathe machine"],"details":{"failure_description":"lathe jammed and stopped","operational_status":"STOPPED"}""")),
+        Demo(11 * DAY, "Sparking from the welding socket in the workshop, humne power band kar di, kisi ko chot nahi lagi.",
+            fill(""""lang":"hinglish","incident_type":"ELECTRICAL","title":"Sparking welding socket in the workshop","description":"Sparking from the welding socket in the workshop. Power has been switched off. No one was hurt.","location":"workshop","time":"just now","severity":"MEDIUM","injuries":"NO","actions_taken":["Power switched off"],"details":{"electrical_hazard":"SPARKING","power_isolated":"YES"}""")),
+        Demo(6 * DAY, "Suresh cut his hand on the grinder in the workshop half an hour ago. First aid was given, he is conscious and talking.",
+            fill(""""lang":"en","incident_type":"MEDICAL","secondary_types":["EQUIPMENT"],"title":"Hand cut on the workshop grinder","description":"Suresh cut his hand on the grinder in the workshop. First aid was given.","location":"Workshop","time":"half an hour ago","severity":"MEDIUM","injuries":"YES","injured_count":1,"persons":[{"name":"Suresh","role":"AFFECTED","injured":true,"injury":"cut hand"}],"equipment":["grinder"],"actions_taken":["First aid given"],"details":{"patient_condition":"CONSCIOUS_STABLE","first_aid_given":"YES","ambulance_called":"NOT_NEEDED","failure_description":"hand cut on the grinder","operational_status":"STOPPED"}""")),
+        Demo(3 * DAY, "The grinder guard came loose in the workshop this morning, the machine has been stopped. No injuries.",
+            fill(""""lang":"en","incident_type":"EQUIPMENT","title":"Grinder guard loose in the workshop","description":"The grinder guard came loose in the workshop. The machine has been stopped.","location":"the workshop","time":"this morning","severity":"MEDIUM","injuries":"NO","equipment":["grinder"],"actions_taken":["Machine stopped"],"details":{"failure_description":"grinder guard came loose","operational_status":"STOPPED"}""")),
+        Demo(1 * DAY, "The drill press in the workshop is vibrating badly and running slow since yesterday evening, nobody is hurt.",
+            fill(""""lang":"en","incident_type":"EQUIPMENT","title":"Drill press vibrating in the workshop","description":"The drill press in the workshop is vibrating badly and running slow.","location":"Workshop","time":"yesterday evening","severity":"LOW","injuries":"NO","equipment":["drill press"],"details":{"failure_description":"drill press vibrating and running slow","operational_status":"DEGRADED"}""")),
+        Demo(22 * DAY, "A delivery truck hit the barrier at the loading dock a few minutes ago, no one was injured.",
+            fill(""""lang":"en","incident_type":"VEHICLE","title":"Truck hit the loading dock barrier","description":"A delivery truck hit the barrier at the loading dock. No one was injured.","location":"Loading Dock","time":"a few minutes ago","severity":"LOW","injuries":"NO","details":{"vehicles_involved":["delivery truck"],"collision_type":"VEHICLE_OBJECT"}""")),
+        Demo(12 * DAY, "Diesel spilled near the loading dock drain this afternoon, we placed absorbent pads and it is contained.",
+            fill(""""lang":"en","incident_type":"ENVIRONMENTAL","title":"Diesel spill at the loading dock","description":"Diesel spilled near the loading dock drain. Absorbent pads were placed and it is contained.","location":"loading dock","time":"this afternoon","severity":"LOW","injuries":"NO","actions_taken":["Absorbent pads placed"],"details":{"pollutant":"diesel","release_medium":"DRAIN","containment_status":"CONTAINED"}""")),
+        Demo(18 * DAY, "An unknown person was loitering near the server room last night, security was informed.",
+            fill(""""lang":"en","incident_type":"SECURITY","title":"Unknown person near the server room","description":"An unknown person was loitering near the server room last night. Security was informed.","location":"server room","time":"last night","severity":"MEDIUM","injuries":"NO","details":{"security_event":"SUSPICIOUS_ACTIVITY","security_informed":"YES"}""")),
+        Demo(15 * DAY, "A ceiling tile fell in the cafeteria at 1 pm, nobody was hurt and the area is cordoned off.",
+            fill(""""lang":"en","incident_type":"STRUCTURAL","title":"Ceiling tile fell in the cafeteria","description":"A ceiling tile fell in the cafeteria. Nobody was hurt. The area is cordoned off.","location":"Cafeteria","time":"at 1 pm","severity":"LOW","injuries":"NO","near_miss":true,"actions_taken":["Area cordoned off"],"details":{"damage_type":"ceiling tile fell","area_cordoned":"YES"}""")),
+        Demo(8 * DAY, "There is a chlorine smell near the chemical store, workers have moved away, the drum has been closed.",
+            fill(""""lang":"en","incident_type":"HAZMAT","title":"Chlorine smell at the chemical store","description":"A chlorine smell near the chemical store. Workers moved away and the drum has been closed.","location":"chemical store","time":"just now","severity":"HIGH","injuries":"NO","actions_taken":["Drum closed"],"details":{"substance":"chlorine","release_status":"STOPPED","area_evacuated":"YES"}""")),
+    )
+
+    /** The 10 general demo reports. */
+    suspend fun seed(reporter: Reporter, now: Long = System.currentTimeMillis()): Int = insert(demos, reporter, now)
+
+    /** The 12 repeat / hotspot demo reports, oldest first so each one's tags are those it would have had on its day. */
+    suspend fun seedHotspots(reporter: Reporter, now: Long = System.currentTimeMillis()): Int = insert(hotspotDemos.sortedByDescending { it.ageMin }, reporter, now)
+
+    private suspend fun insert(list: List<Demo>, reporter: Reporter, now: Long): Int {
         var n = 0
-        for (d in demos) {
+        for (d in list) {
             val at = now - d.ageMin * 60_000
             var form = IncidentForm()
             val first = (parser.parse(d.json, Tools.FILL) as? ParseOutcome.Ok)?.call ?: continue
@@ -53,7 +93,9 @@ class DemoSeeder(private val cfg: AppConfigBundle, private val repo: IncidentRep
                     form = merger.merge(form, c, FieldSource.LLM_PATCH, 1, d.transcript, Instant.ofEpochMilli(at)).form
                 }
             }
+            form = Evidence.attach(form, listOf(d.transcript), cfg.taxonomy, Instant.ofEpochMilli(at), times)
             val id = repo.createDraft(reporter, at)
+            repo.markDemo(id) // every seeded row is marked; "Clear demo data" deletes exactly these
             repo.appendTurn(id, TurnRecord("USER", "NARRATION", textRaw = d.transcript, lang = form.lang))
             repo.saveForm(id, form, Actor.Llm, emergency = form.str("severity") == "CRITICAL")
             repo.saveRecommendations(id, sop.recommend(form))

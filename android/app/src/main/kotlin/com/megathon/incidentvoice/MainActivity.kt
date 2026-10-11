@@ -120,6 +120,7 @@ private fun AppRoot(c: AppContainer) {
             }
             composable("detail/{id}") { be ->
                 DetailScreen(be.arguments!!.getString("id")!!, c.repository, c.config.taxonomy, c.config.sop.disclaimer, similar = { c.askController.similar(it) }, onOpen = { nav.navigate("detail/$it") },
+                    registry = c.config.registry, engineName = { c.engineLabel() },
                     onBack = { nav.popBackStack() }, onDeleted = { nav.popBackStack() },
                     onEdit = { id -> c.orchestrator.openForEdit(id); nav.navigate("home") { popUpTo(nav.graph.findStartDestination().id); launchSingleTop = true } })
             }

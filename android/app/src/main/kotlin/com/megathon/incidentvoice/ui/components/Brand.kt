@@ -78,11 +78,12 @@ fun ProofLine(c: AppContainer, modifier: Modifier = Modifier) {
     val ui by c.orchestrator.ui.collectAsStateWithLifecycle()
     val kind by c.engineKind.collectAsStateWithLifecycle()
     val llm by c.llmBackend.collectAsStateWithLifecycle()
+    val family = c.modelFamily.collectAsStateWithLifecycle().value.display
     LaunchedEffect(ui.debug.decodeTps) { if (ui.debug.decodeTps > 0) lastTokPerSec = ui.debug.decodeTps }
     var sent by remember { mutableLongStateOf(TrafficStats.getUidTxBytes(android.os.Process.myUid())) }
     LaunchedEffect(Unit) { while (true) { sent = TrafficStats.getUidTxBytes(android.os.Process.myUid()); delay(2000) } }
     val where = when {
-        kind == "JNI" && llm == "NPU" -> "Hexagon NPU · " + (if (lastTokPerSec > 0) "%.1f".format(lastTokPerSec) else "–") + " tok/s"
+        kind == "JNI" && llm == "NPU" -> "Hexagon NPU · $family · " + (if (lastTokPerSec > 0) "%.1f".format(lastTokPerSec) else "–") + " tok/s"
         kind == "JNI" -> "CPU · Whisper + rule engine"
         else -> "CPU · mock engine"
     }

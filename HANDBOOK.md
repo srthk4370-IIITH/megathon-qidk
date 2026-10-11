@@ -359,3 +359,150 @@ If a report is already in progress, a quick-launch request does not interrupt it
 ### 2026-10-11 07:20 — ML: Qwen fallback on the Mac; this laptop = fine-tuned Llama only
 - Stock Llama export abandoned: Part 3 (3.5 GB) upload failed repeatedly (S3 SSL EOF with 128 conns; WSL crashed a 3rd time under heavy upload). Hook's "reuse recent same-name upload" fallback picked an incomplete killed upload → removed.
 - New robust uploader in `ml/export/iv_resume_hub.py` (per-part retries, 16 MiB × 32 threads). Precompiled Llama assets do not exist (licence); Qwen3-4B precompiled does (8 Elite for Galaxy, w4a16) → Mac downloads it as fallback.
+
+## On-device LLM: Qwen3-4B on the Hexagon NPU (App branch, 2026-10-11)
+
+**What runs now.** The language model in the app is Qualcomm's pre-compiled **Qwen3-4B** (Genie runtime, w4a16 quantisation, 4096-token context), running on the QIDK's Hexagon NPU inside the app process. It replaces the rules stand-in whenever the bundle is on the device: Settings → Engine → Auto prefers the NPU model when `models/llama/genie_config.json` exists, and falls back to the rules engine otherwise. The rules engine also answers a single turn if the model fails, times out (20 s) or returns something that cannot be parsed twice; the screen then shows a "Fallback" chip.
+
+**Where the model comes from.** Qualcomm's model page https://huggingface.co/qualcomm/Qwen3-4B → table "Download Pre-Exported Models" → row GENIE / w4a16 / "Snapdragon 8 Elite For Galaxy Mobile" (QAIRT 2.45). Licence of the model card: Apache-2.0. The file is `qwen3_4b-genie-w4a16-qualcomm_snapdragon_8_elite_for_galaxy.zip` (2.5 GB; four context binaries `part1_of_4.bin` … `part4_of_4.bin`, 3.2 GB unpacked). `htp_backend_ext_config.json` in it targets `soc_model 69`, `dsp_arch v79`, which is the QIDK's SM8750 / Hexagon V79. The bundle was compiled with QAIRT 2.45; the board runs it with the QAIRT 2.50 libraries already in use (Genie 1.20).
+
+**Weights are not in the repository** (`*.bin` and `iv_exports/` are in `.gitignore`). To reproduce:
+
+```
+mkdir -p ~/iv_exports/qwen3_4b && cd ~/iv_exports/qwen3_4b
+curl -L -O https://qaihub-public-assets.s3.us-west-2.amazonaws.com/qai-hub-models/models/qwen3_4b/releases/v0.64.0/qwen3_4b-genie-w4a16-qualcomm_snapdragon_8_elite_for_galaxy.zip
+unzip qwen3_4b-genie-w4a16-qualcomm_snapdragon_8_elite_for_galaxy.zip && cd qwen3_4b-genie-w4a16-qualcomm_snapdragon_8_elite_for_galaxy
+# greedy decoding: in genie_config.json set dialog.sampler to {"version":1,"seed":42,"temp":1.0,"top-k":1,"top-p":1.0}; leave context.size at 4096
+# (the app's engine applies the same sampler itself when it loads the bundle)
+echo '{"family":"qwen","name":"Qwen3-4B"}' > model.json
+M=/sdcard/Android/data/com.megathon.incidentvoice/files/models/llama        # the folder the app's Genie engine reads
+adb shell am force-stop com.megathon.incidentvoice
+for f in genie_config.json htp_backend_ext_config.json tokenizer.json model.json part1_of_4.bin part2_of_4.bin part3_of_4.bin part4_of_4.bin; do adb push $f $M/$f; done
+```
+
+Smoke test from the shell before starting the app (uses the QAIRT tools the ML branch keeps in `/data/local/tmp/iv`):
+
+```
+adb push smoke_prompt.txt /data/local/tmp/qwen_smoke_prompt.txt
+adb shell "cd $M && export LD_LIBRARY_PATH=/data/local/tmp/iv/lib && export ADSP_LIBRARY_PATH='/data/local/tmp/iv/dsp;/vendor/dsp/cdsp;/vendor/lib/rfsa/adsp;/system/lib/rfsa/adsp;/dsp' && /data/local/tmp/iv/bin/genie-t2t-run -c genie_config.json --prompt_file /data/local/tmp/qwen_smoke_prompt.txt"
+# timings as JSON: adb shell "/data/local/tmp/iv/run.sh llm --prompt-file /data/local/tmp/qwen_smoke_prompt.txt --max-tokens 200 --models /sdcard/Android/data/com.megathon.incidentvoice/files/models"
+```
+
+**Smoke-test result on the board** (prompt: a one-line system message asking for one JSON object, the water-leak sentence, empty think block):
+
+```
+{"name":"fill_incident_form","arguments":{"incident_type":"water_leak","location":"Conference Room 2","time":"10 AM","action_taken":"maintenance_isolated_area"}}
+```
+Valid JSON, no `<think>` text. Decode speed 23.0 tok/s, time to first token 69 ms, 1.7 s in total for 38 tokens. With the app's real extraction prompt (about 800 tokens): time to first token about 0.5 s, 22–23 tok/s, 3.7 s for 73 tokens. Model load: 3.4 s.
+
+**Chat template (selectable by model family).** `ModelFamily` (`core/PromptBuilder.kt`) is detected from the bundle folder: a `model.json` that says "qwen", the word "qwen" in `genie_config.json`, or Qwen's end-of-turn token id (`"eos-token": 151645`); anything else is treated as Llama and that path is unchanged (its golden-prompt tests still pass).
+- Qwen messages are wrapped as `<|im_start|>role\n…<|im_end|>\n`; no BOS token is added.
+- Every assistant prefix ends with `<|im_start|>assistant\n<think>\n\n</think>\n\n`. The empty think block switches Qwen3's thinking mode off, so the answer starts immediately.
+- Generation stops on `<|im_end|>` (the bundle's EOS); the app also cuts the text at `<|im_end|>` and removes any `<think>…</think>` block before parsing, then takes the first balanced `{…}`.
+- Extraction uses a compact prompt written for Qwen, `config/prompts/extract.system.qwen.txt` (about 3,800 characters, roughly 950 tokens; the target was 800) with the categories one per line, a short Hinglish glossary for time words, and two format examples inside it (an English fire and a Hinglish fall). Follow-up (patch) and repair prompts are the existing ones in the Qwen wrapper. Tool schema, validator, grounding, follow-up logic and the NO_INCIDENT contract are unchanged.
+- **Keyword hint.** The user message ends with `Keyword hint for incident_type: <CODE>` when the keyword rules recognise a category; the prompt tells the model to use it unless the transcript clearly says otherwise. Without the hint the first version of the prompt got the incident type right in 53 % of the eval cases; see `eval/RESULTS.md`.
+- **Evidence checks on the model's output (`EvidenceGuard`, deterministic).** The model tends to fill fields from habit, so before its answer reaches the form: "injuries", "injured_count" and "severity" are kept only if the words themselves say so (the keyword rules find them too, or the emergency keywords fire); a location none of whose words were spoken and a time when no time was mentioned are dropped; life-at-risk wording (unconscious, not breathing, fire spreading, trapped) forces CRITICAL. Dropped fields are simply asked for.
+- **Self-correction.** "at 10, no, 11" is rewritten to "at 11" before the text goes to the model (`SelfCorrection`); the stored transcript keeps the words as spoken.
+
+**Two things that had to be fixed to make it run in the app.**
+1. *Crash on load.* The first in-app load crashed inside `GenieDialog_create` (null pointer in `libGenie.so`). The bundle's `genie_config.json` names a backend extension file, and reading it needs `libQnnHtpNetRunExtensions.so`, which the shell tools had and the APK did not. The QAIRT 2.50 copy from the board is now packaged in `android/app/src/main/jniLibs/arm64-v8a/`. (No model had been loaded in-app on the NPU before this, so the gap had never shown.)
+2. *Session breaks after a long prompt.* With this bundle and Genie 1.20, once a prompt goes past roughly 500 tokens (310 was fine, 460 was not), every later query in the same Genie session fails with `GenieDialog_query status=-1` ("batch dispatch failed"), even after `GenieDialog_reset`. Short prompts can be repeated without limit. The native library could not be rebuilt on the App laptop, so the app works around it in `MlEngineAdapter`: after every model call it re-creates the session in the background (3.4 s), while the question is spoken and the reporter answers; the next call waits for that reload if it is still running. Still one NPU session at a time.
+
+**Limits and behaviour to know.**
+- The reload after each call also reloads Whisper and briefly shows "Loading models" on Home. If the reporter answers within about 3 s of a question, that answer waits for the reload.
+- If a reload fails, the next turn is answered by the rules engine (fallback chip), not by the model.
+- A call that takes longer than 20 s is aborted and answered by the rules engine.
+- Category detail fields (for example leak source) are not in the compact extraction prompt; they are collected by the follow-up questions.
+- The folder is still called `models/llama` (that name is fixed in the native engine and `app_config.json`), and the engine info line in Settings still reports the native default model name; the proof line and the "Active" row show the detected family.
+- Only the extraction step was measured on the eval set; follow-up answers were checked by hand on the board.
+- Known wrong behaviour, from the on-board cases (`eval/RESULTS.md` section 2): a second incident in the same sentence is not captured; a long rambling forklift report and "fire is spreading, someone is unconscious" were both typed MEDICAL; any mention of fire starts the emergency clock, including a small controlled one.
+
+**Stretch (not done): base versus fine-tuned comparison.** If the fine-tuned model arrives as merged weights, do not start an NPU export. Convert it to GGUF Q4_0 and run it with llama.cpp on the CPU next to the base model for a base-versus-fine-tuned table on the same eval set.
+
+**Measured (details and caveats in `eval/RESULTS.md`).**
+- Speed on the QIDK: 22–23 tok/s; time to first token 0.5–0.6 s with the app's prompt; extraction 4.4 s median (5.8 s p90) and a follow-up answer 1.8 s median inside the app; model load 3.4 s.
+- Text eval, 150 cases, first prompt, raw parsed output: incident type 53.3 % for Qwen against 96.0 % for the rules engine (which was tuned on this set); field F1 0.39 against 0.73; valid tool calls 98 % against 100 %; made-up fields 26 % against 2 %.
+- After the prompt rewrite and the keyword hint, on a hand-picked 30-case subset: incident type 30 of 30 (11 of 30 before). The full set was not re-run.
+- On-board cases: 6 pass, 3 partial, 1 fail. Soak: 18 consecutive reports, no crash, latency flat, 42–49 °C.
+- Unit tests: 404 of 404 pass (`:core` 190, `:domain`, `:app`; two of them are the eval tool, which does nothing without its environment variables).
+
+**Honest summary.** The model runs reliably on the NPU and the pipeline around it works, but on this eval set the rules engine is still the more accurate extractor; Qwen is the default because the bundle is present and Auto prefers it, with the rules engine giving the category hint, checking the model's claims and taking over a turn when the model fails. To make the rules engine the default instead, choose Settings → Engine → Mock, or remove `genie_config.json` from the model folder.
+
+## Evidence, hotspots and offline QR handoff (App branch, branch `wow-features`, 2026-10-11 08:00–09:00)
+
+Three features built in a second session while the board was busy with the evals. Everything below was built and unit-tested on the Mac and checked on the Mac's Android emulator (mock engine, typed input). **Nothing here has run on the QIDK yet**; the board checks are listed at the end.
+
+### 1. Show your evidence (review screen and report detail)
+
+- **What it does.** Each short field (type, location, time, injuries, persons, equipment, actions taken, witnesses) remembers which words of the transcript support it. Tapping the field shows those words on a coral tint (20 %) in bold in a transcript card pinned at the top of the screen; tapping again clears it. A value that nothing in the transcript supports gets an amber "Needs review" chip. Description and SOP steps have no highlight.
+- **Storage.** `EvidenceSpan(turn, start, end)`: `turn` is the index of the reporter's utterance (0 = narration, then each follow-up answer), `start`/`end` are character offsets in that utterance. `IncidentForm.evidence` holds key → spans; stored as JSON in the new column `incidents.evidence_json` (**DB v5**, migration 4→5 adds the column, existing rows keep NULL). A report saved before v5 gets its spans computed from its transcript when it is opened, so old data shows evidence too.
+- **How a span is found** (`core/Evidence.kt`, on top of `Grounding`, no model):
+  - *Said word for word*: every occurrence is highlighted (a value repeated twice gives two spans).
+  - *Otherwise* the tightest run of words that covers at least half of the value's words and every number in it. Uses the same lexicon and prefix matching as the grounding check, plus number words ("room two") and the recogniser's sound-alikes ("room to"). "Conference Room 2" is supported by "conf room two" and not by "conference room 1".
+  - *Type*: the category's own cue words from the taxonomy ("leak", "aag"), also through the Hinglish lexicon ("paani").
+  - *Time*: the stored phrase first, so "at 10, no, 11" points to "11". If the model paraphrased ("half an hour ago" for "aadha ghanta pehle"), every time phrase in the transcript is resolved by `TimeResolver` and the one that gives the stored time is taken. A time that was assumed (not said) has no span.
+  - *Injuries*: injury words for YES, a denial ("nobody was hurt", "kisi ko chot nahi lagi") for NO. A YES never rests on words inside a denial.
+  - *Follow-up answers*: a value set by an answer is looked for in that answer first; if no single word carries it ("No."), the whole answer is the span. Fields the answer did not change keep their spans.
+  - A value typed by the reporter on the review screen has no span and no chip (it is theirs).
+- **Tests.** `EvidenceTest` (9: English, Hinglish, self-correction, no evidence, follow-up answer, repeated value, recogniser spellings, denial, storage) and `EvidenceStorageTest` (3: through Room, pre-v5 row, migration).
+
+### 2. Hotspots and repeat incidents
+
+Rules on the local database, no model. Every threshold is in `core/HotspotRules.kt`:
+
+| Constant | Value | Meaning |
+|---|---|---|
+| `REPEAT_MIN_REPORTS` / `REPEAT_WINDOW_DAYS` | 3 / 7 | REPEAT: 3 or more reports of the same type at the same location within 7 days, counted up to and including the report |
+| `HOTSPOT_MIN_REPORTS` / `HOTSPOT_WINDOW_DAYS` | 5 / 30 | HOTSPOT: 5 or more reports of any type at the location in 30 days |
+| `HOTSPOT_TOP_N` / `HOTSPOT_TOP_MIN_REPORTS` | 3 / 2 | or one of the top 3 locations by count, with at least 2 reports |
+| `TREND_DAYS` | 7 | trend = last 7 days against the 7 days before |
+
+- **`HOTSPOT_TOP_MIN_REPORTS` is an addition to the brief.** Without it, on a nearly empty device every place with a single report would be a "top 3" hotspot.
+- **Location key** (`LocationKeys`): the site-registry id when the place is known, so "conf room 2", "near conference room two" and "Conference Room 2" are all `A-1-CR2`. A place outside the registry is keyed by its cleaned-up words ("Workshop", "in the workshop" → `text:workshop`).
+- **What is counted**: submitted reports only; drafts and linked witness accounts (the same event told twice) are not. The window edge is inside the window (a report exactly 7 days earlier counts, 1 ms older does not).
+- **Tags**: computed when a report is submitted or edited and stored in `incidents.tags_json`; the chips on the list are recounted live so they stay right when reports are added or deleted.
+  - "Repeat incident · 3rd water leak here in 7 days" (coral chip) on the report that made it a repeat.
+  - "Hotspot" chip on every report at a hotspot location.
+- **After submit**: if the report is a repeat, a card: "Recurring hazard: N <type> reports at <location> in 7 days. Recommend inspection of <location>."
+- **Dashboard**: a "Hotspots" section at the top with the top 3 locations (reports in 30 days, most common type, last 7 days and the 7 before, ↑ more / ↓ fewer / → same). Tapping one filters the list to that place; "Show all" clears it.
+- **Demo data** (Settings → Demo data, debug builds only): "Seed demo data" inserts 12 reports over the last 30 days, every row marked `is_demo = 1` and labelled "Demo data" in the list: 2 water leaks at Conference Room 2 inside the last 7 days (the next leak there is the 3rd and shows the card), 5 at the Workshop, 2 at the Loading Dock, 3 single ones. "Clear demo data" deletes only `is_demo = 1` rows. The older "Load demo reports" rows are marked as demo data too.
+- **DB v6**: `incidents.is_demo` (INTEGER NOT NULL DEFAULT 0) and `incidents.tags_json`.
+- **Tests.** `HotspotsTest` (10, incl. the 7-day edge and location normalisation) and `HotspotRepositoryTest` (7: seed, dashboard order, 3rd leak, place filter, clear demo, drafts and witness accounts, migration).
+
+### 3. Offline QR handoff and the reader page
+
+- **App**: report detail → "Share offline" → full-screen QR code, black on white, screen brightness at maximum while it is shown, caption "Scan with the Qalam Reader". Drawn with ZXing `core` 3.5.3 at error-correction level M. No network, no pairing.
+- **Payload** (the contract with `web/reader.html`; also in `web/README.md`):
+  - `QALAM1:` + base64url (no padding) of raw DEFLATE (`Deflater(9, true)`, no zlib header) of compact UTF-8 JSON.
+  - Keys: `v` (1), `id`, `ts`, `type`, `sev`, `loc`, `at` (`{"t": ISO time, "approx": bool}`), `inj`, `per`, `eq`, `act`, `wit`, `desc`, `det` (label → value), `sop` (steps), `tags` (sentences), `eng`, `tx` (optional), `crc` (always last).
+  - `crc` = CRC32 (8 lower-case hex digits) of the JSON text with its tail `"crc":"xxxxxxxx"}` replaced by `"crc":""}`. The reader checks the text it received and never re-serialises.
+  - Size: at most 1,200 bytes compressed. Too big → drop `tx`, then shorten `desc`; as a last resort keep 3 `sop` steps and drop `det`.
+  - Values are readable text (labels, not codes). The reporter's name and employee id are not in the code.
+- **Reader** (`web/reader.html`, 563 KB, one file, zero network): live camera (native `BarcodeDetector` when the browser has it, else jsQR), "Scan from photo", "Paste code"; green "Integrity check passed" or red "Corrupted / not a Qalam code" with the note "Checks for transmission errors; not a tamper-proof signature."; one-page A4 PDF `Qalam_Incident_<type>_<date>.pdf`; history in `localStorage` with Clear; 360 px layout; light and dark. jsQR, jsPDF, pako (inflate) and a Latin subset of Inter (19 KB) are inlined. `manifest.json` and `sw.js` only matter when the folder is served over https.
+- **Tests.** Kotlin `QrPayloadTest` (6: round trip, wire format, size limit, damage, built from a saved report, writes `web/samples`) and `QrShareTest` (the drawn QR read back by ZXing). Web: `npm test` in `web/` runs the Kotlin → JS round trip on the samples, the photo path (PNG → jsQR) and headless Chrome on the file opened from disk (paste, PDF download, damage, photo, history, dark mode, a fake camera for the live scan, and a check that no request leaves the page).
+- **End to end on the emulator**: a screenshot of the app's QR screen was decoded by the reader's own decoder with the checksum passing.
+
+### Build notes
+
+- New dependency: `com.google.zxing:core:3.5.3` (app). The web tools are dev-only (`web/package.json`); Node is not installed on the Mac, so the tests were run with a Node 22 binary unpacked in a temporary folder.
+- The database goes from v4 to v6 in two steps. Both migrations only add columns.
+- Unit tests after the three features: 431, none failing (`:core:test :domain:test :app:testDebugUnitTest`).
+
+### Not done yet (needs the board)
+
+1. F1: tap the fields of a fresh spoken water-leak report and check the highlights.
+2. F2: seed demo data, report a water leak at Conference Room 2 by voice, confirm the card and the dashboard section.
+3. F3: photograph the board's QR screen with a phone and decode it in `reader.html`; try the live camera scan.
+4. Rebase on the latest main (the Qwen commits touch `ConversationOrchestrator.kt`, which these features also edit in a few lines), rerun the tests, merge what passes.
+
+
+## Merge of the feature branch, system-level eval and the QR ↔ web check (App branch, 2026-10-11 09:30)
+
+- **Merged:** evidence view ("tap a field, its words light up"), repeat incidents and hotspots, offline QR handoff, and the Qalam Reader web page (`web/`). Database is now version 6; the board's existing database (version 4, 89 rows) migrated on first start with nothing lost.
+- **One check per feature on the QIDK, final build:** app starts after the migration with no crash · Dashboard shows the Hotspots block ("Conference Room 2 · 2 reports in 30 days · mostly water leak") · report detail shows the transcript with "Tap a field to see its evidence" · "Share offline" shows a full-screen QR code (632 bytes for the report tried).
+- **QR and web reader together:** a screenshot of the QR code on the board's screen was read with the web page's own decoder (jsQR + `src/decode.js`, script `web/test/device_shot.mjs`): prefix `QALAM1:`, decoded, **integrity check passed**, all fields of the report present. The page's own tests also pass (decode of the samples written by the Kotlin encoder, QR-image round trip, headless-browser run with PDF download). Not done: scanning the board's screen with a phone camera through the hosted page.
+- **Engine name in the QR payload** now says what is actually running ("Qwen3-4B on Hexagon NPU + Whisper small (CPU)", or the rules engine), instead of the native library's default model name.
+- **Hosting the reader:** `bash web/make_deploy.sh` writes `web/deploy/` (index.html, manifest.json, sw.js, icon.svg, _headers); upload that folder to Cloudflare Pages as static assets, no build step. Details in `web/README.md`.
+- **Category check:** when the model answers OTHER or no category and the keyword rules recognise one, the rules' category is used; a category the model chose is never overruled.
+- **System-level eval:** `eval/RESULTS.md` section 0. On the 108 held-out cases with the improved prompt: incident type 95.4 % for the whole system, the same as rules-only and above the raw model (90.7 %); field F1 0.53 for the system against 0.71 for rules-only, on sentences the rules were tuned on. Free-form human-written cases were not available and were not run.
+- **Seen twice, not explained:** the first Gradle run after a source change ended with "BUILD FAILED" without a compiler or test error in the filtered output, and the immediate re-run passed (440 of 440 tests). The APK from the passing run is the one installed.

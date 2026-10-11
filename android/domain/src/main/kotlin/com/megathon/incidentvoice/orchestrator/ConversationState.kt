@@ -31,6 +31,8 @@ data class ConversationUiState(
     /** Keys currently streaming in from the LLM (shimmer in the live preview). */
     val streamingFields: Set<String> = emptySet(),
     val transcriptDraft: String = "",
+    /** What the reporter said, one entry per utterance (review screen: transcript with evidence highlights). */
+    val userTurns: List<String> = emptyList(),
     val countdownMs: Int = 0,
     val level: Float = 0f,
     val elapsedMs: Long = 0,
@@ -54,6 +56,8 @@ data class ConversationUiState(
     val duplicate: DuplicatePrompt? = null,
     /** Extra 3: set once this report was linked to a case. */
     val linkedTo: String? = null,
+    /** After submit: "Recurring hazard: …" when this report is a repeat incident. */
+    val recurring: String? = null,
     val debug: DebugInfo = DebugInfo(),
 ) {
     val canSubmit: Boolean get() = validation?.complete == true && (state == ConvState.REVIEW || state == ConvState.MANUAL_FILL)

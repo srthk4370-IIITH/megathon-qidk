@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#E5484D">
+<title>Qalam Reader</title>
+<!--
+  Qalam Reader: reads the offline QR code of a Qalam incident report and makes a PDF of it.
+  ONE self-contained file. No network is used: no CDN, no external font, no analytics. Save it and open it in a browser.
+  Built by web/build.mjs from web/src. Bundled libraries (licences in web/vendor/LICENSES.md):
+  jsQR 1.4.0 (Apache-2.0), jsPDF 2.5.2 (MIT), pako 2.1.0 inflate (MIT and Zlib), Inter 4.001 Latin subset (SIL OFL 1.1).
+-->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='112' fill='%23E5484D'/%3E%3Ccircle cx='232' cy='228' r='126' fill='none' stroke='%23fff' stroke-width='56'/%3E%3Cpath d='M300 296l96 96' stroke='%23fff' stroke-width='56' stroke-linecap='round'/%3E%3C/svg%3E">
+<style>
+/*__FONT__*/
+:root {
+  --bg: #F6F7F9; --surface: #FFFFFF; --text: #111827; --muted: #6B7280; --line: #E5E7EB; --outline: #D1D5DB;
+  --coral: #E5484D; --coral-press: #C93A3F; --on-coral: #FFFFFF; --tint: rgba(229, 72, 77, .08);
+  --ok: #15803D; --ok-bg: #ECFDF3; --bad: #B91C1C; --bad-bg: #FEF2F2; --amber: #B45309;
+  --low: #15803D; --medium: #B45309; --high: #C2410C; --critical: #B91C1C;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0F1115; --surface: #181B21; --text: #F3F4F6; --muted: #9CA3AF; --line: #262A33; --outline: #3A404C;
+    --coral: #FF6B70; --coral-press: #E5484D; --on-coral: #0F1115; --tint: rgba(255, 107, 112, .12);
+    --ok: #4ADE80; --ok-bg: #12261A; --bad: #F87171; --bad-bg: #2A1516; --amber: #FBBF24;
+  }
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--text);
+  font: 15px/1.4 "Inter Reader", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+main { max-width: 720px; margin: 0 auto; padding: 0 16px 32px; }
+header { max-width: 720px; margin: 0 auto; padding: 16px; display: flex; align-items: center; gap: 10px; }
+header svg { width: 28px; height: 28px; flex: none; }
+.wordmark { font-size: 20px; font-weight: 600; color: var(--coral); letter-spacing: -.01em; }
+.wordmark span { color: var(--text); font-weight: 500; }
+.pill { margin-left: auto; font-size: 12px; font-weight: 500; color: var(--muted); border: 1px solid var(--outline); border-radius: 6px; padding: 2px 8px; white-space: nowrap; }
+h1 { font-size: 22px; font-weight: 600; margin: 8px 0 4px; line-height: 1.25; overflow-wrap: anywhere; }
+h2 { font-size: 13px; font-weight: 500; color: var(--muted); margin: 20px 0 8px; }
+p { margin: 0 0 8px; }
+.muted { color: var(--muted); }
+.small { font-size: 13px; }
+.mono { font-family: ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace; font-size: 13px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; }
+.pad { padding: 16px; }
+.stack > * + * { margin-top: 10px; }
+button, .btn {
+  font: inherit; font-weight: 600; min-height: 52px; width: 100%; border-radius: 10px; border: 1px solid var(--outline);
+  background: var(--surface); color: var(--text); padding: 12px 16px; cursor: pointer; display: flex; align-items: center; justify-content: center; text-align: center;
+  -webkit-tap-highlight-color: transparent;
+}
+button.primary { background: var(--coral); border-color: var(--coral); color: var(--on-coral); font-size: 17px; }
+button.primary:active { background: var(--coral-press); }
+button.plain { border-color: transparent; background: transparent; font-weight: 500; min-height: 48px; width: auto; padding: 8px 12px; }
+button:disabled { opacity: .5; cursor: default; }
+button:focus-visible, textarea:focus-visible, summary:focus-visible, .btn:focus-within { outline: 2px solid var(--coral); outline-offset: 2px; }
+input[type=file] { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; }
+textarea {
+  font: inherit; width: 100%; min-height: 96px; resize: vertical; border-radius: 10px; border: 1px solid var(--outline); background: var(--surface); color: var(--text); padding: 12px;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 13px; overflow-wrap: anywhere;
+}
+details > summary { cursor: pointer; min-height: 48px; display: flex; align-items: center; font-weight: 500; list-style: none; }
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before { content: "+"; width: 20px; color: var(--muted); }
+details[open] > summary::before { content: "\2212"; }
+video { display: block; width: 100%; max-height: 60vh; border-radius: 10px; background: #000; object-fit: cover; }
+#msg { min-height: 20px; }
+#msg.error { color: var(--bad); }
+.banner { border-radius: 10px; padding: 12px 14px; font-weight: 600; border: 1px solid; }
+.banner small { display: block; font-weight: 400; font-size: 13px; margin-top: 2px; }
+.banner.ok { color: var(--ok); background: var(--ok-bg); border-color: var(--ok); }
+.banner.bad { color: var(--bad); background: var(--bad-bg); border-color: var(--bad); }
+.badge { display: inline-block; border-radius: 6px; padding: 2px 10px; font-size: 13px; font-weight: 600; color: #fff; background: var(--muted); }
+.badge.LOW { background: var(--low); } .badge.MEDIUM { background: var(--medium); } .badge.HIGH { background: var(--high); } .badge.CRITICAL { background: var(--critical); }
+.tags { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 0; }
+.tag { font-size: 12px; font-weight: 500; border: 1px solid var(--coral); color: var(--coral); border-radius: 6px; padding: 1px 6px; }
+.tag.neutral { border-color: var(--text); color: var(--text); }
+dl { margin: 0; }
+.row { padding: 10px 16px; border-top: 1px solid var(--line); }
+.row:first-child { border-top: 0; }
+dt { font-size: 13px; color: var(--muted); }
+dd { margin: 2px 0 0; overflow-wrap: anywhere; white-space: pre-wrap; }
+ol.steps { margin: 0; padding: 12px 16px 12px 36px; }
+ol.steps li + li { margin-top: 6px; }
+.hist { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 56px; padding: 10px 16px; border: 0; border-top: 1px solid var(--line); border-radius: 0; background: transparent; text-align: left; font-weight: 400; justify-content: flex-start; }
+.hist:first-child { border-top: 0; }
+.hist .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--muted); flex: none; }
+.hist .dot.LOW { background: #16A34A; } .hist .dot.MEDIUM { background: #D97706; } .hist .dot.HIGH { background: #EA580C; } .hist .dot.CRITICAL { background: #B91C1C; }
+.hist b { font-weight: 500; display: block; overflow-wrap: anywhere; }
+.rowflex { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+[hidden] { display: none !important; }
+footer { max-width: 720px; margin: 0 auto; padding: 0 16px 32px; }
+@media (min-width: 560px) { .two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; } .two > * + * { margin-top: 0; } }
+</style>
+</head>
+<body>
+<header>
+  <svg viewBox="0 0 512 512" aria-hidden="true"><rect width="512" height="512" rx="112" fill="#E5484D"/><circle cx="232" cy="228" r="126" fill="none" stroke="#FFFFFF" stroke-width="56"/><path d="M300 296l96 96" stroke="#FFFFFF" stroke-width="56" stroke-linecap="round"/></svg>
+  <div class="wordmark">Qalam <span>Reader</span></div>
+  <div class="pill" id="netpill">Works offline</div>
+</header>
+<main>
+  <section id="scan" aria-label="Scan a code">
+    <p class="muted">Read the QR code shown by Qalam's “Share offline”. Nothing leaves this device.</p>
+    <div class="stack two">
+      <button class="primary" id="btnCamera" type="button">Scan with camera</button>
+      <label class="btn" id="lblPhoto" tabindex="0">Scan from photo<input id="filePhoto" type="file" accept="image/*" capture="environment"></label>
+    </div>
+    <div id="camera" class="stack" hidden style="margin-top:10px">
+      <video id="video" playsinline muted></video>
+      <button id="btnStop" type="button">Stop camera</button>
+    </div>
+    <p id="msg" class="small muted" role="status" aria-live="polite" style="margin-top:10px"></p>
+    <details id="paste">
+      <summary>Paste code</summary>
+      <div class="stack">
+        <textarea id="txtCode" spellcheck="false" autocapitalize="off" autocomplete="off" placeholder="QALAM1:…" aria-label="Qalam code"></textarea>
+        <button id="btnRead" type="button">Read code</button>
+      </div>
+    </details>
+  </section>
+
+  <section id="result" hidden aria-label="Report" style="margin-top:16px">
+    <div id="integrity" class="banner" role="status"></div>
+    <div id="report" style="margin-top:16px"></div>
+    <div class="stack" style="margin-top:16px">
+      <button class="primary" id="btnPdf" type="button">Download PDF</button>
+      <button id="btnAgain" type="button">Scan another</button>
+    </div>
+  </section>
+
+  <section id="history" aria-label="Scanned on this browser">
+    <div class="rowflex"><h2>Scanned in this browser</h2><button class="plain" id="btnClear" type="button" hidden>Clear</button></div>
+    <div id="histList" class="card"></div>
+    <p id="histEmpty" class="small muted">Nothing scanned yet.</p>
+  </section>
+</main>
+<footer>
+  <p class="small muted">Qalam Reader is a single file that works with no network. Reports are kept only in this browser's storage and can be cleared above.</p>
+</footer>
+<!--__SCRIPTS__-->
+</body>
+</html>

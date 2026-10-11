@@ -55,6 +55,8 @@ data class PromptTemplates(
     /** tool name → compact JSON of config/schemas/tool_<name>.json */
     val toolSchemas: Map<String, String>,
     val extractSystemFt: String? = null,
+    /** Compact extraction prompt with two in-prompt examples, used for the Qwen family. */
+    val extractSystemQwen: String? = null,
 ) {
     companion object {
         private val json = Json { ignoreUnknownKeys = true }
@@ -78,6 +80,7 @@ data class PromptTemplates(
                 warmupUser = tpl(read("prompts/warmup.user.txt")),
                 toolSchemas = listOf(Tools.FILL, Tools.UPDATE, Tools.PROPOSE).associateWith { schema(it) },
                 extractSystemFt = runCatching { tpl(read("prompts/extract.system.ft.txt")) }.getOrNull(),
+                extractSystemQwen = runCatching { tpl(read("prompts/extract.system.qwen.txt")) }.getOrNull(),
             )
         }
     }
@@ -88,7 +91,31 @@ data class PromptTemplates(
  * Kotlin `:core` PromptBuilder and Python `prompt_builder.py` — checked against `config/prompts/golden`).
  * Llama 3.2 chat format without `<|begin_of_text|>` (Genie adds BOS, PRD §13.9).
  */
-class PromptBuilder(private val tx: Taxonomy, private val t: PromptTemplates, private val variant: String = "base") {
+enum class ModelFamily(val display: String) {
+    LLAMA("Llama 3.2 3B"), QWEN("Qwen3-4B");
+
+    companion object {
+        /** From the bundle folder: a `model.json` with `"family"`, else the file names in `genie_config.json`. */
+        fun detect(modelJson: String?, genieConfig: String?): ModelFamily {
+            val hint = (modelJson.orEmpty() + " " + genieConfig.orEmpty()).lowercase()
+            // Qualcomm's Qwen bundle names its parts part1_of_4.bin, so also recognise it by Qwen's end-of-turn token id
+            return if ("qwen" in hint || Regex("\"eos-token\"\\s*:\\s*151645").containsMatchIn(genieConfig.orEmpty())) QWEN else LLAMA
+        }
+    }
+}
+
+/** Removes what a chat model may wrap around the tool call: Qwen3 `<think>` blocks and end-of-turn markers. */
+object ModelOutput {
+    private val think = Regex("<think>.*?</think>", RegexOption.DOT_MATCHES_ALL)
+    fun clean(raw: String): String {
+        var s = think.replace(raw, "")
+        s.indexOf("<think>").let { if (it >= 0) s = s.substring(0, it) }          // an unfinished think block: nothing after it is an answer
+        for (stop in listOf("<|im_end|>", "<|endoftext|>", "<|eot_id|>")) s.indexOf(stop).let { if (it >= 0) s = s.substring(0, it) }
+        return s.trim()
+    }
+}
+
+class PromptBuilder(private val tx: Taxonomy, private val t: PromptTemplates, private val variant: String = "base", private val family: () -> ModelFamily = { ModelFamily.LLAMA }) {
 
     private val statics: Map<String, String> by lazy {
         mapOf(
@@ -103,7 +130,21 @@ class PromptBuilder(private val tx: Taxonomy, private val t: PromptTemplates, pr
 
     fun schema(tool: String): String = t.toolSchemas[tool] ?: error("no schema for $tool")
 
-    fun chat(system: String?, shots: List<FewShot>, user: String): String = buildString {
+    fun chat(system: String?, shots: List<FewShot>, user: String): String = if (family() == ModelFamily.QWEN) chatQwen(system, shots, user) else chatLlama(system, shots, user)
+
+    /**
+     * Qwen (ChatML): `<|im_start|>role\n…<|im_end|>\n`, no BOS. The assistant prefix ends with an empty think block,
+     * which switches Qwen3's thinking mode off so the answer starts at once.
+     */
+    private fun chatQwen(system: String?, shots: List<FewShot>, user: String): String = buildString {
+        fun seg(role: String, text: String) { append("<|im_start|>").append(role).append('\n').append(text).append("<|im_end|>\n") }
+        if (system != null) seg("system", system)
+        for (s in shots) { seg("user", s.user); append("<|im_start|>assistant\n<think>\n\n</think>\n\n").append(s.assistant).append("<|im_end|>\n") }
+        seg("user", user)
+        append("<|im_start|>assistant\n<think>\n\n</think>\n\n")
+    }
+
+    private fun chatLlama(system: String?, shots: List<FewShot>, user: String): String = buildString {
         fun seg(role: String, text: String) { append("<|start_header_id|>").append(role).append("<|end_header_id|>\n\n").append(text).append("<|eot_id|>") }
         if (system != null) seg("system", system)
         for (s in shots) { seg("user", s.user); seg("assistant", s.assistant) }
@@ -121,8 +162,11 @@ class PromptBuilder(private val tx: Taxonomy, private val t: PromptTemplates, pr
 
     fun extractSystemText(): String = render(if (variant == "ft" && t.extractSystemFt != null) t.extractSystemFt else t.extractSystem)
 
-    fun extract(transcript: String): String =
-        chat(extractSystemText(), if (variant == "ft") emptyList() else t.fewShots, render(t.extractUser, mapOf("transcript" to transcript.trim())))
+    /** @param categoryHint keyword-rule guess of the category; only the Qwen prompt uses it (the model may overrule it). */
+    fun extract(transcript: String, categoryHint: String? = null): String =
+        if (family() == ModelFamily.QWEN && t.extractSystemQwen != null) chat(t.extractSystemQwen, emptyList(),
+            render(t.extractUser, mapOf("transcript" to transcript.trim())) + (categoryHint?.let { "\nKeyword hint for incident_type: $it" } ?: ""))
+        else chat(extractSystemText(), if (variant == "ft") emptyList() else t.fewShots, render(t.extractUser, mapOf("transcript" to transcript.trim())))
 
     fun patch(form: IncidentForm, question: String, askedFields: List<String>, answer: String): String = chat(
         render(t.patchSystem, mapOf("asked_field_specs" to askedFieldSpecs(askedFields))), emptyList(),
