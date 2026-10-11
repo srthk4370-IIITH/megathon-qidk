@@ -82,7 +82,7 @@ private fun engineLine(s: EngineStatus, llm: String): String = when (s) {
     is EngineStatus.Ready -> when {
         s.info.backend == "MOCK" -> "Mock engine (scripted speech)"
         llm == "FALLBACK" -> "Speech recognised on this device · stand-in language model"
-        else -> "English or Hinglish · speech and language model run on this device"
+        else -> "Speech and language model run on this device"
     }
     is EngineStatus.Loading -> "Loading models, ${(s.progress * 100).toInt()} %"
     is EngineStatus.Error -> "Engine error ${s.error.code}"

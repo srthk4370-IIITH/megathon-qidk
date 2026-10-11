@@ -359,3 +359,71 @@ If a report is already in progress, a quick-launch request does not interrupt it
 ### 2026-10-11 07:20 — ML: Qwen fallback on the Mac; this laptop = fine-tuned Llama only
 - Stock Llama export abandoned: Part 3 (3.5 GB) upload failed repeatedly (S3 SSL EOF with 128 conns; WSL crashed a 3rd time under heavy upload). Hook's "reuse recent same-name upload" fallback picked an incomplete killed upload → removed.
 - New robust uploader in `ml/export/iv_resume_hub.py` (per-part retries, 16 MiB × 32 threads). Precompiled Llama assets do not exist (licence); Qwen3-4B precompiled does (8 Elite for Galaxy, w4a16) → Mac downloads it as fallback.
+
+## On-device LLM: Qwen3-4B on the Hexagon NPU (App branch, 2026-10-11)
+
+**What runs now.** The language model in the app is Qualcomm's pre-compiled **Qwen3-4B** (Genie runtime, w4a16 quantisation, 4096-token context), running on the QIDK's Hexagon NPU inside the app process. It replaces the rules stand-in whenever the bundle is on the device: Settings → Engine → Auto prefers the NPU model when `models/llama/genie_config.json` exists, and falls back to the rules engine otherwise. The rules engine also answers a single turn if the model fails, times out (20 s) or returns something that cannot be parsed twice; the screen then shows a "Fallback" chip.
+
+**Where the model comes from.** Qualcomm's model page https://huggingface.co/qualcomm/Qwen3-4B → table "Download Pre-Exported Models" → row GENIE / w4a16 / "Snapdragon 8 Elite For Galaxy Mobile" (QAIRT 2.45). Licence of the model card: Apache-2.0. The file is `qwen3_4b-genie-w4a16-qualcomm_snapdragon_8_elite_for_galaxy.zip` (2.5 GB; four context binaries `part1_of_4.bin` … `part4_of_4.bin`, 3.2 GB unpacked). `htp_backend_ext_config.json` in it targets `soc_model 69`, `dsp_arch v79`, which is the QIDK's SM8750 / Hexagon V79. The bundle was compiled with QAIRT 2.45; the board runs it with the QAIRT 2.50 libraries already in use (Genie 1.20).
+
+**Weights are not in the repository** (`*.bin` and `iv_exports/` are in `.gitignore`). To reproduce:
+
+```
+mkdir -p ~/iv_exports/qwen3_4b && cd ~/iv_exports/qwen3_4b
+curl -L -O https://qaihub-public-assets.s3.us-west-2.amazonaws.com/qai-hub-models/models/qwen3_4b/releases/v0.64.0/qwen3_4b-genie-w4a16-qualcomm_snapdragon_8_elite_for_galaxy.zip
+unzip qwen3_4b-genie-w4a16-qualcomm_snapdragon_8_elite_for_galaxy.zip && cd qwen3_4b-genie-w4a16-qualcomm_snapdragon_8_elite_for_galaxy
+# greedy decoding: in genie_config.json set dialog.sampler to {"version":1,"seed":42,"temp":1.0,"top-k":1,"top-p":1.0}; leave context.size at 4096
+# (the app's engine applies the same sampler itself when it loads the bundle)
+echo '{"family":"qwen","name":"Qwen3-4B"}' > model.json
+M=/sdcard/Android/data/com.megathon.incidentvoice/files/models/llama        # the folder the app's Genie engine reads
+adb shell am force-stop com.megathon.incidentvoice
+for f in genie_config.json htp_backend_ext_config.json tokenizer.json model.json part1_of_4.bin part2_of_4.bin part3_of_4.bin part4_of_4.bin; do adb push $f $M/$f; done
+```
+
+Smoke test from the shell before starting the app (uses the QAIRT tools the ML branch keeps in `/data/local/tmp/iv`):
+
+```
+adb push smoke_prompt.txt /data/local/tmp/qwen_smoke_prompt.txt
+adb shell "cd $M && export LD_LIBRARY_PATH=/data/local/tmp/iv/lib && export ADSP_LIBRARY_PATH='/data/local/tmp/iv/dsp;/vendor/dsp/cdsp;/vendor/lib/rfsa/adsp;/system/lib/rfsa/adsp;/dsp' && /data/local/tmp/iv/bin/genie-t2t-run -c genie_config.json --prompt_file /data/local/tmp/qwen_smoke_prompt.txt"
+# timings as JSON: adb shell "/data/local/tmp/iv/run.sh llm --prompt-file /data/local/tmp/qwen_smoke_prompt.txt --max-tokens 200 --models /sdcard/Android/data/com.megathon.incidentvoice/files/models"
+```
+
+**Smoke-test result on the board** (prompt: a one-line system message asking for one JSON object, the water-leak sentence, empty think block):
+
+```
+{"name":"fill_incident_form","arguments":{"incident_type":"water_leak","location":"Conference Room 2","time":"10 AM","action_taken":"maintenance_isolated_area"}}
+```
+Valid JSON, no `<think>` text. Decode speed 23.0 tok/s, time to first token 69 ms, 1.7 s in total for 38 tokens. With the app's real extraction prompt (about 800 tokens): time to first token about 0.5 s, 22–23 tok/s, 3.7 s for 73 tokens. Model load: 3.4 s.
+
+**Chat template (selectable by model family).** `ModelFamily` (`core/PromptBuilder.kt`) is detected from the bundle folder: a `model.json` that says "qwen", the word "qwen" in `genie_config.json`, or Qwen's end-of-turn token id (`"eos-token": 151645`); anything else is treated as Llama and that path is unchanged (its golden-prompt tests still pass).
+- Qwen messages are wrapped as `<|im_start|>role\n…<|im_end|>\n`; no BOS token is added.
+- Every assistant prefix ends with `<|im_start|>assistant\n<think>\n\n</think>\n\n`. The empty think block switches Qwen3's thinking mode off, so the answer starts immediately.
+- Generation stops on `<|im_end|>` (the bundle's EOS); the app also cuts the text at `<|im_end|>` and removes any `<think>…</think>` block before parsing, then takes the first balanced `{…}`.
+- Extraction uses a compact prompt written for Qwen, `config/prompts/extract.system.qwen.txt` (about 3,800 characters, roughly 950 tokens; the target was 800) with the categories one per line, a short Hinglish glossary for time words, and two format examples inside it (an English fire and a Hinglish fall). Follow-up (patch) and repair prompts are the existing ones in the Qwen wrapper. Tool schema, validator, grounding, follow-up logic and the NO_INCIDENT contract are unchanged.
+- **Keyword hint.** The user message ends with `Keyword hint for incident_type: <CODE>` when the keyword rules recognise a category; the prompt tells the model to use it unless the transcript clearly says otherwise. Without the hint the first version of the prompt got the incident type right in 53 % of the eval cases; see `eval/RESULTS.md`.
+- **Evidence checks on the model's output (`EvidenceGuard`, deterministic).** The model tends to fill fields from habit, so before its answer reaches the form: "injuries", "injured_count" and "severity" are kept only if the words themselves say so (the keyword rules find them too, or the emergency keywords fire); a location none of whose words were spoken and a time when no time was mentioned are dropped; life-at-risk wording (unconscious, not breathing, fire spreading, trapped) forces CRITICAL. Dropped fields are simply asked for.
+- **Self-correction.** "at 10, no, 11" is rewritten to "at 11" before the text goes to the model (`SelfCorrection`); the stored transcript keeps the words as spoken.
+
+**Two things that had to be fixed to make it run in the app.**
+1. *Crash on load.* The first in-app load crashed inside `GenieDialog_create` (null pointer in `libGenie.so`). The bundle's `genie_config.json` names a backend extension file, and reading it needs `libQnnHtpNetRunExtensions.so`, which the shell tools had and the APK did not. The QAIRT 2.50 copy from the board is now packaged in `android/app/src/main/jniLibs/arm64-v8a/`. (No model had been loaded in-app on the NPU before this, so the gap had never shown.)
+2. *Session breaks after a long prompt.* With this bundle and Genie 1.20, once a prompt goes past roughly 500 tokens (310 was fine, 460 was not), every later query in the same Genie session fails with `GenieDialog_query status=-1` ("batch dispatch failed"), even after `GenieDialog_reset`. Short prompts can be repeated without limit. The native library could not be rebuilt on the App laptop, so the app works around it in `MlEngineAdapter`: after every model call it re-creates the session in the background (3.4 s), while the question is spoken and the reporter answers; the next call waits for that reload if it is still running. Still one NPU session at a time.
+
+**Limits and behaviour to know.**
+- The reload after each call also reloads Whisper and briefly shows "Loading models" on Home. If the reporter answers within about 3 s of a question, that answer waits for the reload.
+- If a reload fails, the next turn is answered by the rules engine (fallback chip), not by the model.
+- A call that takes longer than 20 s is aborted and answered by the rules engine.
+- Category detail fields (for example leak source) are not in the compact extraction prompt; they are collected by the follow-up questions.
+- The folder is still called `models/llama` (that name is fixed in the native engine and `app_config.json`), and the engine info line in Settings still reports the native default model name; the proof line and the "Active" row show the detected family.
+- Only the extraction step was measured on the eval set; follow-up answers were checked by hand on the board.
+- Known wrong behaviour, from the on-board cases (`eval/RESULTS.md` section 2): a second incident in the same sentence is not captured; a long rambling forklift report and "fire is spreading, someone is unconscious" were both typed MEDICAL; any mention of fire starts the emergency clock, including a small controlled one.
+
+**Stretch (not done): base versus fine-tuned comparison.** If the fine-tuned model arrives as merged weights, do not start an NPU export. Convert it to GGUF Q4_0 and run it with llama.cpp on the CPU next to the base model for a base-versus-fine-tuned table on the same eval set.
+
+**Measured (details and caveats in `eval/RESULTS.md`).**
+- Speed on the QIDK: 22–23 tok/s; time to first token 0.5–0.6 s with the app's prompt; extraction 4.4 s median (5.8 s p90) and a follow-up answer 1.8 s median inside the app; model load 3.4 s.
+- Text eval, 150 cases, first prompt, raw parsed output: incident type 53.3 % for Qwen against 96.0 % for the rules engine (which was tuned on this set); field F1 0.39 against 0.73; valid tool calls 98 % against 100 %; made-up fields 26 % against 2 %.
+- After the prompt rewrite and the keyword hint, on a hand-picked 30-case subset: incident type 30 of 30 (11 of 30 before). The full set was not re-run.
+- On-board cases: 6 pass, 3 partial, 1 fail. Soak: 18 consecutive reports, no crash, latency flat, 42–49 °C.
+- Unit tests: 404 of 404 pass (`:core` 190, `:domain`, `:app`; two of them are the eval tool, which does nothing without its environment variables).
+
+**Honest summary.** The model runs reliably on the NPU and the pipeline around it works, but on this eval set the rules engine is still the more accurate extractor; Qwen is the default because the bundle is present and Auto prefers it, with the rules engine giving the category hint, checking the model's claims and taking over a turn when the model fails. To make the rules engine the default instead, choose Settings → Engine → Mock, or remove `genie_config.json` from the model folder.

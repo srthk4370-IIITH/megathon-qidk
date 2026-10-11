@@ -68,9 +68,10 @@ class SmallTalkTest {
     @Test fun sentinel_isRecognised_andTheRulesEngineReturnsIt() {
         assertTrue(SmallTalk.isSentinel("NO_INCIDENT")); assertTrue(SmallTalk.isSentinel(" no_incident. ")); assertFalse(SmallTalk.isSentinel("No incident in bay 4 today")); assertFalse(SmallTalk.isSentinel(null))
         val out = rules.extract("hello hello testing 1 2 3, can you hear me?")
-        assertEquals("{\"incident_type\":\"OTHER\",\"description\":\"NO_INCIDENT\",\"lang\":\"en\"}", out.toString())
-        assertEquals("\"hinglish\"", rules.extract("kuch nahi bas check kar raha tha")["lang"].toString())
-        assertFalse(SmallTalk.isSentinel(rules.extract("there is a water leak near the pantry")["description"].toString().trim('"')))
+        assertEquals("{\"name\":\"fill_incident_form\",\"parameters\":{\"incident_type\":\"OTHER\",\"description\":\"NO_INCIDENT\",\"lang\":\"en\"}}", out.toString())
+        assertTrue(Fx.parser.parse(out.toString(), Tools.FILL) is ParseOutcome.Ok)
+        assertEquals("\"hinglish\"", (rules.extract("kuch nahi bas check kar raha tha")["parameters"] as kotlinx.serialization.json.JsonObject)["lang"].toString())
+        assertFalse(SmallTalk.isSentinel((rules.extract("there is a water leak near the pantry")["parameters"] as kotlinx.serialization.json.JsonObject)["description"].toString().trim('"')))
     }
 
     /** The ML branch's small-talk set must be rejected, and its real-incident set must not be. */
@@ -83,6 +84,31 @@ class SmallTalkTest {
         println("SMALLTALK-EVAL small talk not rejected: ${missed.size}/15 ${missed}  | real incidents rejected: ${wronglyRejected.size}/150 ${wronglyRejected}")
         assertTrue(missed.isEmpty(), "small talk filed as an incident: $missed")
         assertTrue(wronglyRejected.isEmpty(), "real incidents rejected: $wronglyRejected")
+    }
+
+    @Test fun selfCorrection_usesTheCorrectedTime() {
+        assertEquals("A forklift hit the rack in Bay 4 at 11 in the morning.", SelfCorrection.apply("A forklift hit the rack in Bay 4 at 10, no, 11 in the morning."))
+        assertEquals("It happened around 3:30 pm", SelfCorrection.apply("It happened around 3 pm, sorry, 3:30 pm"))
+        assertEquals("subah 9 baje hua", SelfCorrection.apply("subah 8 baje, nahi, 9 baje hua"))
+        assertEquals("There were 10 people and no injuries", SelfCorrection.apply("There were 10 people and no injuries"))
+        assertEquals("Bay 4, no one was hurt", SelfCorrection.apply("Bay 4, no one was hurt"))
+    }
+    @Test fun evidenceGuard_dropsPlaceAndTimeNobodySaid() {
+        fun f(vararg kv: Pair<String, String>) = kv.associate { it.first to (kotlinx.serialization.json.JsonPrimitive(it.second) as kotlinx.serialization.json.JsonElement) }
+        assertEquals(setOf("incident_type"), EvidenceGuard.filterUnsaid(f("incident_type" to "WATER", "location" to "building", "occurred_at" to "today"), "there's a leak").keys)
+        assertEquals(setOf("location", "occurred_at"), EvidenceGuard.filterUnsaid(f("location" to "near the pantry", "occurred_at" to "half an hour ago"), "Pantry ke paas paani leak ho raha hai, aadha ghanta pehle").keys)
+        assertEquals(setOf("location", "occurred_at"), EvidenceGuard.filterUnsaid(f("location" to "Bay 4", "occurred_at" to "at 11 in the morning"), "A forklift hit the rack in Bay 4 at 11 in the morning").keys)
+    }
+
+    @Test fun evidenceGuard_lifeAtRiskIsCritical_whateverTheModelSaid() {
+        val text = "fire is spreading, someone is unconscious"
+        val rp = rules.extract(text)["parameters"] as kotlinx.serialization.json.JsonObject
+        val out = EvidenceGuard.filterUnsaid(EvidenceGuard.filter(mapOf("severity" to kotlinx.serialization.json.JsonPrimitive("MEDIUM"), "injuries" to kotlinx.serialization.json.JsonPrimitive("YES")), rp, emergency.scan(text) != null), text)
+        assertEquals("CRITICAL", (out["severity"] as kotlinx.serialization.json.JsonPrimitive).content)
+        // an ordinary report keeps what the speaker said
+        val calm = "water leak near the pantry, it is minor, nobody is hurt"
+        val out2 = EvidenceGuard.filterUnsaid(EvidenceGuard.filter(mapOf("severity" to kotlinx.serialization.json.JsonPrimitive("LOW")), rules.extract(calm)["parameters"] as kotlinx.serialization.json.JsonObject, false), calm)
+        assertEquals("LOW", (out2["severity"] as kotlinx.serialization.json.JsonPrimitive).content)
     }
 
     // ---- language matching and the reporter's own words

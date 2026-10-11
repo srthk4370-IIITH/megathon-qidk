@@ -78,7 +78,7 @@ fun SettingsScreen(c: AppContainer) {
             val llm by c.llmBackend.collectAsStateWithLifecycle()
             InfoRow("Active", when {
                 kind != "JNI" -> "Mock (scripted demo responses)"
-                llm == "NPU" -> "On device: Whisper speech recognition and Llama on the Hexagon NPU"
+                llm == "NPU" -> "On device: Whisper speech recognition and ${c.modelFamily.collectAsStateWithLifecycle().value.display} on the Hexagon NPU"
                 llm == "FALLBACK" -> "On device: Whisper speech recognition. Stand-in language model until the Llama bundle is on the device (then choose Auto to reload)"
                 else -> "On device (not ready, see status)"
             })
