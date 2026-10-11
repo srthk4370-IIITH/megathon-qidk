@@ -162,8 +162,10 @@ class PromptBuilder(private val tx: Taxonomy, private val t: PromptTemplates, pr
 
     fun extractSystemText(): String = render(if (variant == "ft" && t.extractSystemFt != null) t.extractSystemFt else t.extractSystem)
 
-    fun extract(transcript: String): String =
-        if (family() == ModelFamily.QWEN && t.extractSystemQwen != null) chat(t.extractSystemQwen, emptyList(), render(t.extractUser, mapOf("transcript" to transcript.trim())))
+    /** @param categoryHint keyword-rule guess of the category; only the Qwen prompt uses it (the model may overrule it). */
+    fun extract(transcript: String, categoryHint: String? = null): String =
+        if (family() == ModelFamily.QWEN && t.extractSystemQwen != null) chat(t.extractSystemQwen, emptyList(),
+            render(t.extractUser, mapOf("transcript" to transcript.trim())) + (categoryHint?.let { "\nKeyword hint for incident_type: $it" } ?: ""))
         else chat(extractSystemText(), if (variant == "ft") emptyList() else t.fewShots, render(t.extractUser, mapOf("transcript" to transcript.trim())))
 
     fun patch(form: IncidentForm, question: String, askedFields: List<String>, answer: String): String = chat(

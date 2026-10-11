@@ -88,6 +88,9 @@ class RuleBasedLlm(private val tx: Taxonomy, private val registry: SiteRegistry?
         return cues.any { it.re.containsMatchIn(t) } || has(rx(NEG_INJ).replace(t, " "), POS_INJ)
     }
 
+    /** The category the keywords point to, or null when no keyword matched (used as a hint for the model, never as a decision). */
+    fun categoryHint(text: String): String? = if (hasIncidentCue(text)) classify(clean(text)).primary else null
+
     private fun classify(t0: String): Classified {
         val negInj = has(t0, NEG_INJ)
         val t = rx(NEG_INJ).replace(t0, " ")           // "nobody was hurt" must not vote for MEDICAL

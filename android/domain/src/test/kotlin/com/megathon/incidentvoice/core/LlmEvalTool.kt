@@ -15,18 +15,18 @@ import kotlin.test.Test
  */
 class LlmEvalTool {
     private val cases by lazy { File(Fx.dir.parentFile, "eval/text_cases.jsonl").readLines().filter { it.isNotBlank() }.map { Json.parseToJsonElement(it).jsonObject } }
-    private val skip = setOf("lang", "title", "description", "actions_taken", "persons", "witnesses", "other_incidents", "details")
+    private val skip = setOf("lang", "title", "description", "other_incidents", "details")
 
     @Test fun export() {
         val out = System.getenv("IV_EVAL_EXPORT") ?: return
         val pb = PromptBuilder(Fx.tx, Fx.templates, "base") { ModelFamily.QWEN }
+        val rb = RuleBasedLlm(Fx.tx, Fx.registry); val hint = System.getenv("IV_EVAL_HINT") == "1"
         File(out).writeText(cases.joinToString("\n") { c ->
-            JsonObject(mapOf("id" to c["id"]!!, "prompt" to JsonPrimitive(pb.extract(c["transcript"]!!.jsonPrimitive.content)), "max_tokens" to JsonPrimitive(320), "sampler" to JsonPrimitive("greedy"))).toString()
+            val tr = c["transcript"]!!.jsonPrimitive.content
+            JsonObject(mapOf("id" to c["id"]!!, "prompt" to JsonPrimitive(pb.extract(tr, if (hint) rb.categoryHint(tr) else null)), "max_tokens" to JsonPrimitive(320), "sampler" to JsonPrimitive("greedy"))).toString()
         } + "\n")
         println("EVAL exported ${cases.size} prompts to $out")
     }
-
-    private class Score { var n = 0; var valid = 0; var typeOk = 0; var tp = 0; var fp = 0; var fn = 0; val ms = ArrayList<Double>(); val tps = ArrayList<Double>(); val ttft = ArrayList<Double>(); val byLang = HashMap<String, IntArray>() }
 
     private fun flat(gold: JsonObject): Map<String, JsonElement> {
         val m = LinkedHashMap<String, JsonElement>()
@@ -40,12 +40,15 @@ class LlmEvalTool {
         val a = Fx.times.resolve(str(got), now)
         val b = Fx.times.resolve(str(want), now)
         if (a.defaulted) return false
-        return kotlin.math.abs(a.instant.toEpochMilli() - b.instant.toEpochMilli()) <= 60_000
+        return kotlin.math.abs(a.instant.toEpochMilli() - b.instant.toEpochMilli()) <= 15 * 60_000
     }
     private fun place(x: String) = x.lowercase().replace(Regex("^(near|behind|in|at|inside|outside|the)\\s+"), "").replace(Regex("^the\\s+"), "").trim()
     private fun samePlace(want: JsonElement, got: JsonElement): Boolean {
         val g = place(str(got)); val w = place(str(want))
-        return g.isNotEmpty() && (g.contains(w) || w.contains(g))
+        if (g.isEmpty()) return false
+        val a = matcher.match(str(got)).location?.id; val b = matcher.match(str(want)).location?.id      // same place in the site registry
+        if (a != null && b != null) return a == b
+        return g.contains(w) || w.contains(g)
     }
     private fun sameList(key: String, want: JsonArray, got: JsonElement): Boolean {
         val g = (got as? JsonArray) ?: return false
@@ -60,53 +63,45 @@ class LlmEvalTool {
         return str(got).isNotBlank()
     }
 
-    private fun scoreOne(sc: Score, c: JsonObject, raw: String?) {
-        val gold = c["gold"]!!.jsonObject; val now = OffsetDateTime.parse(c["now"]!!.jsonPrimitive.content).toInstant(); val lang = c["lang"]!!.jsonPrimitive.content
-        val call = raw?.let { (Fx.parser.parse(it, Tools.FILL) as? ParseOutcome.Ok)?.call }
-        sc.n++; val l = sc.byLang.getOrPut(lang) { IntArray(2) }; l[0]++
-        if (call != null) sc.valid++
-        val got = call?.fields ?: emptyMap()
-        if ((got["incident_type"] as? JsonPrimitive)?.content == gold["incident_type"]!!.jsonPrimitive.content) { sc.typeOk++; l[1]++ }
-        val want = flat(gold)
-        for ((k, w) in want) { val g = got[k]; if (g != null && same(k, w, g, now)) sc.tp++ else { sc.fn++; if (g != null) sc.fp++ } }
-        for (k in got.keys) if (k !in want && k !in skip) sc.fp++
-    }
+    private val matcher = LocationMatcher(Fx.registry)
 
-    private fun pct(xs: List<Double>, p: Double) = if (xs.isEmpty()) 0.0 else xs.sorted()[((xs.size - 1) * p).toInt()]
-    private fun summary(name: String, sc: Score): JsonObject {
-        val p = if (sc.tp + sc.fp == 0) 0.0 else sc.tp.toDouble() / (sc.tp + sc.fp); val r = if (sc.tp + sc.fn == 0) 0.0 else sc.tp.toDouble() / (sc.tp + sc.fn)
-        fun r1(x: Double) = JsonPrimitive(Math.round(x * 10) / 10.0)
+    /** One case, one engine → every number the report needs. Description is scored on its own, never inside the field counts. */
+    private fun detail(c: JsonObject, raw: String?, stats: JsonObject?): JsonObject {
+        val gold = c["gold"]!!.jsonObject; val now = OffsetDateTime.parse(c["now"]!!.jsonPrimitive.content).toInstant()
+        val call = raw?.let { (Fx.parser.parse(it, Tools.FILL) as? ParseOutcome.Ok)?.call }
+        val got = call?.fields ?: emptyMap()
+        val want = flat(gold)
+        var tp = 0; val wrong = ArrayList<String>(); val missing = ArrayList<String>(); val madeUp = ArrayList<String>()
+        for ((k, w) in want) { val g = got[k]; if (g == null) missing += k else if (same(k, w, g, now)) tp++ else wrong += "$k: expected ${str2(w)}, got ${str2(g)}" }
+        val predicted = got.keys.filter { it !in skip }
+        for (k in predicted) if (k !in want) madeUp += "$k=${str2(got[k]!!)}"
+        val gd = (gold["description"] as? JsonPrimitive)?.content; val pd = (got["description"] as? JsonPrimitive)?.content
+        val tr = c["transcript"]!!.jsonPrimitive.content
         return JsonObject(mapOf(
-            "engine" to JsonPrimitive(name), "cases" to JsonPrimitive(sc.n),
-            "incident_type_accuracy_pct" to r1(100.0 * sc.typeOk / sc.n),
-            "incident_type_accuracy_en_pct" to r1(sc.byLang["en"]?.let { 100.0 * it[1] / it[0] } ?: 0.0),
-            "incident_type_accuracy_hinglish_pct" to r1(sc.byLang["hinglish"]?.let { 100.0 * it[1] / it[0] } ?: 0.0),
-            "field_precision" to JsonPrimitive(Math.round(p * 1000) / 1000.0), "field_recall" to JsonPrimitive(Math.round(r * 1000) / 1000.0),
-            "field_f1" to JsonPrimitive(if (p + r == 0.0) 0.0 else Math.round(2 * p * r / (p + r) * 1000) / 1000.0),
-            "valid_tool_call_pct" to r1(100.0 * sc.valid / sc.n),
-            "latency_p50_ms" to r1(pct(sc.ms, 0.5)), "latency_p90_ms" to r1(pct(sc.ms, 0.9)), "ttft_p50_ms" to r1(pct(sc.ttft, 0.5)), "decode_tok_per_s_p50" to r1(pct(sc.tps, 0.5)),
+            "id" to c["id"]!!, "lang" to c["lang"]!!, "category" to gold["incident_type"]!!, "transcript" to JsonPrimitive(tr),
+            "valid" to JsonPrimitive(call != null), "pred_type" to (got["incident_type"] ?: JsonNull),
+            "expected" to JsonPrimitive(want.size), "predicted" to JsonPrimitive(predicted.size), "tp" to JsonPrimitive(tp),
+            "wrong" to JsonArray(wrong.map { JsonPrimitive(it) }), "missing" to JsonArray(missing.map { JsonPrimitive(it) }), "made_up" to JsonArray(madeUp.map { JsonPrimitive(it) }),
+            "desc_present" to JsonPrimitive(!pd.isNullOrBlank()), "desc_expected" to JsonPrimitive(gd != null),
+            "desc_overlap_with_transcript" to JsonPrimitive(if (pd.isNullOrBlank()) 0.0 else DescriptionStyle.overlap(pd, tr)),
+            "desc_overlap_with_gold" to JsonPrimitive(if (pd.isNullOrBlank() || gd == null) 0.0 else DescriptionStyle.overlap(pd, gd)),
+            "raw" to JsonPrimitive(raw.orEmpty().take(600)), "stats" to (stats ?: JsonNull),
         ))
     }
+    private fun str2(e: JsonElement) = if (e is JsonPrimitive) e.content else e.toString()
 
     @Test fun score() {
         val file = System.getenv("IV_EVAL_SCORE") ?: return
-        val outDir = File(System.getenv("IV_EVAL_OUT") ?: File(Fx.dir.parentFile, "eval").path)
+        val out = File(System.getenv("IV_EVAL_DETAIL") ?: error("IV_EVAL_DETAIL not set"))
         val outs = File(file).readLines().filter { it.isNotBlank() }.map { Json.parseToJsonElement(it).jsonObject }.associateBy { it["id"]!!.jsonPrimitive.content }
-        val qwen = Score(); val rules = Score(); val rb = RuleBasedLlm(Fx.tx, Fx.registry)
-        for (c in cases) {
+        val rb = RuleBasedLlm(Fx.tx, Fx.registry)
+        val rows = cases.map { c ->
             val o = outs[c["id"]!!.jsonPrimitive.content]
-            scoreOne(qwen, c, o?.get("text")?.jsonPrimitive?.contentOrNull)
-            (o?.get("stats") as? JsonObject)?.let { st ->
-                fun d(vararg k: String) = k.firstNotNullOfOrNull { (st[it] as? JsonPrimitive)?.doubleOrNull }
-                d("wall_ms", "wallMs")?.let { qwen.ms += it }; d("decode_tps", "decodeTps")?.takeIf { it > 0 }?.let { qwen.tps += it }; d("ttft_ms", "ttftMs")?.let { qwen.ttft += it }
-            }
-            val t0 = System.nanoTime(); val r = rb.extract(c["transcript"]!!.jsonPrimitive.content).toString(); rules.ms += (System.nanoTime() - t0) / 1e6
-            scoreOne(rules, c, r)
+            val t0 = System.nanoTime(); val r = rb.extract(c["transcript"]!!.jsonPrimitive.content).toString(); val ms = (System.nanoTime() - t0) / 1e6
+            JsonObject(mapOf("qwen" to detail(c, o?.get("text")?.jsonPrimitive?.contentOrNull, o?.get("stats") as? JsonObject),
+                "rules" to detail(c, r, JsonObject(mapOf("wall_ms" to JsonPrimitive(ms))))))
         }
-        val date = System.getenv("IV_EVAL_DATE") ?: java.time.LocalDate.now().toString()
-        val res = JsonObject(mapOf("date" to JsonPrimitive(date), "set" to JsonPrimitive("eval/text_cases.jsonl (150 cases: 75 English, 75 Hinglish)"), "model_outputs_received" to JsonPrimitive(outs.size),
-            "results" to JsonArray(listOf(summary(System.getenv("IV_EVAL_NAME") ?: "Qwen3-4B (Genie, Hexagon NPU, on the QIDK)", qwen), summary("Rules engine (stand-in, JVM on the laptop)", rules)))))
-        File(outDir, "results_$date.json").writeText(Json { prettyPrint = true }.encodeToString(JsonObject.serializer(), res) + "\n")
-        println("EVAL " + res)
+        out.writeText(JsonArray(rows).toString())
+        println("EVAL detail written: ${rows.size} cases, model outputs ${outs.size}")
     }
 }

@@ -430,7 +430,7 @@ class ConversationOrchestrator(
     private suspend fun extract(text: String) {
         retryAction = { extract(text) }
         update { it.copy(state = ConvState.EXTRACTING, streamingFields = emptySet(), error = null) }
-        val gen = generateWithRetry(LlmTask.EXTRACT, prompts.extract(text), SamplerName.GREEDY, cfg.app.llm.maxTokens.extract, preview = true) { rules.extract(text).toString() } ?: return
+        val gen = generateWithRetry(LlmTask.EXTRACT, prompts.extract(text, rules.categoryHint(text)), SamplerName.GREEDY, cfg.app.llm.maxTokens.extract, preview = true) { rules.extract(text).toString() } ?: return
         var call = parseWithRepair(gen.text, Tools.FILL, null)
         // the model itself found nothing to file (no type, no description)
         val said = (call?.fields?.get("description") as? JsonPrimitive)?.content
