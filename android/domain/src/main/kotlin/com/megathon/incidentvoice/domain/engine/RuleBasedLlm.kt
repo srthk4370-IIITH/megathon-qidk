@@ -307,6 +307,10 @@ class RuleBasedLlm(private val tx: Taxonomy, private val registry: SiteRegistry?
     // ------------------------------------------------------------------------------------------ tool calls
 
     fun extract(transcript: String): JsonObject {
+        // same contract as the real model: nothing reportable → the NO_INCIDENT sentinel, nothing else
+        if (com.megathon.incidentvoice.core.SmallTalk.isNoIncident(transcript, ::hasIncidentCue)) return JsonObject(mapOf(
+            "incident_type" to JsonPrimitive("OTHER"), "description" to JsonPrimitive(com.megathon.incidentvoice.core.SmallTalk.SENTINEL),
+            "lang" to JsonPrimitive(com.megathon.incidentvoice.core.LangDetector.ofSpeech(transcript))))
         val t = clean(transcript)
         val c = classify(t)
         val p = LinkedHashMap<String, JsonElement>()

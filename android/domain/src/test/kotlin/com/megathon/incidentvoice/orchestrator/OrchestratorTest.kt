@@ -206,7 +206,7 @@ class OrchestratorTest {
         r.o.startNew(); r.o.onMicTapped(); advanceUntilIdle()
         assertEquals(ConvState.IDLE, r.o.ui.value.state); assertNotNull(r.o.ui.value.notice)
         assertEquals(3, r.tts.spoken.count { it.contains("I didn't catch an incident") })
-        assertNull(r.repo.store.values.first().form.incidentType)
+        assertTrue(r.repo.store.isEmpty())                                   // no empty draft is left behind
     }
 
     /** Hinglish in, Hinglish questions out; English in, English out; the words are stored as they were said. */
