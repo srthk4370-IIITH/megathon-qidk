@@ -2,6 +2,71 @@
 
 All numbers below were produced on 2026-10-11. Sample sizes are small; read differences of a few points as noise.
 
+## 0. System vs components (read this first)
+
+Three things are compared on the same sentences:
+- **Rules only**: the keyword rules engine alone (the stand-in that runs when no model is on the device).
+- **Qwen raw**: what the model wrote, parsed, nothing else.
+- **Qalam system**: what the app actually puts in the form. The model's answer goes through the app's own post-processing, the same Kotlin code in the same order as `ConversationOrchestrator.extract`: spoken self-correction, tool-call parser (the rules engine answers if the model's output cannot be parsed), evidence checks on injuries / severity / place / time, the category check (the rules' category is used only when the model said OTHER or nothing), then the merger (enum normalisation, grounding, site-registry location, time resolution). Scored by `LlmEvalTool` (a JVM test harness that calls that code; nothing is re-implemented).
+
+**Why the rules score so high here.** The 150 sentences in `eval/text_cases.jsonl` are template-generated, and the rules engine was written and tuned by looking at exactly these sentences (all 150, not only the "dev" ones). Its keyword lists contain the words these templates use. So "Rules only" on this set is an upper bound for the rules, not an estimate of how they do on sentences they have not seen. The Qwen prompt was written without these sentences, and `eval/dev_ids.txt` (42 ids) marks the cases the ML branch used for prompt work, which leaves 108 held out for the model. The fair test for all three is free-form text written by people; see "Not run" below.
+
+### 0.1 Held-out split, improved prompt, on the board (N = 108)
+
+Qwen3-4B on the QIDK's NPU with the current prompt (`config/prompts/extract.system.qwen.txt`) and the keyword hint, one fresh Genie session per case.
+
+| Metric | Rules only | Qwen raw (improved prompt + hint) | Qalam system (improved prompt) |
+|---|---|---|---|
+| N | 108 | 108 | 108 |
+| Incident-type accuracy | 95.4 % (103/108) | 90.7 % (98/108) | 95.4 % (103/108) |
+| Field precision | 0.924 | 0.601 | 0.727 |
+| Field recall | 0.570 | 0.387 | 0.414 |
+| Field F1 (micro) | 0.705 | 0.471 | 0.528 |
+| Mapping accuracy | 57.0 % (483/847) | 38.7 % (328/847) | 41.4 % (351/847) |
+| Valid tool-call rate | 100.0 % (108/108) | 95.4 % (103/108) | 95.4 % (103/108) |
+| Made-up field rate | 2.5 % (13/523) | 28.8 % (157/546) | 18.4 % (89/483) |
+
+By language, incident-type accuracy: English (42): rules 100.0 % (42/42), Qwen raw 97.6 % (41/42), system 97.6 % (41/42). Hinglish (66): rules 92.4 % (61/66), Qwen raw 86.4 % (57/66), system 93.9 % (62/66).
+
+The same 108 cases with the **first** prompt, for comparison:
+
+| Metric | Rules only | Qwen raw (first prompt) | Qalam system (first prompt) |
+|---|---|---|---|
+| N | 108 | 108 | 108 |
+| Incident-type accuracy | 95.4 % (103/108) | 51.9 % (56/108) | 69.4 % (75/108) |
+| Field precision | 0.924 | 0.505 | 0.579 |
+| Field recall | 0.570 | 0.290 | 0.332 |
+| Field F1 (micro) | 0.705 | 0.369 | 0.422 |
+| Mapping accuracy | 57.0 % (483/847) | 29.0 % (246/847) | 33.2 % (281/847) |
+| Valid tool-call rate | 100.0 % (108/108) | 97.2 % (105/108) | 97.2 % (105/108) |
+| Made-up field rate | 2.5 % (13/523) | 27.7 % (135/487) | 24.3 % (118/485) |
+
+What this says, including what goes against us:
+- With the improved prompt the system matches rules-only on incident type (95.4 % each) and is ahead of the raw model (90.7 %). On Hinglish the system is slightly ahead of the rules (62 against 61 of 66).
+- On field F1 the system (0.53) is still clearly behind rules-only (0.71), on sentences the rules were tuned on. Recall is the gap: the compact prompt does not ask for category detail fields, people or secondary types, so the app collects those with follow-up questions instead; the rules pick many of them up from keywords.
+- The system layer removes about a third of the model's made-up fields (28.8 % → 18.4 %). Most of what remains is `actions_taken` (46 of 89), where the speaker did mention an action and the reference does not list it, and `severity` (17).
+- 5 of 108 model answers were not valid tool calls; the app falls back to the rules engine for those.
+- Keyword hint: the model sees the rules' category guess. On this set that guess is right 95 % of the time, so part of the model's type accuracy here is borrowed from the rules.
+- Speed in this run: median 5.6 s per call (p90 7.2 s), time to first token 0.7 s, 20.6 tok/s.
+
+### 0.2 All 150 cases, first prompt, logged outputs re-scored (no board)
+
+| Metric | Rules only | Qwen raw (first prompt) | Qalam system (first prompt) |
+|---|---|---|---|
+| N | 150 | 150 | 150 |
+| Incident-type accuracy | 96.0 % (144/150) | 53.3 % (80/150) | 69.3 % (104/150) |
+| Field precision | 0.934 | 0.537 | 0.611 |
+| Field recall | 0.600 | 0.311 | 0.343 |
+| Field F1 (micro) | 0.731 | 0.394 | 0.440 |
+| Mapping accuracy | 60.0 % (709/1182) | 31.1 % (368/1182) | 34.3 % (406/1182) |
+| Valid tool-call rate | 100.0 % (150/150) | 98.0 % (147/150) | 98.0 % (147/150) |
+| Made-up field rate | 2.2 % (17/759) | 26.3 % (180/685) | 22.4 % (149/664) |
+
+### 0.3 Not run
+
+- **Free-form, human-written cases** (`eval/freeform/`) and the **recorded-clip transcripts** (`eval/asr_clips/transcripts.csv`): neither folder was in the repository on any branch when this was written, so there is no result on text the rules were not tuned on. That is the comparison that matters most and it is missing.
+- The improved prompt was not run on the 42 dev cases.
+
 ## 1. Extraction on the text eval set: rules baseline vs Qwen3-4B on the NPU (first prompt, model output as parsed)
 
 **Set:** `eval/text_cases.jsonl`, N = 150 typed transcripts (75 English, 75 Hinglish), the same cases for both engines. Each transcript goes through the app's own prompt builder, tool-call parser and normalisers (`LlmEvalTool`, `android/domain/src/test`). Qwen ran on the QIDK's Hexagon NPU, one fresh Genie session per case; the rules engine ran on the laptop (text only, no NPU).
