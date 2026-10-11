@@ -145,3 +145,14 @@ def test_extract_json_helper():
 
 def test_lenient_fix_keeps_strings():
     assert lenient_fix('{"a": "x, }", b: True,}') == '{"a": "x, }", "b": true}'
+
+
+def test_no_incident_sentinel():
+    raw = ('{"name":"fill_incident_form","parameters":{"incident_type":"OTHER","description":"NO_INCIDENT",'
+           '"lang":"hinglish","location":"Bay 1"}}')
+    pc = parse(raw, T, transcript="haan hello sun rahe ho")
+    assert pc.ok and pc.no_incident
+    assert pc.params == {"incident_type": "OTHER", "description": "NO_INCIDENT", "lang": "hinglish"}
+    pc = parse('{"name":"fill_incident_form","parameters":{"incident_type":"OTHER","description":"no incident."}}', T)
+    assert pc.no_incident and pc.params["description"] == "NO_INCIDENT"
+    assert not parse(SLIDE, T).no_incident

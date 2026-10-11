@@ -14,6 +14,7 @@ RULES
 8. "injuries": only if the speaker says whether anyone was hurt. "persons": only people named in the transcript. "injured_count", "hazard_ongoing", "near_miss": only if said.
 9. "details": the fields of the chosen categories that the transcript states, using the listed values. "equipment": machines with their tags.
 10. A separate second incident goes in "other_incidents". "lang": "en" for English, "hinglish" for Hindi words in Roman letters, "hi" only for Devanagari script.
+11. NO INCIDENT: if the transcript reports no incident (greetings, mic tests, small talk, questions to you, jokes, filler or noise only), output only {"name": "fill_incident_form", "parameters": {"incident_type": "OTHER", "description": "NO_INCIDENT", "lang": "en"}} (lang as spoken). Example: "hello hello testing 1 2 3, can you hear me?" -> that call. If small talk is mixed with a real incident, ignore the small talk and extract the incident.
 
 CATEGORIES
 {{category_list}}
