@@ -25,11 +25,15 @@ class ConversationOrchestrator(
     private val clock: () -> Instant = { Instant.now() },
     /** §31.3 back-off between engine retries; tests pass an empty list. */
     private val retryDelaysMs: List<Long> = listOf(3_000, 7_000, 15_000),
+    /** Which chat template the loaded model needs (detected from the bundle on the device). */
+    private val modelFamily: () -> ModelFamily = { ModelFamily.LLAMA },
+    /** Hard limit for one model call; after it the call is aborted and the rules engine answers that turn. */
+    private val llmTimeoutMs: Long = 20_000,
 ) {
     private val tx = cfg.taxonomy
     private val parser = ToolCallParser(tx)
     private val merger = FormMerger(tx, TimeResolver(), LocationMatcher(cfg.registry))
-    private val prompts = PromptBuilder(tx, cfg.templates, cfg.app.models.promptVariant)
+    private val prompts = PromptBuilder(tx, cfg.templates, cfg.app.models.promptVariant, modelFamily)
     private val sop = SopSelector(cfg.sop, cfg.app.recommend.maxItems)
     private val emergencyDetector = EmergencyDetector(tx)
     /** Keyword rules: tell an incident from small talk, and stand in for the model for one turn if it fails. */
@@ -432,7 +436,12 @@ class ConversationOrchestrator(
         val said = (call?.fields?.get("description") as? JsonPrimitive)?.content
         val nothing = call != null && (SmallTalk.isSentinel(said) || (call.fields["incident_type"] == null && said == null && !hasIncidentCue(text)))
         if (nothing) { form = IncidentForm(lang = form.lang); update { it.copy(streamingFields = emptySet(), form = form) }; noIncident(text); return }
-        if (call == null) { // §13.7: unparseable after one repair → manual fill with the transcript
+        if (call == null) { // unparseable after one repair → the rules engine answers this turn, and the screen says so
+            call = (parser.parse(rules.extract(text).toString(), Tools.FILL, null) as? ParseOutcome.Ok)?.call
+            if (call != null) update { it.copy(notice = FALLBACK_NOTICE, debug = it.debug.copy(lastTask = "EXTRACT (rules)")) }
+        }
+        if (call != null && SmallTalk.isSentinel((call.fields["description"] as? JsonPrimitive)?.content)) { form = IncidentForm(lang = form.lang); update { it.copy(streamingFields = emptySet(), form = form) }; noIncident(text); return }
+        if (call == null) { // §13.7: still nothing → manual fill with the transcript
             ensureDescriptionFromTranscript()
             update { it.copy(state = ConvState.ERROR_PARSE, error = "Couldn't understand fully — please check the form.", streamingFields = emptySet()) }
             persist()
@@ -518,7 +527,8 @@ class ConversationOrchestrator(
         update { it.copy(state = ConvState.PATCHING, error = null) }
         val prompt = prompts.patch(form, q.text(form.lang), q.fields, text)
         val gen = generateWithRetry(LlmTask.PATCH, prompt, SamplerName.GREEDY, cfg.app.llm.maxTokens.patch, preview = false) { rules.patch(q.fields, text).toString() } ?: return
-        val call = parseWithRepair(gen.text, Tools.UPDATE, form.types)
+        val call = (parseWithRepair(gen.text, Tools.UPDATE, form.types)
+            ?: (parser.parse(rules.patch(q.fields, text).toString(), Tools.UPDATE, form.types) as? ParseOutcome.Ok)?.call?.also { update { u -> u.copy(notice = FALLBACK_NOTICE) } })
             ?.let { c -> if (SmallTalk.isSentinel((c.fields["description"] as? JsonPrimitive)?.content)) c.copy(fields = emptyMap()) else c }   // sentinel in an answer = no new info, never a description
         if (call != null) {
             val m = merger.merge(form, call, FieldSource.LLM_PATCH, null, userTexts.toString(), clock())
@@ -608,6 +618,7 @@ class ConversationOrchestrator(
         val t0 = System.nanoTime()
         generating = true
         try {
+        val finished = withTimeoutOrNull(llmTimeoutMs) {
         engine.generate(GenRequest(task, prompt, sampler, maxTokens)).collect { ev ->
             when (ev) {
                 is GenEvent.Token -> {
@@ -617,6 +628,12 @@ class ConversationOrchestrator(
                 is GenEvent.Done -> { stats = ev.stats; if (sb.isBlank() && !ev.text.isNullOrBlank()) sb.append(ev.text) }
                 is GenEvent.Error -> throw EngineException(ev.error)
             }
+        }
+        true
+        }
+        if (finished == null) {     // never hang: stop the model and let the caller fall back
+            runCatching { engine.abort() }
+            throw EngineException(EngineError("IV-E604", "The model did not answer within ${llmTimeoutMs / 1000} s", retryable = false))
         }
         } finally { generating = false }
         if (sb.isBlank()) throw EngineException(EngineError("IV-E601", "Empty output from the engine", retryable = true))

@@ -38,7 +38,11 @@ fun ConversationScreen(ui: ConversationUiState, tx: Taxonomy, o: ConversationOrc
         LinearProgressIndicator(progress = { ui.validation?.progress ?: 0f }, Modifier.fillMaxWidth().padding(top = 8.dp).height(4.dp).clip(RoundedCornerShape(2.dp)),
             color = MaterialTheme.colorScheme.onSurface, trackColor = divider, drawStopIndicator = {})
         // status notices ("Using offline fallback", "retrying") are plain; they are information, not alarms
-        ui.notice?.let { Text(it, color = secondaryText, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 4.dp)) }
+        ui.notice?.let {
+            if (it == ConversationOrchestrator.FALLBACK_NOTICE) Text("Fallback · rules engine answered this turn", style = MaterialTheme.typography.labelMedium,
+                modifier = Modifier.padding(top = 4.dp).border(1.dp, divider, RoundedCornerShape(10.dp)).padding(horizontal = 10.dp, vertical = 4.dp))
+            else Text(it, color = secondaryText, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 4.dp))
+        }
         // Extra 1: pinned response clock (replaces the banner, which carries the same steps)
         ui.response?.let { ResponseClockCard(it, o::onResponseStep, Modifier.padding(top = 8.dp)) }
 
