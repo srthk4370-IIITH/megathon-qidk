@@ -27,6 +27,9 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.doubleOrNull
 import com.megathon.incidentvoice.engine.EngineException as MlEngineException
 import com.megathon.incidentvoice.engine.EngineStatus as MlStatus
+import kotlinx.coroutines.flow.onCompletion
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.launch
 import com.megathon.incidentvoice.engine.GenEvent as MlGenEvent
 import com.megathon.incidentvoice.engine.GenRequest as MlGenRequest
 import com.megathon.incidentvoice.engine.InferenceEngine as MlEngine
@@ -40,7 +43,19 @@ import com.megathon.incidentvoice.engine.SamplerName as MlSampler
  * to the app's engine port. This file is the only place that knows both type families, so a change in the ML
  * DTOs is a one-file fix.
  */
-class MlEngineAdapter(private val ml: MlEngine, scope: CoroutineScope, private val label: String) : InferenceEngine {
+class MlEngineAdapter(
+    private val ml: MlEngine, private val scope: CoroutineScope, private val label: String,
+    /**
+     * True when the loaded bundle needs a fresh Genie session for every call. Measured on the QIDK with Qualcomm's
+     * Qwen3-4B bundle (QAIRT 2.45 export, Genie 1.20 on the board): once a prompt goes past roughly 500 tokens,
+     * every later query in the same session fails with `GenieDialog_query status=-1` ("batch dispatch failed"),
+     * even after `GenieDialog_reset`. Re-creating the session costs about 3.4 s, so it is done in the background
+     * right after a call, while the question is being spoken and the reporter answers.
+     */
+    private val freshSessionPerCall: () -> Boolean = { false },
+) : InferenceEngine {
+    @Volatile private var refresh: kotlinx.coroutines.Job? = null
+
     private val json = Json { ignoreUnknownKeys = true; isLenient = true }
 
     override val status: StateFlow<EngineStatus> =
@@ -91,7 +106,14 @@ class MlEngineAdapter(private val ml: MlEngine, scope: CoroutineScope, private v
     override fun generate(req: GenRequest): Flow<GenEvent> {
         val task = when (req.task) { LlmTask.EXTRACT -> MlTask.EXTRACT; LlmTask.PATCH -> MlTask.PATCH; LlmTask.RECOMMEND -> MlTask.RECOMMEND; LlmTask.REPAIR -> MlTask.REPAIR; LlmTask.WARMUP -> MlTask.WARMUP }
         val sampler = if (req.sampler == SamplerName.RECOMMEND) MlSampler.RECOMMEND else MlSampler.GREEDY
-        return ml.generate(MlGenRequest(task, req.prompt, sampler, req.maxTokens)).map { ev ->
+        val calls = kotlinx.coroutines.flow.flow<MlGenEvent> {
+            refresh?.join()                                    // a session reload from the previous call must finish first
+            emitAll(ml.generate(MlGenRequest(task, req.prompt, sampler, req.maxTokens)))
+        }.onCompletion {
+            if (req.task != LlmTask.WARMUP && ml is JniInferenceEngine && ml.llmOnNpu() && freshSessionPerCall())
+                refresh = scope.launch { runCatching { ml.init() }.onFailure { e -> android.util.Log.w("IV", "session reload failed: ${e.message}") } }
+        }
+        return calls.map { ev ->
             when (ev) {
                 is MlGenEvent.Token -> GenEvent.Token(ev.piece)
                 is MlGenEvent.Done -> GenEvent.Done(

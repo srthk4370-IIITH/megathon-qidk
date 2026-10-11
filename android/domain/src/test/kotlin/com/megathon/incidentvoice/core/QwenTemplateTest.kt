@@ -14,6 +14,7 @@ class QwenTemplateTest {
         assertEquals(ModelFamily.QWEN, ModelFamily.detect("""{"family":"qwen","name":"Qwen3-4B"}""", "{}"))
         assertEquals(ModelFamily.LLAMA, ModelFamily.detect(null, """{"ctx-bins":["llama_v3_2_3b_instruct_part_1_of_3.bin"]}"""))
         assertEquals(ModelFamily.LLAMA, ModelFamily.detect(null, null))
+        assertEquals(ModelFamily.QWEN, ModelFamily.detect(null, """{"dialog":{"context":{"size":4096,"eos-token": 151645},"ctx-bins":["part1_of_4.bin"]}}"""))
     }
 
     @Test fun chatMl_wrapsMessages_endsWithEmptyThinkBlock_noBos() {

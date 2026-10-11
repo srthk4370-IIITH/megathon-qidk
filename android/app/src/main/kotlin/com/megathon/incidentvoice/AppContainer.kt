@@ -82,7 +82,7 @@ class AppContainer(val context: Context) {
         // transcript instead of replaying one canned scene.
         JniInferenceEngine(context, modelsDir, whisperModel = config.app.asr.whisperCppModel, llmFallback = DomainToMlEngine(mockEngine))
     }
-    private val jniEngine: InferenceEngine by lazy { MlEngineAdapter(jni, appScope, "on-device") }
+    private val jniEngine: InferenceEngine by lazy { MlEngineAdapter(jni, appScope, "on-device") { modelFamily.value == com.megathon.incidentvoice.core.ModelFamily.QWEN } }
 
     /** "NPU" when Llama runs on the Hexagon NPU, "FALLBACK" when ASR is real but the LLM is the mock, "" for Mock engine. */
     val llmBackend = MutableStateFlow("")

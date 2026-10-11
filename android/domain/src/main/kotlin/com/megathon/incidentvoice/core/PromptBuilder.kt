@@ -98,7 +98,8 @@ enum class ModelFamily(val display: String) {
         /** From the bundle folder: a `model.json` with `"family"`, else the file names in `genie_config.json`. */
         fun detect(modelJson: String?, genieConfig: String?): ModelFamily {
             val hint = (modelJson.orEmpty() + " " + genieConfig.orEmpty()).lowercase()
-            return if ("qwen" in hint) QWEN else LLAMA
+            // Qualcomm's Qwen bundle names its parts part1_of_4.bin, so also recognise it by Qwen's end-of-turn token id
+            return if ("qwen" in hint || Regex("\"eos-token\"\\s*:\\s*151645").containsMatchIn(genieConfig.orEmpty())) QWEN else LLAMA
         }
     }
 }
