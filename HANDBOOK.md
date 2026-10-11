@@ -258,3 +258,73 @@ Severity is a small dot plus a word, never a filled pill: Low `#16A34A`, Medium 
 - Screenshots of every screen taken on the QIDK are in `shots/`.
 
 **Known gaps.** The dark theme is defined but was only checked in light mode on the board. The wide witness table still scrolls sideways on a phone-width screen. The Settings tab stays in the bottom bar and the top-bar settings icon opens the same screen.
+
+
+## ASR benchmark (App branch, 2026-10-11)
+
+Full table, method and caveats: `eval/asr_benchmark.md` (+ `eval/asr_benchmark.csv`). Report only; the app was not changed.
+
+- **Sample:** 39 clips — 15 scripted English, 15 scripted Hinglish, 9 live English recordings from the board microphone (their references were reconstructed from the demo sentences). Small sample; read the numbers as "clearly better / clearly worse", not to the decimal.
+- **Scripted English WER, no hint:** tiny.en 10.3 %, base.en 6.8 %, small q5_1 (the shipped model) 4.4 %. **With the domain hint:** 8.2 % / 4.9 % / 2.8 %.
+- **Live English WER (noisy, about 11 dB):** no hint 27.9 % / 14.0 % / 9.3 %; with hint 10.5 % / 5.8 % / 2.3 %. The hint was tuned after seeing errors on some of these clips, so this column is optimistic.
+- **Speed on the QIDK, 10.2 s clip, median of 5:** tiny.en 253 ms, base.en 411 ms, small q5_1 1815 ms. The hint costs nothing measurable.
+- **Conclusion:** the shipped choice (small + hint) is the most accurate of the three and still runs about 5.6 times faster than real time. base.en + hint is the fallback if latency ever matters more than accuracy.
+- **Hinglish:** 91–111 % WER in every configuration. Literal Hinglish transcription does not work with these models; this is a known limitation, not something the hint fixes.
+
+
+## Emergency: questions are cut to the minimum (App branch, 2026-10-11)
+
+- **Before:** in an emergency the follow-up loop still asked for every missing common field (severity, injuries, time, location) and only left the category details for review, and it did so only when severity was already CRITICAL.
+- **Now:** an emergency is any of: severity CRITICAL, the red banner, or a running response clock (which the keyword banner starts). In that state the app asks **one** question at most, where it is, and only if the place is missing. Whatever the answer, it then goes to review, where the response clock and Call ERT are pinned on top and every other required field is listed as "Required". Submit stays disabled until those are filled or marked unknown.
+- No new model fields, prompts or config. Change is in `ConversationOrchestrator.validateAndAdvance` / `ask`; two unit tests (`emergency_locationKnown_…`, `emergency_locationMissing_…`).
+- **20-second demo:** Type instead → "There is a fire in the server room and someone is unconscious" → no questions; the review screen opens with the clock running and "Call ERT" on top.
+
+
+## Small talk and "no incident" (App branch, 2026-10-11)
+
+- **What:** if what was said is not an incident ("hi wassup this is Ravi", a mic check, a joke, an off-topic question, a sentence that was cut off), the form is **not** filled. The app says and shows "I didn't catch an incident. What happened?" (Hinglish: "Mujhe koi incident samajh nahi aaya. Kya hua tha?") and listens again; when the report was typed it waits for typing instead.
+- **Self-introduction:** "this is X", "my name is X", "X here", "main X bol raha hoon", "mera naam X hai" set the reporter name for this report and nothing else. The device profile is filled with it only if it had no name yet. The name is also picked up when it comes with a real report ("this is Ravi, there is a fire in bay 4").
+- **How it decides (deterministic, `core/SmallTalk.kt`):** not an incident when the words contain no category or emergency keyword and no general "something went wrong" word (happened, broke, leak, hurt, stuck, hua, gir gaya …), or when the speaker says so ("nothing happened, just testing"). The same path is taken if the model returns neither a type nor a description. Safety valve so the rule can never block a real report: a second attempt of six words or more is filed as it is. After three empty tries the app goes back to the start with "No incident was reported".
+- **What is kept:** the words are still stored as a turn of the draft; they are not used for the description or for grounding.
+- **Tests:** `SmallTalkTest` (12 messy inputs that must not be filed, 8 messy real reports that must, name extraction), two orchestrator tests.
+- **Also fixed here:** a report with a running response clock that the reporter closed is no longer reopened at the next launch.
+- **Known limits:** keyword-based, so a real incident described with none of the known words gets one "What happened?" before it is accepted; a joke that contains an incident word ("my code is on fire") is filed.
+- **20-second demo:** Type instead → "hi wassup this is Ravi" → the reply is "Hi Ravi. I didn't catch an incident. What happened?" and the form stays empty → type the water-leak sentence → the report is filled, reporter "Ravi".
+
+
+## Error handling: every case and what the user sees (App branch, 2026-10-11)
+
+Rule: a failure never loses the report and never leaves a dead end. The draft (form, every turn, the recording path) is written to the database after each step and again when an error is raised.
+
+| # | What goes wrong | What the app does | What the user sees or hears |
+|---|---|---|---|
+| 1 | Language model fails on a turn (NPU busy, session lost, empty output) | Retries after 3, 7 and 15 s if the error is retryable. If it still fails, or is not retryable, the keyword rules engine (`RuleBasedLlm`) produces the same tool call **for that one turn**; the next turn tries the model again | "Engine busy — retrying (n/3)…" while retrying, then a small plain line "Using offline fallback". It disappears when the model answers again |
+| 2 | Model output cannot be parsed (extraction) | One repair request to the model. If that fails too: the transcript becomes the description and the form opens for manual filling | "Couldn't understand fully — please check the form." and the review screen with the gaps marked "Required" |
+| 3 | Model output cannot be parsed (a follow-up answer) | One repair request; if that fails the answer is kept in the transcript, the fields stay missing and the loop moves on | "Couldn't read that answer" in the timeline; the field is asked again or left for review |
+| 4 | No speech at the start | Says it once and listens once more; a second silence returns to the start | Spoken and shown: "Sorry, I didn't catch that." Then: "Sorry, I didn't catch that. Tap the button and try again." |
+| 5 | No speech after a question | Repeats the question once with the same phrase; a second silence counts as skipped | "Sorry, I didn't catch that. <question>" |
+| 6 | Speech with no recognisable words | Treated like no speech (4 or 5) | "I couldn't make out any words. Please try again." at the start |
+| 7 | Not an incident (small talk, joke, cut-off sentence) | Form untouched; asks again, up to three times | "I didn't catch an incident. What happened?" |
+| 8 | Speech recognition fails (engine error on transcribe) | Same retries as 1; there is no fallback for speech, so the error card is shown | Error card with Retry, Fill manually, and Type instead |
+| 9 | Microphone unavailable or permission denied | Error card | "Try mic again", "Open settings", "Fill manually" |
+| 10 | Text-to-speech not ready | A short chime replaces the voice; the question stays on screen and the microphone still opens | The question as text |
+| 11 | Follow-up limit reached (3 rounds) or nothing left that can be asked | Goes to manual fill | "Please check the highlighted fields on the screen." |
+| 12 | Required fields still empty at submit | Submit is refused | "Fill the highlighted fields first: …"; each field can also be marked Unknown |
+| 13 | Engine fails to load at start | App stays usable for typing and manual filling | Home shows the error with "Retry engine" and "Use mock engine"; the top-bar dot is grey |
+| 14 | App killed during an emergency | The draft and its response clock are picked up at the next launch (within an hour), unless the reporter had closed it | "Picked up the report that was in progress." |
+| 15 | No dialler on the device | The call button does not crash | Toast with the number to call from a phone |
+| 16 | Device clock wrong | Relative times would be wrong | Red strip on Home: "Device clock is wrong." |
+
+Changed for this task: case 1 (the rules engine now takes over automatically; before, the error card appeared and the user had to choose), case 4 (spoken once and one more try; before, straight back to the start), the draft is saved explicitly on every error path, and status notices are shown in plain text instead of red. Cases 2, 3, 5–7 and 9–16 already behaved this way. Tests: `modelFailure_usesRulesForThatTurn_…`, `modelFailure_onAnAnswer_alsoFallsBack`, `silenceAtTheStart_…`.
+
+**20-second demo:** tap the report button and stay silent for about ten seconds → "Sorry, I didn't catch that." is spoken once and it listens again; stay silent again → back to the start with the notice. The model-failure fallback cannot be triggered by hand on the board; it is covered by the unit tests.
+
+
+## Language matching and the reporter's own words (App branch, 2026-10-11)
+
+- **Follow-up language:** the language of the questions now follows the reporter's own words, not the model's label. After the narration the app runs `LangDetector.ofSpeech` on the text (Hinglish marker words such as hai, tha, nahi, ke, mein, paani; or Devanagari) and uses the Hinglish question templates from `taxonomy.json` when it is Hinglish, the English ones otherwise. A later answer of three words or more can switch the language; "yes" or "haan" does not.
+- **Description:** the model may tidy the sentence, but if less than 70 % of the words in its description were actually said, the description is replaced by the narration with light cleanup only (`DescriptionStyle`: fillers and a leading greeting removed, spacing, capital letter, full stop). A description the reporter edited by hand is never touched.
+- **Verbatim transcript:** every turn is stored exactly as heard (`turns.text_raw`); a correction made on the "Heard this" screen is stored next to it, not over it. The detail screen shows "Transcript, word for word" with the heard text and, if there was one, the correction.
+- **Limit that matters:** speech recognition runs with English forced (the benchmark shows literal Hinglish transcription does not work with these models), so *spoken* Hinglish mostly arrives as English text and gets English questions. Hinglish questions appear when the text itself is Hinglish: typed reports, or the Hindi words Whisper happens to keep. The marker-word list is short and can misjudge a very short sentence.
+- **Tests:** `followUps_matchTheReportersLanguage_andTheTranscriptIsKeptVerbatim`, `language_followsTheReportersWords`, `description_lightCleanupOnly`, `description_keepsTheReportersWords_unlessTheModelStayedClose`.
+- **20-second demo:** Type instead → "Pantry ke paas paani leak ho raha hai" → the next question is in Hinglish and the description keeps "paani leak ho raha hai". Open any report → "Transcript, word for word".

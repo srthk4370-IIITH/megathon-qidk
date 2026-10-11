@@ -93,6 +93,8 @@ interface IncidentDao {
     @Query("DELETE FROM response_actions WHERE incident_id = :id") suspend fun deleteResponseActions(id: String)
     @Query("SELECT id FROM incidents WHERE status = 'DRAFT' AND response_started_at >= :since ORDER BY response_started_at DESC LIMIT 1") suspend fun activeResponseDraft(since: Long): String?
 
+    @Query("UPDATE incidents SET reporter_name = :name, reporter_emp_id = :emp, updated_at = :at WHERE id = :id") suspend fun setReporter(id: String, name: String, emp: String, at: Long)
+
     // multi-witness merging (Extra 3)
     @Query("UPDATE incidents SET parent_incident_id = :parent, updated_at = :at WHERE id = :id") suspend fun setParent(id: String, parent: String?, at: Long)
     @Query("UPDATE incidents SET parent_incident_id = NULL WHERE parent_incident_id = :parent") suspend fun orphanChildren(parent: String)

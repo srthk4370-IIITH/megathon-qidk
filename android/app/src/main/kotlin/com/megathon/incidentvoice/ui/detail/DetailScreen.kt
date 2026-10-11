@@ -130,11 +130,12 @@ private fun DetailBody(d: IncidentDetail, tx: Taxonomy, disclaimer: String, modi
             item { Text(disclaimer, style = MaterialTheme.typography.bodySmall, color = secondaryText) }
         }
         if (d.turns.isNotEmpty()) {
-            item { SectionTitle("Transcript") }
+            item { SectionTitle("Transcript, word for word") }
             items(d.turns, key = { "t${it.idx}" }) { t ->
                 Column {
                     Text(if (t.role == "ASSISTANT") "Qalam" else "Reporter", style = MaterialTheme.typography.bodySmall, color = secondaryText)
-                    Text(t.text)
+                    Text(t.textRaw ?: t.text)
+                    if (t.textEdited != null && t.textEdited != t.textRaw) Text("Corrected by the reporter to: ${t.textEdited}", style = MaterialTheme.typography.bodySmall, color = secondaryText)
                 }
             }
         }

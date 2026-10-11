@@ -89,6 +89,8 @@ interface IncidentRepository {
     suspend fun addResponseAction(id: String, action: com.megathon.incidentvoice.core.ResponseAction) {}
     /** A draft whose response clock started after [sinceMs] (the app was closed mid-emergency), newest first. */
     suspend fun activeResponseDraft(sinceMs: Long): String? = null
+    /** The reporter of one report (someone introduced themselves by voice); the device profile is not touched. */
+    suspend fun setReporter(id: String, reporter: Reporter) {}
     // ---- Extra 3: multi-witness merging
     /** Submitted reports since [sinceMs], newest first (candidates for "is this the same event?"). */
     suspend fun recentSubmitted(sinceMs: Long, limit: Int = 60): List<IncidentDetail> = emptyList()

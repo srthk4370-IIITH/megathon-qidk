@@ -32,6 +32,8 @@ class ConversationOrchestrator(
     private val prompts = PromptBuilder(tx, cfg.templates, cfg.app.models.promptVariant)
     private val sop = SopSelector(cfg.sop, cfg.app.recommend.maxItems)
     private val emergencyDetector = EmergencyDetector(tx)
+    /** Keyword rules: tell an incident from small talk, and stand in for the model for one turn if it fails. */
+    private val rules = RuleBasedLlm(tx, cfg.registry)
     private val conv = cfg.app.conversation
 
     private val _ui = MutableStateFlow(ConversationUiState())
@@ -48,6 +50,11 @@ class ConversationOrchestrator(
     private var question: FollowUpQuestion? = null
     private var lastAskedFields: List<String> = emptyList()
     private var repromptedNoSpeech = false
+    private var emergencyLocationAsked = false
+    private var lastFromVoice = true
+    private var narrationReprompted = false
+    private var noIncidentCount = 0
+    private var spokenReporter: String? = null
     private var retryAction: (suspend () -> Unit)? = null
     private val userTexts = StringBuilder() // everything the speaker said (grounding)
     private var narrationText = ""
@@ -184,7 +191,15 @@ class ConversationOrchestrator(
     fun onKeepSeparate() { update { it.copy(duplicate = null) } }
 
     /** Discard: the draft stays in the DB (§8.2). */
-    fun onCancel() { cancelAll(); audio.cancel(); tts.stop(); reset() }
+    fun onCancel() {
+        // a report the reporter closed must not be picked up again at the next launch (the response clock would reopen it)
+        val id = incidentId
+        if (id != null && responseStart != null && editingRef == null) {
+            val closed = ResponseAction(CLOSED, "Report closed", clock().toEpochMilli(), "USER")
+            scope.launch { runCatching { repo.addResponseAction(id, closed) } }
+        }
+        cancelAll(); audio.cancel(); tts.stop(); reset()
+    }
 
     fun onEmergencyCall() { if (ui.value.response != null) onResponseStep(ResponseClock.ERT) else _events.tryEmit(UiEvent.Dial(settings().ertNumber)) }
 
@@ -245,6 +260,7 @@ class ConversationOrchestrator(
             val id = repo.activeResponseDraft(clock().toEpochMilli() - 60 * 60_000L) ?: return@step
             val d = repo.load(id) ?: return@step
             val start = d.meta.responseStartedAt ?: return@step
+            if (d.responseActions.any { it.stepId == CLOSED }) return@step
             incidentId = id; form = d.form; rounds = d.meta.followupRounds; emergencyFlag = d.meta.emergencyFlag
             responseStart = start; responseActions.clear(); responseActions.addAll(d.responseActions)
             d.turns.filter { it.role == "USER" }.forEach { userTexts.append(it.text).append(' ') }
@@ -273,9 +289,23 @@ class ConversationOrchestrator(
         val maxMs = cfg.app.asr.maxNarrationS * 1000L // rev 1.1 R1-08: one Whisper window (30 s)
         when (val r = audio.listen(ListenKind.NARRATION, maxMs, settings().endSilenceMs, id) { lvl, ms -> update { u -> u.copy(level = lvl, elapsedMs = ms) } }) {
             is ListenResult.Speech -> transcribeAndHandle(r, narration = true)
-            ListenResult.NoSpeech -> update { it.copy(state = ConvState.IDLE, notice = "I didn't hear anything. Tap the mic and try again.") }
+            ListenResult.NoSpeech -> {
+                if (!narrationReprompted) {
+                    // say it once and listen once more; a second silence goes back to the start
+                    narrationReprompted = true
+                    val msg = if (form.lang == "en" || form.lang.isBlank()) "Sorry, I didn't catch that." else "Maaf kijiye, sunaai nahi diya."
+                    say(msg); update { it.copy(state = ConvState.ASKING) }
+                    if (settings().speakQuestions) tts.speak(msg, form.lang)
+                    markSpeakingDone(); delay(conv.ttsPostGapMs.toLong())
+                    listenNarration()
+                } else {
+                    runCatching { persist() }
+                    reset()
+                    update { it.copy(notice = "Sorry, I didn't catch that. Tap the button and try again.") }
+                }
+            }
             ListenResult.Cancelled -> {}
-            is ListenResult.Failure -> update { it.copy(state = ConvState.ERROR_AUDIO, error = r.message) }
+            is ListenResult.Failure -> { runCatching { persist() }; update { it.copy(state = ConvState.ERROR_AUDIO, error = r.message) } }
         }
     }
 
@@ -328,6 +358,7 @@ class ConversationOrchestrator(
     private suspend fun processText(text: String, fromVoice: Boolean, audioPath: String?, audioMs: Long?, asrMs: Long?) {
         ensureDraft()
         narrationText = text
+        lastFromVoice = fromVoice
         update { it.copy(notice = null) }
         scanEmergency(text)
         var finalText = text
@@ -348,14 +379,55 @@ class ConversationOrchestrator(
         repo.appendTurn(id, TurnRecord("USER", "NARRATION", textRaw = text, textEdited = finalText.takeIf { it != text }, lang = form.lang,
             audioPath = audioPath, audioMs = audioMs, asrMs = asrMs))
         addBubble(BubbleRole.USER, finalText)
+        SmallTalk.reporterName(finalText)?.let { rememberReporter(it) }
+        // small talk, a joke, a cut-off sentence: nothing to file. Ask what happened instead of filling the form with it.
+        // The second try is taken at its word if it says anything of substance (the rules must never block a real report).
+        val chatter = SmallTalk.isNoIncident(finalText, ::hasIncidentCue)
+        if (chatter && !(noIncidentCount >= 1 && finalText.trim().split(Regex("\\s+")).size >= 6)) { noIncident(finalText); return }
         extract(finalText)
+    }
+
+    private fun hasIncidentCue(text: String) = rules.hasIncidentCue(text) || emergencyDetector.scan(text) != null
+
+    private suspend fun rememberReporter(name: String) {
+        if (name == spokenReporter) return
+        spokenReporter = name
+        incidentId?.let { repo.setReporter(it, settings().reporter.copy(name = name)) }
+        update { it.copy(reporterName = name) }
+        _events.tryEmit(UiEvent.ReporterName(name))
+    }
+
+    /** Nothing reportable was said: keep the form empty, say so, and listen (or wait for typing) again. Gives up after three tries. */
+    private suspend fun noIncident(text: String) {
+        noIncidentCount++
+        val lang = LangDetector.detect(text)
+        userTexts.clear(); narrationText = ""
+        if (noIncidentCount > 3) {
+            val keepName = spokenReporter
+            reset(); spokenReporter = keepName
+            update { it.copy(notice = "No incident was reported. Tap the button when you are ready.", reporterName = keepName) }
+            return
+        }
+        form = form.copy(lang = lang)
+        val msg = SmallTalk.prompt(lang, spokenReporter.takeIf { noIncidentCount == 1 })
+        id()?.let { repo.appendTurn(it, TurnRecord("ASSISTANT", "NO_INCIDENT", textRaw = msg, lang = lang)) }
+        say(msg)
+        if (lastFromVoice) {
+            update { it.copy(state = ConvState.ASKING, form = form) }
+            if (settings().speakQuestions) tts.speak(msg, lang)
+            markSpeakingDone()
+            delay(conv.ttsPostGapMs.toLong())
+            listenNarration()
+        } else { markSpeakingDone(); update { it.copy(state = ConvState.TYPING, question = null, form = form) } }
     }
 
     private suspend fun extract(text: String) {
         retryAction = { extract(text) }
         update { it.copy(state = ConvState.EXTRACTING, streamingFields = emptySet(), error = null) }
-        val gen = generateWithRetry(LlmTask.EXTRACT, prompts.extract(text), SamplerName.GREEDY, cfg.app.llm.maxTokens.extract, preview = true) ?: return
+        val gen = generateWithRetry(LlmTask.EXTRACT, prompts.extract(text), SamplerName.GREEDY, cfg.app.llm.maxTokens.extract, preview = true) { rules.extract(text).toString() } ?: return
         var call = parseWithRepair(gen.text, Tools.FILL, null)
+        // the model itself found nothing to file (no type, no description)
+        if (call != null && noIncidentCount < 3 && call.fields["incident_type"] == null && call.fields["description"] == null && !hasIncidentCue(text)) { update { it.copy(streamingFields = emptySet()) }; noIncident(text); return }
         if (call == null) { // §13.7: unparseable after one repair → manual fill with the transcript
             ensureDescriptionFromTranscript()
             update { it.copy(state = ConvState.ERROR_PARSE, error = "Couldn't understand fully — please check the form.", streamingFields = emptySet()) }
@@ -365,6 +437,13 @@ class ConversationOrchestrator(
         }
         val merged = merger.merge(form, call, FieldSource.LLM_EXTRACT, null, userTexts.toString(), clock())
         form = merger.applyTimeDefault(merged.form, clock())
+        // answer in the language the reporter used (their words decide, not the model's label)
+        form = form.copy(lang = LangDetector.ofSpeech(text))
+        // the description stays in the reporter's own words: a model rewrite that drifted from them is replaced by the lightly cleaned narration
+        form.state("description")?.takeIf { it.status != FieldStatus.USER_EDITED && it.status != FieldStatus.MISSING }?.let { st ->
+            val kept = DescriptionStyle.keep(form.str("description"), text)
+            if (kept.isNotBlank() && kept != form.str("description")) form = form.with(st.copy(value = JsonPrimitive(kept)))
+        }
         ensureDescriptionFromTranscript()
         rememberTool(gen, "Form updated: " + merged.changed.filter { it != "lang" }.joinToString { tx.label(it) })
         update { it.copy(streamingFields = emptySet(), form = form) }
@@ -384,17 +463,21 @@ class ConversationOrchestrator(
         update { it.copy(validation = res, form = form, round = rounds) }
         maybeStartResponseClock()
         persist()
+        // §10.7, emergency: do not hold the reporter in a question loop. Ask only where it is (once, if missing), then go
+        // to review, where the response clock and Call ERT are pinned and every other required field waits as "Required".
+        val emergency = critical || ui.value.response != null || ui.value.emergency?.level == EmergencyLevel.RED
         when {
             res.complete -> goRecommend(fromConversation = true)
-            critical && res.missing.none { tx.field(it)?.isCommon == true } -> goRecommend(fromConversation = true) // §10.7: details later in review
+            emergency && ("location" !in res.missing || emergencyLocationAsked) -> goRecommend(fromConversation = true)
             rounds >= conv.maxFollowupRounds -> gotoManualFill(speak = true)
-            else -> ask(res, critical)
+            else -> ask(res, emergency)
         }
     }
 
     private suspend fun ask(res: ValidationResult, emergencyMode: Boolean) {
-        val q = Validator.nextQuestion(res, form, tx, emergencyMode)
-        if (q == null) { gotoManualFill(speak = true); return }
+        if (emergencyMode) emergencyLocationAsked = true
+        val q = Validator.nextQuestion(if (emergencyMode) res.copy(missing = listOf("location")) else res, form, tx, emergencyMode)
+        if (q == null) { if (emergencyMode) goRecommend(fromConversation = true) else gotoManualFill(speak = true); return }
         form = merger.markAsked(form, q.fields)
         question = q
         repromptedNoSpeech = false
@@ -420,6 +503,8 @@ class ConversationOrchestrator(
 
     private suspend fun handleAnswer(text: String, audioPath: String?, audioMs: Long?, asrMs: Long?) {
         val q = question ?: return
+        // a full sentence in the other language switches the language of the next question; "yes" or "haan" does not
+        if (text.trim().split(Regex("\\s+")).size >= 3) form = form.copy(lang = LangDetector.ofSpeech(text))
         retryAction = { handleAnswer(text, audioPath, audioMs, asrMs) }
         val id = ensureDraft()
         scanEmergency(text)
@@ -428,7 +513,7 @@ class ConversationOrchestrator(
         addBubble(BubbleRole.USER, text)
         update { it.copy(state = ConvState.PATCHING, error = null) }
         val prompt = prompts.patch(form, q.text(form.lang), q.fields, text)
-        val gen = generateWithRetry(LlmTask.PATCH, prompt, SamplerName.GREEDY, cfg.app.llm.maxTokens.patch, preview = false) ?: return
+        val gen = generateWithRetry(LlmTask.PATCH, prompt, SamplerName.GREEDY, cfg.app.llm.maxTokens.patch, preview = false) { rules.patch(q.fields, text).toString() } ?: return
         val call = parseWithRepair(gen.text, Tools.UPDATE, form.types)
         if (call != null) {
             val m = merger.merge(form, call, FieldSource.LLM_PATCH, null, userTexts.toString(), clock())
@@ -539,15 +624,25 @@ class ConversationOrchestrator(
         update { it.copy(form = pv, streamingFields = out.call.fields.keys) }
     }
 
-    private suspend fun generateWithRetry(task: LlmTask, prompt: String, sampler: SamplerName, maxTokens: Int, preview: Boolean): Gen? =
-        withEngineRetry {
+    /**
+     * One generation with the §31.3 retries. If the model still fails and [fallback] is given, the keyword rules answer
+     * this one turn instead (same tool-call format) and the screen says so; the next turn tries the model again.
+     */
+    private suspend fun generateWithRetry(task: LlmTask, prompt: String, sampler: SamplerName, maxTokens: Int, preview: Boolean, fallback: (() -> String)? = null): Gen? {
+        val gen = withEngineRetry(giveUpQuietly = fallback != null) {
             generateOnce(task, prompt, sampler, maxTokens, preview).also { g ->
                 update { it.copy(debug = it.debug.copy(llmMs = g.ms, tokensOut = g.stats?.tokensOut ?: 0, decodeTps = g.stats?.decodeTps ?: 0.0, lastToolJson = g.text, lastTask = task.name)) }
             }
         }
+        if (gen != null) { if (ui.value.notice == FALLBACK_NOTICE) update { it.copy(notice = null) }; return gen }   // the model is back
+        if (fallback == null) return null
+        val text = fallback()
+        update { it.copy(notice = FALLBACK_NOTICE, streamingFields = emptySet(), debug = it.debug.copy(llmMs = 0, tokensOut = 0, decodeTps = 0.0, lastToolJson = text, lastTask = task.name + " (rules)")) }
+        return Gen(text, null, 0)
+    }
 
     /** §31.3: retryable engine errors retry after 3/7/15 s, then surface ERROR_ENGINE. Returns null after reporting. */
-    private suspend fun <T> withEngineRetry(block: suspend () -> T): T? {
+    private suspend fun <T> withEngineRetry(giveUpQuietly: Boolean = false, block: suspend () -> T): T? {
         var attempt = 0
         while (true) {
             try { return block() }
@@ -557,7 +652,10 @@ class ConversationOrchestrator(
                     update { it.copy(notice = "Engine busy — retrying (${attempt + 1}/${retryDelaysMs.size})…") }
                     delay(retryDelaysMs[attempt]); attempt++
                 } else {
-                    update { it.copy(state = ConvState.ERROR_ENGINE, error = "On-device AI engine unavailable (${e.error.code}).", retryable = true, notice = null, streamingFields = emptySet()) }
+                    if (!giveUpQuietly) {
+                        update { it.copy(state = ConvState.ERROR_ENGINE, error = "On-device AI engine unavailable (${e.error.code}).", retryable = true, notice = null, streamingFields = emptySet()) }
+                        runCatching { persist() }      // the draft is saved whatever happens
+                    }
                     return null
                 }
             }
@@ -581,7 +679,7 @@ class ConversationOrchestrator(
 
     private suspend fun ensureDraft(): String {
         incidentId?.let { return it }
-        val id = repo.createDraft(settings().reporter)
+        val id = repo.createDraft(settings().reporter.let { r -> spokenReporter?.let { r.copy(name = it) } ?: r })
         incidentId = id
         update { it.copy(incidentId = id) }
         return id
@@ -633,8 +731,10 @@ class ConversationOrchestrator(
 
     private fun reset() {
         form = IncidentForm(); incidentId = null; rounds = 0; emergencyFlag = false; question = null; lastAskedFields = emptyList()
-        repromptedNoSpeech = false; retryAction = null; userTexts.clear(); narrationText = ""; spokeComplete = false; bubbleSeq = 0; editingRef = null
+        repromptedNoSpeech = false; emergencyLocationAsked = false; noIncidentCount = 0; spokenReporter = null; narrationReprompted = false; lastFromVoice = true; retryAction = null; userTexts.clear(); narrationText = ""; spokeComplete = false; bubbleSeq = 0; editingRef = null
         responseStart = null; responseActions.clear(); hintCategory = null; reminderJob?.cancel(); reminderJob = null
         _ui.value = ConversationUiState()
     }
+
+    companion object { private const val CLOSED = "CLOSED"; const val FALLBACK_NOTICE = "Using offline fallback" }
 }

@@ -1,0 +1,19 @@
+model,domain_hint,set,clips,ref_words,word_errors,wer_pct,clips_exact
+tiny.en,no,live English (board mic),9,86,24,27.9,4
+tiny.en,no,scripted English,15,428,44,10.3,3
+tiny.en,no,scripted Hinglish,15,444,493,111.0,0
+tiny.en,yes,live English (board mic),9,86,9,10.5,5
+tiny.en,yes,scripted English,15,428,35,8.2,4
+tiny.en,yes,scripted Hinglish,15,444,417,93.9,0
+base.en,no,live English (board mic),9,86,12,14.0,5
+base.en,no,scripted English,15,428,29,6.8,6
+base.en,no,scripted Hinglish,15,444,406,91.4,0
+base.en,yes,live English (board mic),9,86,5,5.8,6
+base.en,yes,scripted English,15,428,21,4.9,8
+base.en,yes,scripted Hinglish,15,444,415,93.5,0
+"small q5_1 (multilingual, forced English)",no,live English (board mic),9,86,8,9.3,6
+"small q5_1 (multilingual, forced English)",no,scripted English,15,428,19,4.4,5
+"small q5_1 (multilingual, forced English)",no,scripted Hinglish,15,444,418,94.1,0
+"small q5_1 (multilingual, forced English)",yes,live English (board mic),9,86,2,2.3,8
+"small q5_1 (multilingual, forced English)",yes,scripted English,15,428,12,2.8,9
+"small q5_1 (multilingual, forced English)",yes,scripted Hinglish,15,444,416,93.7,0

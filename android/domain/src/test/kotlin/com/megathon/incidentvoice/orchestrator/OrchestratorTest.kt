@@ -166,6 +166,65 @@ class OrchestratorTest {
         assertEquals(listOf<UiEvent>(UiEvent.Dial("112")), events)
     }
 
+    /** Emergency-lite: with the place known, no question at all — straight to review with the clock running. */
+    @Test fun emergency_locationKnown_asksNothing_goesToReviewWithClock() = runTest {
+        val r = rig("there is a fire in the server room and someone is unconscious")
+        r.o.startNew(); r.o.onMicTapped(); advanceUntilIdle()
+        val ui = r.o.ui.value
+        assertEquals(ConvState.REVIEW, ui.state); assertNotNull(ui.response)
+        assertTrue(r.audio.calls.none { it == ListenKind.FOLLOWUP }, "asked: ${r.tts.spoken}")
+        assertFalse(ui.canSubmit)                                        // the other required fields wait in review
+        assertTrue(ui.validation!!.missing.isNotEmpty())
+    }
+
+    /** Emergency-lite: the place is the only thing asked, once, even if other common fields are missing. */
+    @Test fun emergency_locationMissing_asksOnlyWhere_once_thenReview() = runTest {
+        val r = rig("fire fire, someone is unconscious, help")
+        r.engine.enqueue("umm")                                           // an answer that does not give a place
+        r.o.startNew(); r.o.onMicTapped(); advanceUntilIdle()
+        val ui = r.o.ui.value
+        assertEquals(ConvState.REVIEW, ui.state, "spoken=${r.tts.spoken}")
+        assertEquals(1, r.audio.calls.count { it == ListenKind.FOLLOWUP }, "asked: ${r.tts.spoken}")
+        assertTrue("location" in ui.validation!!.missing); assertNotNull(ui.response)
+    }
+
+    /** Small talk does not fill the form: the app asks what happened, takes the name, and files the real report that follows. */
+    @Test fun smallTalk_isNotFiled_nameIsKept_thenTheRealReportGoesThrough() = runTest {
+        val r = rig("hi wassup this is Ravi", "There was a water leak near Conference Room 2 around 10 AM.", "No one is hurt, it's minor.", "A pipe under the sink burst, it's stopped now.")
+        r.o.startNew(); r.o.onMicTapped(); advanceUntilIdle()
+        assertTrue(r.tts.spoken.first().contains("I didn't catch an incident. What happened?"), r.tts.spoken.toString())
+        assertEquals("Hi Ravi. I didn't catch an incident. What happened?", r.tts.spoken.first())
+        val ui = r.o.ui.value
+        assertEquals("Ravi", ui.reporterName); assertEquals("Ravi", r.inc.meta.reporter.name); assertEquals("E100", r.inc.meta.reporter.empId)
+        assertEquals("WATER", ui.form.incidentType); assertFalse(ui.form.str("description")!!.contains("wassup"))
+        assertEquals(1, r.repo.store.size)                                   // one draft, not two
+        assertTrue(r.inc.turns.any { it.textRaw == "hi wassup this is Ravi" }) // the words are still on record
+    }
+
+    @Test fun onlySmallTalk_givesUpPolitely_afterThreeTries() = runTest {
+        val r = rig("hello", "good morning", "can you hear me", "hello hello")
+        r.o.startNew(); r.o.onMicTapped(); advanceUntilIdle()
+        assertEquals(ConvState.IDLE, r.o.ui.value.state); assertNotNull(r.o.ui.value.notice)
+        assertEquals(3, r.tts.spoken.count { it.contains("I didn't catch an incident") })
+        assertNull(r.repo.store.values.first().form.incidentType)
+    }
+
+    /** Hinglish in, Hinglish questions out; English in, English out; the words are stored as they were said. */
+    @Test fun followUps_matchTheReportersLanguage_andTheTranscriptIsKeptVerbatim() = runTest {
+        val hi = rig("Pantry ke paas paani leak ho raha hai, abhi bhi gir raha hai", "kisi ko chot nahi lagi, minor hai", "pipe se, abhi band nahi hua")
+        hi.o.startNew(); hi.o.onMicTapped(); advanceUntilIdle()
+        val asked = hi.tts.spoken.first()
+        assertEquals(Fx.tx.pairTemplates.map { it.hinglish }.plus(Fx.tx.commonFields.map { it.q?.hinglish }).contains(asked) || Regex("\\b(kya|kisi|kab|kahan|kitn\\w+|hai|hua)\\b", RegexOption.IGNORE_CASE).containsMatchIn(asked), true, asked)
+        assertEquals("hinglish", hi.o.ui.value.form.lang)
+        assertEquals("Pantry ke paas paani leak ho raha hai, abhi bhi gir raha hai", hi.inc.turns.first { it.kind == "NARRATION" }.textRaw)
+        assertTrue(hi.o.ui.value.form.str("description")!!.contains("paani leak ho raha hai"))       // the reporter's own phrase
+
+        val en = rig()
+        en.o.startNew(); en.o.onMicTapped(); advanceUntilIdle()
+        assertEquals("en", en.o.ui.value.form.lang)
+        assertTrue(en.tts.spoken.none { Regex("\\b(kya|kisi|hai)\\b").containsMatchIn(it) }, en.tts.spoken.toString())
+    }
+
     private fun TestScope.launchCollect(o: ConversationOrchestrator, into: MutableList<UiEvent>) =
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { o.events.collect { into += it } }
 
@@ -176,24 +235,38 @@ class OrchestratorTest {
         assertEquals(ConvState.REVIEW, r.o.ui.value.state)
     }
 
-    @Test fun engineHardError_showsErrorEngine_thenManualFallbackKeepsTranscript() = runTest {
-        val r = rig("water leak near the pantry")
+    /** Model failure after the retries: the keyword rules answer that turn, the screen says so, and the next turn uses the model again. */
+    @Test fun modelFailure_usesRulesForThatTurn_withPlainNotice_thenModelAgain() = runTest {
+        val r = rig("water leak near the pantry around 9 AM", "no one hurt, minor", "the tap, it has stopped")
+        val notices = mutableListOf<String?>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { r.o.ui.collect { notices += it.notice } }
         r.engine.failNextGenerate = EngineError("IV-E603", "no device", retryable = false)
         r.o.startNew(); r.o.onMicTapped(); advanceUntilIdle()
-        assertEquals(ConvState.ERROR_ENGINE, r.o.ui.value.state)
-        r.o.onManualFallback(); advanceUntilIdle()
+        assertTrue(ConversationOrchestrator.FALLBACK_NOTICE in notices, notices.distinct().toString())
         val ui = r.o.ui.value
-        assertEquals(ConvState.MANUAL_FILL, ui.state); assertEquals("water leak near the pantry", ui.form.str("description"))
-        assertEquals(FieldStatus.DEFAULTED, ui.form.state("description")!!.status)
+        assertEquals(ConvState.REVIEW, ui.state); assertEquals("WATER", ui.form.incidentType); assertNull(ui.error)
+        assertNull(ui.notice)                                              // cleared once the model answered the next turn
+        assertNotNull(r.inc.form.incidentType)                              // and the draft was saved
     }
 
-    @Test fun retryAfterHardError_works() = runTest {
+    @Test fun modelFailure_onAnAnswer_alsoFallsBack() = runTest {
         val r = rig("water leak near the pantry around 9 AM", "no one hurt, minor", "the tap, it has stopped")
-        r.engine.failNextGenerate = EngineError("IV-E603", "x", retryable = false)
+        r.o.startNew(); r.o.onMicTapped()
+        testScheduler.runCurrent()
+        // let the extraction through, then fail the first patch
+        while (r.o.ui.value.state != ConvState.ASKING && r.o.ui.value.state != ConvState.LISTENING) testScheduler.advanceTimeBy(50)
+        r.engine.failNextGenerate = EngineError("IV-E603", "no device", retryable = false)
+        advanceUntilIdle()
+        assertEquals(ConvState.REVIEW, r.o.ui.value.state); assertEquals("NO", r.o.ui.value.form.str("injuries"))
+    }
+
+    @Test fun silenceAtTheStart_saysSorryOnce_thenGoesBackWithANotice() = runTest {
+        val r = rig()
+        r.audio.results += ListenResult.NoSpeech; r.audio.results += ListenResult.NoSpeech
         r.o.startNew(); r.o.onMicTapped(); advanceUntilIdle()
-        assertEquals(ConvState.ERROR_ENGINE, r.o.ui.value.state)
-        r.o.onRetry(); advanceUntilIdle()
-        assertEquals(ConvState.REVIEW, r.o.ui.value.state)
+        assertEquals(listOf("Sorry, I didn't catch that."), r.tts.spoken)
+        assertEquals(ConvState.IDLE, r.o.ui.value.state); assertTrue(r.o.ui.value.notice!!.startsWith("Sorry, I didn't catch that"))
+        assertEquals(2, r.audio.calls.size)
     }
 
     @Test fun emptyEngineOutput_isEngineErrorNotParseError() = runTest {
@@ -320,6 +393,11 @@ class OrchestratorTest {
         o2.resumeActiveResponse(); advanceUntilIdle()
         val rc = o2.ui.value.response!!
         assertEquals(Fx.now.toEpochMilli(), rc.startedAtMs); assertTrue(rc.steps.first().done); assertNotEquals(ConvState.IDLE, o2.ui.value.state)
+        // once the reporter closes it, it does not come back at the next launch
+        o2.onCancel(); advanceUntilIdle()
+        val o3 = ConversationOrchestrator(this, cfg, r.engine, r.repo, r.tts, r.audio, { OrchestratorSettings(Reporter("Asha", "E100")) }, clock = { Fx.now.plusSeconds(120) }, retryDelaysMs = emptyList())
+        o3.resumeActiveResponse(); advanceUntilIdle()
+        assertNull(o3.ui.value.response); assertEquals(ConvState.IDLE, o3.ui.value.state)
     }
 
     @Test fun responseClock_flagOff() = runTest {

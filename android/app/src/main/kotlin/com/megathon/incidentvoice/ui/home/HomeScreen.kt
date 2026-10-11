@@ -48,7 +48,7 @@ fun HomeScreen(c: AppContainer, onMic: () -> Unit, onTypeInstead: () -> Unit, no
                 w.error?.let { Text("Wake word unavailable: $it", style = MaterialTheme.typography.bodySmall, color = secondaryText) }
                 if (settings.showDebug) Text("heard: ${w.lastHeard.ifBlank { "–" }} · ${if (w.listening) "listening" else "paused"}", style = Mono, color = secondaryText, maxLines = 1)
             }
-            notice?.let { Spacer(Modifier.height(8.dp)); Text(it, color = MaterialTheme.colorScheme.error, textAlign = TextAlign.Center) }
+            notice?.let { Spacer(Modifier.height(8.dp)); Text(it, textAlign = TextAlign.Center) }
             Spacer(Modifier.height(8.dp))
             PlainButton("Type instead", onTypeInstead)
         }

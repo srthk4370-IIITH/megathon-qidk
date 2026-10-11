@@ -82,6 +82,12 @@ class RuleBasedLlm(private val tx: Taxonomy, private val registry: SiteRegistry?
 
     private data class Classified(val primary: String, val secondary: List<String>, val injuries: String?)
 
+    /** True when the words name any incident category or an injury (used to tell an incident from small talk). */
+    fun hasIncidentCue(text: String): Boolean {
+        val t = clean(text)
+        return cues.any { it.re.containsMatchIn(t) } || has(rx(NEG_INJ).replace(t, " "), POS_INJ)
+    }
+
     private fun classify(t0: String): Classified {
         val negInj = has(t0, NEG_INJ)
         val t = rx(NEG_INJ).replace(t0, " ")           // "nobody was hurt" must not vote for MEDICAL

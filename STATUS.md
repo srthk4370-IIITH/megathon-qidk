@@ -123,3 +123,13 @@ Run on the real board (SM8750P, Android 15) from the App laptop. Legend as above
 ## UI restyle and Qalam branding (App branch, 2026-10-11)
 
 Done on every screen (Home, Conversation, Review, Emergency, Dashboard, Detail, Ask, Settings) and checked on the QIDK; screenshots in `shots/`. App name, icon and splash are "Qalam". Visual change only. Rules and tokens: HANDBOOK "Design system".
+
+## Behaviour hardening (App branch, 2026-10-11 morning)
+
+| Item | State | Where |
+|---|---|---|
+| ASR benchmark (tiny.en / base.en / small, with and without the hint, board timing) | Done, report only | `eval/asr_benchmark.md` |
+| Emergency asks only for the place, then review with the response clock | Done, unit-tested | HANDBOOK "Emergency: questions are cut to the minimum" |
+| Small talk is not filed; self-introduction sets the reporter | Done, unit-tested, checked on the QIDK by typing | HANDBOOK "Small talk" |
+| Model failure → rules engine for that turn; silence answered once | Done, unit-tested (cannot be forced on the board) | HANDBOOK "Error handling" |
+| Follow-ups in the reporter's language; description in their words | Done, unit-tested | HANDBOOK "Language matching" |

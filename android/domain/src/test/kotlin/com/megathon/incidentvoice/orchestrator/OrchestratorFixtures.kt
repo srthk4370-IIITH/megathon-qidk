@@ -35,6 +35,7 @@ class InMemoryRepo(private val now: () -> Long = { Fx.now.toEpochMilli() }) : In
     override suspend fun latestDraft(maxAgeMs: Long): String? = null
     override suspend fun purgeOldDrafts(maxAgeMs: Long): Int = 0
     override suspend fun countAll(): Int = store.size
+    override suspend fun setReporter(id: String, reporter: Reporter) { store[id]!!.meta = store[id]!!.meta.copy(reporter = reporter) }
     override suspend fun recentSubmitted(sinceMs: Long, limit: Int): List<IncidentDetail> = store.values.filter { it.meta.status == IncidentStatus.SUBMITTED }.mapNotNull { load(it.meta.id) }
     override suspend fun linkWitness(childId: String, parentId: String, actor: Actor) { store[childId]!!.meta = store[childId]!!.meta.copy(parentId = parentId) }
     override suspend fun caseOf(id: String): List<IncidentDetail> { val root = store[id]?.meta?.let { it.parentId ?: it.id } ?: return emptyList(); return store.values.filter { it.meta.id == root || it.meta.parentId == root }.mapNotNull { load(it.meta.id) } }

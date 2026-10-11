@@ -55,7 +55,7 @@ fun ReviewScreen(ui: ConversationUiState, cfg: AppConfigBundle, o: ConversationO
                 Text("Needs details", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
                 Text("${missing.size} ${if (missing.size > 1) "fields" else "field"}: ${missing.take(3).joinToString { tx.label(it) }}${if (missing.size > 3) "…" else ""}")
             } else Text("All required fields complete.", color = secondaryText)
-            ui.notice?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+            ui.notice?.let { Text(it, color = if (it == ConversationOrchestrator.FALLBACK_NOTICE || it.startsWith("Picked up")) secondaryText else MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
             ui.emergency?.takeIf { ui.response == null }?.let { Spacer(Modifier.height(8.dp)); EmergencyBannerView(it, o::onEmergencyCall, o::onEmergencyDismiss) }
         }
 
@@ -155,9 +155,9 @@ fun ReviewScreen(ui: ConversationUiState, cfg: AppConfigBundle, o: ConversationO
         // ---- Reporter + submit
         item {
             SectionHeader("Reporter")
-            val rep = LocalReporter.current
+            val rep = ui.reporterName ?: LocalReporter.current
             Text(if (rep.isBlank()) "Not set. Add your name in Settings." else rep)
-            Text("Taken from the device profile.", style = MaterialTheme.typography.bodySmall, color = secondaryText)
+            Text(if (ui.reporterName != null) "As introduced by voice." else "Taken from the device profile.", style = MaterialTheme.typography.bodySmall, color = secondaryText)
             Spacer(Modifier.height(16.dp))
             PrimaryButton(if (ui.editingExisting) "Save changes" else "Submit report", o::onSubmit, enabled = ui.canSubmit)
             PlainButton(if (ui.editingExisting) "Close without saving further" else "Discard (keeps a draft)", o::onCancel)
