@@ -437,6 +437,13 @@ class ConversationOrchestrator(
         }
         val merged = merger.merge(form, call, FieldSource.LLM_EXTRACT, null, userTexts.toString(), clock())
         form = merger.applyTimeDefault(merged.form, clock())
+        // answer in the language the reporter used (their words decide, not the model's label)
+        form = form.copy(lang = LangDetector.ofSpeech(text))
+        // the description stays in the reporter's own words: a model rewrite that drifted from them is replaced by the lightly cleaned narration
+        form.state("description")?.takeIf { it.status != FieldStatus.USER_EDITED && it.status != FieldStatus.MISSING }?.let { st ->
+            val kept = DescriptionStyle.keep(form.str("description"), text)
+            if (kept.isNotBlank() && kept != form.str("description")) form = form.with(st.copy(value = JsonPrimitive(kept)))
+        }
         ensureDescriptionFromTranscript()
         rememberTool(gen, "Form updated: " + merged.changed.filter { it != "lang" }.joinToString { tx.label(it) })
         update { it.copy(streamingFields = emptySet(), form = form) }
@@ -496,6 +503,8 @@ class ConversationOrchestrator(
 
     private suspend fun handleAnswer(text: String, audioPath: String?, audioMs: Long?, asrMs: Long?) {
         val q = question ?: return
+        // a full sentence in the other language switches the language of the next question; "yes" or "haan" does not
+        if (text.trim().split(Regex("\\s+")).size >= 3) form = form.copy(lang = LangDetector.ofSpeech(text))
         retryAction = { handleAnswer(text, audioPath, audioMs, asrMs) }
         val id = ensureDraft()
         scanEmergency(text)

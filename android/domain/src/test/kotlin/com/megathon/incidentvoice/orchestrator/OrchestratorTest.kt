@@ -209,6 +209,22 @@ class OrchestratorTest {
         assertNull(r.repo.store.values.first().form.incidentType)
     }
 
+    /** Hinglish in, Hinglish questions out; English in, English out; the words are stored as they were said. */
+    @Test fun followUps_matchTheReportersLanguage_andTheTranscriptIsKeptVerbatim() = runTest {
+        val hi = rig("Pantry ke paas paani leak ho raha hai, abhi bhi gir raha hai", "kisi ko chot nahi lagi, minor hai", "pipe se, abhi band nahi hua")
+        hi.o.startNew(); hi.o.onMicTapped(); advanceUntilIdle()
+        val asked = hi.tts.spoken.first()
+        assertEquals(Fx.tx.pairTemplates.map { it.hinglish }.plus(Fx.tx.commonFields.map { it.q?.hinglish }).contains(asked) || Regex("\\b(kya|kisi|kab|kahan|kitn\\w+|hai|hua)\\b", RegexOption.IGNORE_CASE).containsMatchIn(asked), true, asked)
+        assertEquals("hinglish", hi.o.ui.value.form.lang)
+        assertEquals("Pantry ke paas paani leak ho raha hai, abhi bhi gir raha hai", hi.inc.turns.first { it.kind == "NARRATION" }.textRaw)
+        assertTrue(hi.o.ui.value.form.str("description")!!.contains("paani leak ho raha hai"))       // the reporter's own phrase
+
+        val en = rig()
+        en.o.startNew(); en.o.onMicTapped(); advanceUntilIdle()
+        assertEquals("en", en.o.ui.value.form.lang)
+        assertTrue(en.tts.spoken.none { Regex("\\b(kya|kisi|hai)\\b").containsMatchIn(it) }, en.tts.spoken.toString())
+    }
+
     private fun TestScope.launchCollect(o: ConversationOrchestrator, into: MutableList<UiEvent>) =
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { o.events.collect { into += it } }
 

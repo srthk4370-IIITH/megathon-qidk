@@ -317,4 +317,14 @@ Rule: a failure never loses the report and never leaves a dead end. The draft (f
 
 Changed for this task: case 1 (the rules engine now takes over automatically; before, the error card appeared and the user had to choose), case 4 (spoken once and one more try; before, straight back to the start), the draft is saved explicitly on every error path, and status notices are shown in plain text instead of red. Cases 2, 3, 5–7 and 9–16 already behaved this way. Tests: `modelFailure_usesRulesForThatTurn_…`, `modelFailure_onAnAnswer_alsoFallsBack`, `silenceAtTheStart_…`.
 
-**20-second demo:** Settings → Engine → Mock, start a report and tap stop without speaking → "Sorry, I didn't catch that." is spoken once and it listens again. The model-failure fallback cannot be triggered by hand on the board; it is covered by the unit tests.
+**20-second demo:** tap the report button and stay silent for about ten seconds → "Sorry, I didn't catch that." is spoken once and it listens again; stay silent again → back to the start with the notice. The model-failure fallback cannot be triggered by hand on the board; it is covered by the unit tests.
+
+
+## Language matching and the reporter's own words (App branch, 2026-10-11)
+
+- **Follow-up language:** the language of the questions now follows the reporter's own words, not the model's label. After the narration the app runs `LangDetector.ofSpeech` on the text (Hinglish marker words such as hai, tha, nahi, ke, mein, paani; or Devanagari) and uses the Hinglish question templates from `taxonomy.json` when it is Hinglish, the English ones otherwise. A later answer of three words or more can switch the language; "yes" or "haan" does not.
+- **Description:** the model may tidy the sentence, but if less than 70 % of the words in its description were actually said, the description is replaced by the narration with light cleanup only (`DescriptionStyle`: fillers and a leading greeting removed, spacing, capital letter, full stop). A description the reporter edited by hand is never touched.
+- **Verbatim transcript:** every turn is stored exactly as heard (`turns.text_raw`); a correction made on the "Heard this" screen is stored next to it, not over it. The detail screen shows "Transcript, word for word" with the heard text and, if there was one, the correction.
+- **Limit that matters:** speech recognition runs with English forced (the benchmark shows literal Hinglish transcription does not work with these models), so *spoken* Hinglish mostly arrives as English text and gets English questions. Hinglish questions appear when the text itself is Hinglish: typed reports, or the Hindi words Whisper happens to keep. The marker-word list is short and can misjudge a very short sentence.
+- **Tests:** `followUps_matchTheReportersLanguage_andTheTranscriptIsKeptVerbatim`, `language_followsTheReportersWords`, `description_lightCleanupOnly`, `description_keepsTheReportersWords_unlessTheModelStayedClose`.
+- **20-second demo:** Type instead → "Pantry ke paas paani leak ho raha hai" → the next question is in Hinglish and the description keeps "paani leak ho raha hai". Open any report → "Transcript, word for word".

@@ -63,4 +63,27 @@ class SmallTalkTest {
         assertEquals("Hi Ravi. I didn't catch an incident. What happened?", SmallTalk.prompt("en", "Ravi"))
         assertEquals("Mujhe koi incident samajh nahi aaya. Kya hua tha?", SmallTalk.prompt("hinglish"))
     }
+
+    // ---- language matching and the reporter's own words
+    @Test fun language_followsTheReportersWords() {
+        assertEquals("hinglish", LangDetector.ofSpeech("Pantry ke paas paani leak ho raha hai"))
+        assertEquals("hinglish", LangDetector.ofSpeech("पैंट्री के पास पानी गिर रहा है"))
+        assertEquals("en", LangDetector.ofSpeech("There was a water leak near Conference Room 2 around 10 AM"))
+        assertEquals("en", LangDetector.ofSpeech("A forklift hit the rack in Bay 4, nobody was hurt"))
+    }
+    @Test fun description_lightCleanupOnly() {
+        assertEquals("There was a water leak near the pantry, it is still dripping.", DescriptionStyle.light("um, there was a water leak near the pantry, uh it is still dripping"))
+        assertEquals("Pantry ke paas paani leak ho raha hai.", DescriptionStyle.light("hello, pantry ke paas paani leak ho raha hai"))
+        assertEquals("", DescriptionStyle.light("  "))
+    }
+    @Test fun description_keepsTheReportersWords_unlessTheModelStayedClose() {
+        val said = "the pipe under the sink burst and water is all over the pantry floor"
+        // a tidy-up of the same words is accepted
+        assertEquals("The pipe under the sink burst; water is all over the pantry floor.", DescriptionStyle.keep("The pipe under the sink burst; water is all over the pantry floor.", said))
+        // a formal rewrite is not: the reporter's own sentence is used
+        assertEquals("The pipe under the sink burst and water is all over the pantry floor.",
+            DescriptionStyle.keep("A plumbing failure resulted in significant flooding of the kitchenette area, posing a slip hazard to personnel.", said))
+        assertEquals("The pipe under the sink burst and water is all over the pantry floor.", DescriptionStyle.keep(null, said))
+        assertTrue(DescriptionStyle.overlap("A plumbing failure resulted in flooding", said) < 0.3)
+    }
 }
