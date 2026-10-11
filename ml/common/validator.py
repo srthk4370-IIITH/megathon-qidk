@@ -90,6 +90,8 @@ def required_fields(form: Form, tx: Taxonomy | None = None) -> list[str]:
 
 def validate(form: Form, now: datetime, tx: Taxonomy | None = None) -> ValidationResult:
     tx = tx or taxonomy()
+    if is_no_incident(form):   # nothing to complete: the app discards it and keeps listening
+        return ValidationResult(complete=False, required=[], missing=[], progress=0.0)
     req = required_fields(form, tx)
     missing, invalid = [], []
     for k in req:
@@ -140,6 +142,12 @@ def group_rule(a: str, b: str, tx: Taxonomy) -> dict:
     en = f"{_strip_q(qa['en'])}, and {en_b[:1].lower() + en_b[1:]}"
     hi = f"{_strip_q(qa['hinglish'])}, aur {qb['hinglish']}"
     return {"en": en, "hinglish": hi}
+
+
+def is_no_incident(form: Form) -> bool:
+    """NO_INCIDENT sentinel form (small talk / mic test): no draft, no follow-up questions."""
+    from .parser import is_no_incident as _ni
+    return _ni({"description": form.value("description")})
 
 
 def is_emergency(form: Form) -> bool:

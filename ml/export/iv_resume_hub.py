@@ -70,6 +70,12 @@ def _install():
             # a pre-uploaded zip of the same part is "<same>.zip" → same key
             base = _os.path.basename(path.rstrip("/"))
             key = "part:" + (base[:-4] if base.endswith(".zip") else base)
+            # a side uploader (scripts/jobs/up_part.sh) may be uploading this part right now: wait for it
+            lock = _CACHE.parent / ("uploading_" + key.replace(":", "_").replace("/", "_"))
+            while lock.exists() and not _os.environ.get("IV_SIDE_UPLOAD") and key not in _load()["models"]:
+                _log(f"waiting for side upload of {key}")
+                import time as _t
+                _t.sleep(60)
             cache = _load()
             mid = cache["models"].get(key)
             if mid:
@@ -79,17 +85,6 @@ def _install():
                     return m
                 except Exception as e:  # noqa: BLE001
                     _log(f"cached model {mid} unusable ({e}); uploading")
-            else:  # fallback: same-name model uploaded recently (e.g. by a crashed run)
-                try:
-                    base = _os.path.basename(path.rstrip("/"))
-                    for m in self.get_models(limit=50):
-                        if (m.name or "").startswith(base.replace(".zip", "")) and _recent(m.date):
-                            cache["models"][key] = m.model_id
-                            _save(cache)
-                            _log(f"reuse recent upload {base} -> {m.model_id}")
-                            return m
-                except Exception as e:  # noqa: BLE001
-                    _log(f"recent-model lookup failed: {e}")
             m = orig_upload(self, model, model_type, name=name, project=project)
             cache = _load()
             cache["models"][key] = m.model_id

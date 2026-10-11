@@ -57,6 +57,14 @@ done_ ft_kaggle_push && start ft_kaggle_fetch
 { [ -f "$ST/ft_use_laptop" ] && stock_ready && [ ! -f "$HOME/iv_ft/adapter/adapter_config.json" ]; } && start ft_train_laptop
 { [ -f "$HOME/iv_ft/adapter/adapter_config.json" ] && stock_ready; } && start ft_merge
 done_ ft_merge && start ft_gate
-{ done_ ft_gate && stock_ready; } && start ft_export
+# re-training deadline (~/iv/state/ft_v2_deadline, epoch): past it, an unfinished fetch is given up (current adapter kept)
+DL=$(cat "$ST/ft_v2_deadline" 2>/dev/null)
+if [ -n "$DL" ] && [ "$(date +%s)" -gt "$DL" ] && ! done_ ft_kaggle_fetch && [ ! -f "$ST/ft_kaggle_fetch.failed" ]    && [ -f "$HOME/iv_ft/adapter/adapter_config.json" ]; then
+  alive ft_kaggle_fetch && kill -TERM -"$(ps -o pgid= -p "$(cat "$ST/ft_kaggle_fetch.pid")" | tr -d ' ')" 2>/dev/null
+  rm -f "$ST/ft_kaggle_fetch.pid"; touch "$ST/ft_kaggle_fetch.failed"
+  echo "$(date '+%F %T') ft v2 deadline passed — ft_kaggle_fetch given up, proceeding with current adapter" >> "$HOME/iv/logs/supervisor.log"
+fi
+# export only once the newest Kaggle run is settled (fetched or given up): never export an adapter about to be replaced
+{ done_ ft_gate && stock_ready && { done_ ft_kaggle_fetch || [ -f "$ST/ft_kaggle_fetch.failed" ]; }; } && start ft_export
 { done_ ft_gate && [ -f "$HOME/iv_ft/ft_ckpt_w4a16/SCALES_OK" ]; } && start ft_eval_full
 exit 0

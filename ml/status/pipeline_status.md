@@ -78,3 +78,30 @@
 - 11 04:29 [ft_kaggle_push] kaggle training kernel pushed: https://www.kaggle.com/code/srthk4370/iv-ft-train
 - 11 04:29 [ft_kaggle_push] DONE
 - 11 04:34 [ft_kaggle_fetch] GAVE UP: kaggle kernel finished without adapter: {"ok": false, "error": "inputs missing: model=meta-llama/Llama-3.2-3B-Instruct data=/kaggle/input/datasets/srthk4370/iv-ft-data"} → laptop fallback  (rm ~/iv/state/ft_kaggle_fetch.failed to retry)
+- 11 04:54 [ft_train_laptop] laptop QLoRA start/resume
+- 11 04:54 [export_llama] venv /home/hp_srthk4370/venvs/qaihm_pin: torch 2.10.0+cpu transformers 4.45.0 
+- 11 04:54 [export_llama] export start: llama_v3_2_3b_instruct (expect 3–5 h: local ONNX export, upload, cloud compile, download)
+- 11 05:05 [ft_data] data: {"train_extract": 2000, "train_patch": 778, "dev": 160, "rejected": {"near_eval": 5, "dup": 5}, "lang": {"en": 1387, "hinglish": 613}, "noisy_frac": 0.457, "cat
+- 11 05:05 [ft_data] DONE
+- 11 05:11 [ft_kaggle_push] kaggle training kernel pushed: https://www.kaggle.com/code/srthk4370/iv-ft-train
+- 11 05:11 [ft_kaggle_push] DONE
+- 11 05:17 [ft_kaggle_push] kaggle training kernel pushed: https://www.kaggle.com/code/srthk4370/iv-ft-train
+- 11 05:17 [ft_kaggle_push] DONE
+- 11 05:20 [ft_kaggle_fetch] GAVE UP: kaggle kernel srthk4370/iv-ft-train has status "KernelWorkerStatus.ERROR" → laptop fallback (log: kaggle kernels output srthk4370/iv-ft-train)  (rm ~/iv/state/ft_kaggle_fetch.failed to retry)
+- 11 05:20 [ft_kaggle_push] kaggle training kernel pushed: https://www.kaggle.com/code/srthk4370/iv-ft-train
+- 11 05:20 [ft_kaggle_push] DONE
+- 11 05:38 [ft_train_laptop] laptop QLoRA start/resume
+- 11 05:47 [ft_train_laptop] train crashed — resumes next tick
+- 11 05:48 [ft_train_laptop] laptop QLoRA start/resume
+- 11 05:55 [ft_train_laptop] train crashed — resumes next tick
+- 11 05:58 [ft_train_laptop] laptop QLoRA start/resume
+- 11 06:07 [ft_train_laptop] train crashed — resumes next tick
+- 11 06:08 [ft_train_laptop] laptop QLoRA start/resume
+- 11 06:11 [export_llama] venv /home/hp_srthk4370/venvs/qaihm_pin: torch 2.10.0+cpu transformers 4.45.0 
+- 11 06:11 [export_llama] export start: llama_v3_2_3b_instruct (expect 3–5 h: local ONNX export, upload, cloud compile, download)
+- 11 06:16 [ft_kaggle_fetch] kaggle adapter fetched: {"ok":true,"steps":133,"total_steps":137,"stopped":"time_guard","dev_loss":0.035,"minutes":50.6,"dev_json_valid":"8/8","sample":"{\"name\":\"fill_incident_form\",\"parameters\":{\"lang\":\"hinglish\",
+- 11 06:16 [ft_kaggle_fetch] DONE
+- 11 06:23 [up_part] side upload OK: part:Llama3_2_3B_Part3_Of_3_w4a16.aimet
+- 11 06:33 [ft_data] data: {"train_extract": 2350, "train_patch": 778, "dev": 181, "rejected": {"near_eval": 5, "dup": 22}, "lang": {"en": 1629, "hinglish": 721}, "noisy_frac": 0.455, "ca
+- 11 06:33 [ft_data] DONE
+- 11 06:34 [ft_kaggle_push] GAVE UP: v2 subset  (rm ~/iv/state/ft_kaggle_push.failed to retry)

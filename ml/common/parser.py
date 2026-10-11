@@ -32,6 +32,13 @@ ROLE_SYNONYMS = {"VICTIM": "AFFECTED", "INJURED": "AFFECTED", "PATIENT": "AFFECT
                  "HELPER": "RESPONDER", "SECURITY": "RESPONDER", "WITNESS": "OTHER", "SPEAKER": "REPORTER",
                  "CALLER": "REPORTER"}
 MAX_STR = 300
+NO_INCIDENT = "NO_INCIDENT"   # sentinel description: {"incident_type":"OTHER","description":"NO_INCIDENT","lang":..}
+
+
+def is_no_incident(params: dict | None) -> bool:
+    """True if extraction params carry the NO_INCIDENT sentinel (lenient: case / space / dash variants)."""
+    d = (params or {}).get("description")
+    return isinstance(d, str) and re.sub(r"[\s\-]+", "_", d.strip().strip(".").upper()) == NO_INCIDENT
 
 
 @dataclass
@@ -55,6 +62,7 @@ class ParsedCall:
     strict_json: bool = False        # the stripped raw text was valid JSON as-is
     inferred: set[str] = field(default_factory=set)   # ungrounded strings kept as INFERRED
     raw_obj: Any = None
+    no_incident: bool = False        # NO_INCIDENT sentinel: speech had no incident (small talk / mic test)
 
 
 # ---------------------------------------------------------------------------------------------------
@@ -667,6 +675,13 @@ def parse(text: str, tool: str, transcript: str | list[str] | None = None, tx: T
     pc.raw_obj = obj
     ok, params = _envelope(obj, tool, pc.issues)
     if not ok or params is None:
+        return pc
+    if tool == "fill_incident_form" and is_no_incident(params):
+        # small talk / mic test: canonical sentinel only, anything else the model added is dropped
+        pc.no_incident = True
+        lang = norm_value("lang", params.get("lang"), tx, pc.issues) if "lang" in params else None
+        pc.params = {"incident_type": "OTHER", "description": NO_INCIDENT, **({"lang": lang} if lang else {})}
+        pc.ok = True
         return pc
     if tool == "fill_incident_form":
         out = _route_fill(params, tx, pc.issues)

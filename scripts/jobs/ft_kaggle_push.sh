@@ -9,17 +9,35 @@ kg(){ local out i; for i in 1 2 3 4 5 6 7 8; do
     echo "$out" | grep -qE "SSLError|ConnectionError|ReadTimeout|Max retries|50[234] " || { echo "$out"; return 0; }
     sleep 20; done; echo "$out" | tail -1; return 1; }
 D=$HOME/iv_ft/kaggle_ds
-if [ ! -f "$ST/ft_dataset_ok" ]; then
+# re-upload whenever the data changed (ft_dataset_ok holds the md5 of the uploaded train.jsonl)
+H=$(cat $HOME/iv_ft/data/train.jsonl $HOME/iv_ft/adapter/adapter_model.safetensors 2>/dev/null | md5sum | cut -c1-32)
+if [ "$(cat "$ST/ft_dataset_ok" 2>/dev/null)" != "$H" ]; then
   rm -rf "$D"; mkdir -p "$D"
   cp $HOME/iv_ft/data/{train,dev}.jsonl $HOME/iv_ft/data/stats.json "$D/" || mark_failed "no data"
+  if [ -f $HOME/iv_ft/adapter/adapter_model.safetensors ]; then
+    # continuation run (v2+): train only on small talk (NO_INCIDENT) + mixed + 600-sample replay, from the current
+    # adapter (train_lora.py: half LR, 24 min incl. load). Adapter files go flat (datasets drop sub-dirs).
+    $HOME/venvs/ml/bin/python - "$D/train.jsonl" <<'PY' || mark_failed "v2 subset"
+import json, random, sys
+p = sys.argv[1]
+rows = [json.loads(l) for l in open(p, encoding="utf-8")]
+new = [r for r in rows if r.get("category") == "NO_INCIDENT" or r.get("mixed_small_talk")]
+old = [r for r in rows if not (r.get("category") == "NO_INCIDENT" or r.get("mixed_small_talk"))]
+rng = random.Random(11); sub = new + rng.sample(old, min(600, len(old))); rng.shuffle(sub)
+open(p, "w", encoding="utf-8", newline="\n").writelines(json.dumps(r, ensure_ascii=False) + "\n" for r in sub)
+print("v2 subset:", len(new), "new +", len(sub) - len(new), "replay")
+PY
+    for f in adapter_config.json adapter_model.safetensors; do cp $HOME/iv_ft/adapter/$f "$D/init_adapter__$f"; done
+  fi
   echo "{\"title\":\"iv-ft-data\",\"id\":\"$DS\",\"licenses\":[{\"name\":\"other\"}]}" > "$D/dataset-metadata.json"
   st=$(kg datasets status $DS) || retry_later "status"
   if echo "$st" | grep -qi ready; then o=$(kg datasets version -p "$D" -m "regen $(date +%F_%T)") || retry_later version
   else o=$(kg datasets create -p "$D") || retry_later create; fi
   echo "$o" | tail -2
+  sleep 60   # a new version needs processing; "ready" right away may still be the previous version
   for i in $(seq 1 40); do sleep 15; kg datasets status $DS | grep -qi ready && break; done
   kg datasets status $DS | grep -qi ready || retry_later "dataset not ready"
-  touch "$ST/ft_dataset_ok"; status "kaggle dataset $DS ready (private)"
+  echo "$H" > "$ST/ft_dataset_ok"; status "kaggle dataset $DS ready (private, train md5 $H)"
 fi
 KD=$HOME/iv_ft/kaggle_kernel; rm -rf "$KD"; mkdir -p "$KD"
 cp "$REPO/ml/ft/train_lora.py" "$KD/"; sed -i 's/\r$//' "$KD/train_lora.py"
@@ -32,6 +50,7 @@ J
 out=$(kg kernels push -p "$KD") || retry_later "push"
 echo "$out"
 echo "$out" | grep -qiE "successfully|pushed|version" || mark_failed "kernel push: $(echo $out | cut -c1-200)"
-date +%s > "$ST/ft_kaggle_pushed"; rm -f "$ST/ft_kaggle_fetch.failed" "$ST/ft_kaggle_fetch.done"
+date +%s > "$ST/ft_kaggle_pushed"; wc -l < "$D/train.jsonl" | tr -d ' ' > "$ST/ft_kaggle_n_train"
+rm -f "$ST/ft_kaggle_fetch.failed" "$ST/ft_kaggle_fetch.done"
 status "kaggle training kernel pushed: https://www.kaggle.com/code/$KID"
 mark_done

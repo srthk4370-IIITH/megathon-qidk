@@ -6,7 +6,7 @@ JOB=ft_train_laptop; source $HOME/iv/jobs/common.sh
 cd "$REPO"; export HF_HUB_OFFLINE=1
 status "laptop QLoRA start/resume"
 $HOME/venvs/train/bin/python ml/ft/train_lora.py --qlora --data $HOME/iv_ft/data --out $HOME/iv_ft/laptop_run \
-  --max-minutes 80 --save-every 20 --eval-every 0 || { status "train crashed — resumes next tick"; rm -f "$ST/$JOB.pid"; exit 1; }
+  --max-len 1024 --max-minutes 80 --save-every 20 --eval-every 0 || { status "train crashed — resumes next tick"; rm -f "$ST/$JOB.pid"; exit 1; }
 [ -f $HOME/iv_ft/laptop_run/adapter/adapter_config.json ] || mark_failed "no adapter written"
 if [ ! -f $HOME/iv_ft/adapter/adapter_config.json ]; then
   rm -rf $HOME/iv_ft/adapter.tmp; cp -r $HOME/iv_ft/laptop_run/adapter $HOME/iv_ft/adapter.tmp && mv $HOME/iv_ft/adapter.tmp $HOME/iv_ft/adapter

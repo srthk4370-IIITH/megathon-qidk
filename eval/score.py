@@ -42,7 +42,7 @@ sys.path.insert(0, str(ROOT))
 from ml.common.config import taxonomy  # noqa: E402
 from ml.common.form import Form  # noqa: E402
 from ml.common.fuzzy import token_set_ratio  # noqa: E402
-from ml.common.parser import parse  # noqa: E402
+from ml.common.parser import is_no_incident, parse  # noqa: E402
 from ml.common.timeres import resolve, times_match  # noqa: E402
 from ml.common.validator import SEVERITY_ORDER, _valid  # noqa: E402
 
@@ -232,6 +232,7 @@ def score(cases, preds, asr_rows=None):
     per_case = []
     latency = defaultdict(lambda: defaultdict(list))
     missing_preds = 0
+    ni_n = ni_ok = ni_false_reject = 0
     for c in cases:
         p = P.get(c["id"])
         if p is None:
@@ -250,6 +251,20 @@ def score(cases, preds, asr_rows=None):
                     latency[task][m].append(st[m])
         gold = c["gold"]
         pred = pc.params if pc.ok else {}
+        # NO_INCIDENT sentinel (small talk / mic test): gold-NI case is correct iff the prediction is NI too;
+        # a real incident predicted as NI is a false rejection (scored as an empty prediction below)
+        g_ni, p_ni = is_no_incident(gold), pc.ok and is_no_incident(pred)
+        if g_ni:
+            ni_n += 1; ni_ok += p_ni; type_ok += p_ni; lang_ok += p_ni and pred.get("lang") == gold.get("lang")
+            g = by_group[f"lang={c['lang']}"]; g["n"] += 1; g["type_ok"] += p_ni
+            g = by_group["cat=NO_INCIDENT"]; g["n"] += 1; g["type_ok"] += p_ni
+            per_case.append({"id": c["id"], "type_ok": bool(p_ni), "f1": 1.0 if p_ni else 0.0, "json_ok": info["ok_first"],
+                             "no_incident": True, "pred_type": pred.get("incident_type"),
+                             "issues": [repr(i) for i in pc.issues][:8]})
+            continue
+        if p_ni:
+            ni_false_reject += 1
+            pred = {}
         t_ok = pred.get("incident_type") == gold.get("incident_type")
         type_ok += t_ok
         lang_ok += pred.get("lang") == gold.get("lang")
@@ -341,6 +356,9 @@ def score(cases, preds, asr_rows=None):
                   "json_valid_with_repair": patch_json["ok_repair"] / patch_n if patch_n else None},
         "groups": {k: {"n": v["n"], "type_accuracy": v["type_ok"] / v["n"], "field_f1": f1(*v["f"])[0]}
                    for k, v in sorted(by_group.items())},
+        "no_incident": {"n": ni_n, "accuracy": ni_ok / ni_n if ni_n else None,
+                        "false_reject_n": ni_false_reject,
+                        "false_reject_rate": ni_false_reject / (n - ni_n) if n - ni_n else None},
         "latency": {t: {m_: {"p50": pct(v, 0.5), "p90": pct(v, 0.9), "n": len(v)} for m_, v in ms.items()}
                     for t, ms in latency.items()},
     }
@@ -379,6 +397,8 @@ def report_md(m, title):
          f"| JSON valid without repair | {fmtv(m['json_valid_without_repair'])} | ≥ 97 % |",
          f"| JSON valid with repair | {fmtv(m['json_valid_with_repair'])} | — |",
          f"| JSON strict (raw output is pure JSON) | {fmtv(m['json_strict'])} | — |",
+         f"| NO_INCIDENT accuracy (small talk rejected, n={m['no_incident']['n']}) | {fmtv(m['no_incident']['accuracy'])} | — |",
+         f"| False NO_INCIDENT on real incidents (n={m['no_incident']['false_reject_n']}) | {fmtv(m['no_incident']['false_reject_rate'])} | 0 % |",
          f"| Patch `set` F1 / `unknown` F1 | {fmtv(m['patch']['set_f1'], False)} / {fmtv(m['patch']['unknown_f1'], False)} | — |",
          ""]
     if m.get("asr"):

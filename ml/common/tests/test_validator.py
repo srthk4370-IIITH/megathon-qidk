@@ -141,3 +141,11 @@ def test_severity_rules():
                           "persons": [{"name": "A", "injured": True}]}, now=NOW)
     apply_rules(g)
     assert g.value("injuries") == "YES" and g.value("severity") == "MEDIUM"
+
+
+def test_no_incident_form_asks_nothing():
+    from ml.common.validator import is_no_incident
+    f = Form.from_params({"incident_type": "OTHER", "description": "NO_INCIDENT", "lang": "en"}, now=NOW)
+    r = validate(f, NOW)
+    assert is_no_incident(f) and not r.complete and r.missing == [] and next_question(r, f) is None
+    assert not is_no_incident(mg.slide_form())

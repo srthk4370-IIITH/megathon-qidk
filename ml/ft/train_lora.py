@@ -19,6 +19,7 @@ import os
 import random
 import subprocess
 import sys
+import shutil
 import time
 
 KAGGLE = os.path.isdir("/kaggle/working")
@@ -29,6 +30,8 @@ def sh(cmd):
 
 
 if KAGGLE:
+    # Kaggle image ships torchao 0.10, which recent peft rejects at LoRA injection ("only versions above 0.16")
+    print(sh("pip uninstall -y -q torchao 2>&1 | tail -1"))
     try:
         import peft  # noqa: F401
     except ImportError:
@@ -114,9 +117,10 @@ def main():
     ap.add_argument("--max-minutes", type=float, default=55)
     ap.add_argument("--save-every", type=int, default=20)
     ap.add_argument("--eval-every", type=int, default=50)
+    ap.add_argument("--init-adapter", default=None, help="continue training from an existing LoRA adapter dir")
     a = ap.parse_args([] if KAGGLE else None)
     if KAGGLE:
-        a.max_minutes = 50
+        a.max_minutes = 65   # v2 data (+NO_INCIDENT small talk) is ~13 % larger; T4 session cap is far above this
     t_start = time.time()
     if KAGGLE:
         # weights only from the attached Kaggle Models source (needs the Llama licence accepted on the account)
@@ -124,6 +128,16 @@ def main():
         a.data = find_data()
         a.out = "/kaggle/working"
         print("model:", a.model, "data:", a.data, flush=True)
+        # v2 continuation: the dataset carries the previous adapter flat as init_adapter__<file> (Kaggle datasets
+        # drop sub-directories) -> rebuild the dir; short run at half LR on the new samples + replay
+        flat = sorted(glob.glob(os.path.join(a.data or "", "init_adapter__*")))
+        if flat:
+            ia = "/kaggle/working/init_adapter"
+            os.makedirs(ia, exist_ok=True)
+            for f in flat:
+                shutil.copy(f, os.path.join(ia, os.path.basename(f).split("__", 1)[1]))
+            a.init_adapter, a.lr, a.max_minutes = ia, a.lr / 2, 24
+            print("continuing from", ia, os.listdir(ia), "lr", a.lr, flush=True)
         if not a.data or not os.path.isdir(a.model):
             json.dump({"ok": False, "error": f"inputs missing: model={a.model} data={a.data}"},
                       open("/kaggle/working/result.json", "w"))
@@ -161,6 +175,9 @@ def main():
     resume = os.path.isfile(os.path.join(ck, "state.pt"))
     if resume:
         model = PeftModel.from_pretrained(model, ck, is_trainable=True)
+    elif a.init_adapter:
+        model = PeftModel.from_pretrained(model, a.init_adapter, is_trainable=True)
+        log(event="init_adapter", path=a.init_adapter)
     else:
         model = get_peft_model(model, lcfg)
     for n, p in model.named_parameters():  # LoRA params in fp32 (fp16 AMP master weights)
@@ -255,7 +272,7 @@ def main():
     if not KAGGLE:
         save()
     res = {"ok": True, "steps": step, "total_steps": total, "stopped": stopped, "dev_loss": dl,
-           "minutes": round((time.time() - t_start) / 60, 1)}
+           "minutes": round((time.time() - t_start) / 60, 1), "n_train": len(train)}
     # quick JSON-validity probe on a few dev extract prompts (greedy)
     try:
         model.eval(); model.config.use_cache = True
@@ -274,6 +291,16 @@ def main():
                 pass
         res["dev_json_valid"] = f"{ok}/{len(rows)}"
         res["sample"] = txt[:400]
+        ni = [r for r in load(os.path.join(a.data, "dev.jsonl")) if r.get("category") == "NO_INCIDENT"][:4]
+        hit = 0
+        for r in ni:   # small-talk rejection probe (NO_INCIDENT sentinel)
+            ids = [tok.convert_tokens_to_ids(BOS)] + tok(r["prompt"], add_special_tokens=False).input_ids
+            x = torch.tensor([ids], device=model.device)
+            with torch.no_grad(), torch.autocast("cuda", dtype=torch.float16):
+                out = model.generate(input_ids=x, attention_mask=torch.ones_like(x), max_new_tokens=60,
+                                     do_sample=False, eos_token_id=[128009, 128001], pad_token_id=128009)
+            hit += "NO_INCIDENT" in tok.decode(out[0, len(ids):], skip_special_tokens=True)
+        res["dev_no_incident"] = f"{hit}/{len(ni)}"
     except Exception as e:
         res["gen_error"] = repr(e)
     json.dump(res, open(os.path.join(a.out, "result.json"), "w"), indent=1)

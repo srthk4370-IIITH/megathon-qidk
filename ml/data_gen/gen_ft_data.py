@@ -5,7 +5,8 @@ Reuses the eval scenario templates (eval/scenarios.py, eval/gen_cases.py) but wi
   * paraphrase layer (safe sentence swaps, opening/closing chatter, fragment re-ordering),
   * ASR-noise augmentation on ~50 % (gc.noisify + word drops + extra homophones, §27.2.4),
   * patch samples from the real Python Validator follow-up question (§27.2.5),
-and de-duplicates against the held-out eval set (eval/text_cases.jsonl, exact + word-5-gram Jaccard).
+and de-duplicates against the held-out eval sets (eval/text_cases.jsonl + smalltalk_cases.jsonl, exact + word-5-gram
+Jaccard). ~10 % small talk / mic tests / ASR noise -> NO_INCIDENT sentinel; ~7.5 % small talk + real incident (normal gold).
 
 Every sample is rendered with ml/common/prompt_builder.py, extract variant `ft` (short prompt, no few-shots):
   {"task": "extract"|"patch", "id", "prompt", "completion"}   completion = compact tool JSON (eot added by trainer)
@@ -124,6 +125,75 @@ NEG_EN = ["Thankfully nobody is hurt and nobody is unconscious.", "No one was in
           "Nobody got hurt, no one needs an ambulance.", "No injuries, everyone is fine and conscious."]
 
 
+# ---------------------------------------------------------------- small talk / non-incident (NO_INCIDENT sentinel)
+NO_INCIDENT_PARAMS = {"incident_type": "OTHER", "description": "NO_INCIDENT"}
+ST_EN = {
+    "greet": ["hello", "hi", "hey", "good morning", "good evening", "hello sir", "hi there", "namaste", "hello madam",
+              "good afternoon", "hey buddy"],
+    "mic": ["testing testing", "testing one two three", "mic check", "is this working", "can you hear me",
+            "is this thing on", "hello hello", "one two one two", "can you hear me clearly", "check check",
+            "am I audible", "is the recording on"],
+    "chat": ["how are you doing", "what's the weather like today", "tell me a joke", "what can you do",
+             "who made you", "are you a robot", "what time is it", "when does the shift end", "is the canteen open",
+             "I'm just checking the app", "just trying this out", "nothing to report", "everything is fine here",
+             "all good on my side", "sorry wrong button", "never mind", "I was talking to someone else",
+             "let me think", "wait wait", "one second", "okay bye", "thank you", "the cricket match was great yesterday",
+             "my phone battery is low", "where is my tea", "what is your name", "how does this work",
+             "I will call you later", "can you play some music", "is it going to rain today", "did you have lunch",
+             "the new manager seems nice", "remind me to buy milk", "how many leaves do I have left",
+             "let me just see if this records", "I don't have anything right now"],
+    "asr": ["Thank you.", "Thanks for watching!", "you", "Bye.", "Okay.", "So.", "Hmm.", "Uh huh.", "Yeah yeah."],
+    "fill": ["um", "uh", "hmm", "like", "you know", "so", "okay", "yeah", "I mean", "actually", "right"],
+}
+ST_HI = {
+    "greet": ["namaste", "haan ji", "hello ji", "kaise ho", "kya haal hai", "sab theek", "ram ram",
+              "namaste sir", "kaise ho bhai", "hello bhaiya"],
+    "mic": ["sun rahe ho", "awaaz aa rahi hai", "testing ek do teen", "hello hello", "mic chal raha hai kya",
+            "meri awaaz aa rahi hai kya", "ek do ek do", "record ho raha hai kya"],
+    "chat": ["kuch nahi bas check kar raha tha", "app chal raha hai ki nahi dekh raha tha", "chai pi li",
+             "lunch ka time ho gaya kya", "aaj mausam accha hai", "match dekha kal", "galti se button dab gaya",
+             "rukiye ek minute", "kuch nahi", "theek hai bye", "shukriya", "aap kaun ho", "kya kar sakte ho tum",
+             "baad mein baat karte hain", "canteen khula hai kya", "shift kab khatam hogi", "abhi kuch nahi hai",
+             "bas aise hi try kar raha tha", "koi joke sunao", "aaj barish hogi kya", "mera phone charge nahi hai"],
+    "asr": ["Thank you.", "you", "Okay.", "Hmm.", "Haan."],
+    "fill": ["haan", "matlab", "woh", "acha", "arre", "yaar", "bas", "dekho", "hmm"],
+}
+# mixed small talk + incident: only pieces that cannot contradict / add to the incident gold
+MIX_PRE_EN = ["hello hello testing can you hear me okay good", "hi good morning", "um is this working okay so",
+              "hello testing one two three right so", "hey how are you, listen", "mic check okay",
+              "sorry one second, okay", "hello sir good evening, so"]
+MIX_POST_EN = ["okay bye", "thank you", "and also is the canteen open today", "anyway how are you",
+               "okay that's it, bye bye", "also remind me to buy milk"]
+MIX_PRE_HI = ["hello hello sun rahe ho, acha", "haan ji namaste, dekho", "kaise ho bhai, suno",
+              "testing ek do teen, haan toh", "arre awaaz aa rahi hai, theek hai"]
+MIX_POST_HI = ["theek hai bye", "shukriya", "aur haan lunch ka time ho gaya kya", "baaki baad mein baat karte hain"]
+
+
+def small_talk(rng: random.Random, lang: str) -> str:
+    P = ST_EN if lang == "en" else ST_HI
+    if rng.random() < 0.08:
+        return rng.choice(P["asr"])            # Whisper-style hallucination on silence / noise
+    if rng.random() < 0.06:
+        return " ".join(rng.choice(P["fill"]) for _ in range(rng.randint(1, 4)))   # filler only
+    kinds = rng.choice([["greet"], ["mic"], ["chat"], ["greet", "mic"], ["greet", "chat"], ["mic", "chat"],
+                        ["greet", "mic", "chat"], ["chat", "chat"], ["mic", "mic"]])
+    parts = []
+    for k in kinds:
+        x = rng.choice(P[k])
+        if rng.random() < 0.3:
+            x = rng.choice(P["fill"]) + " " + x
+        parts.append(x)
+    if rng.random() < 0.15:                    # half sentence (cut off)
+        w = parts[-1].split()
+        if len(w) > 2:
+            parts[-1] = " ".join(w[: rng.randint(1, len(w) - 1)])
+    sep = rng.choice([" ", ", ", ". ", "... ", "? "])
+    text = sep.join(parts)
+    if rng.random() < 0.5:
+        text = text[0].upper() + text[1:] + rng.choice(["", ".", "?", "..."])
+    return text
+
+
 def paraphrase(rng: random.Random, text: str, lang: str) -> str:
     sw = SWAP_EN if lang == "en" else SWAP_HI
     for a, alts in sw.items():
@@ -235,6 +305,66 @@ def gen(n_target: int, seed: int, eval_grams: list[set], eval_norm: set, tag: st
                 pat.append({"task": "patch", "id": sid + "p", "lang": gold["lang"], "noisy": noisy, "category": cat,
                             "prompt": pb.render_patch(form, fu["asked_fields"], fu["question"], ans.strip()),
                             "completion": patch_completion(fu["gold_patch"])})
+
+    def accept(text: str) -> bool:
+        key = norm(text)
+        if key in seen or key in eval_norm:
+            rejected["dup"] += 1
+            return False
+        if any(jacc(grams(text), e) >= 0.8 for e in eval_grams):
+            rejected["near_eval"] += 1
+            return False
+        seen.add(key)
+        return True
+
+    # small talk / mic tests / ASR noise → NO_INCIDENT sentinel (~10 % of extract samples, 70/30 en/hinglish)
+    n_ni, n_mix, att = round(n_target * 0.10), round(n_target * 0.075), 0
+    while sum(r["category"] == "NO_INCIDENT" for r in ext) < n_ni and att < n_ni * 20:
+        att += 1
+        lang = "en" if rng.random() < 0.7 else "hinglish"
+        text = small_talk(rng, lang)
+        noisy = rng.random() < 0.4
+        if noisy:
+            text = asr_noise(rng, text, lang) or text
+        text = text.strip()
+        if not text or not accept(text):
+            continue
+        params = {"lang": lang, **NO_INCIDENT_PARAMS}
+        ext.append({"task": "extract", "id": f"{tag}-{len(ext):05d}", "lang": lang, "noisy": noisy,
+                    "category": "NO_INCIDENT", "transcript": text, "prompt": pb.render_extract(text, "ft"),
+                    "completion": compact({"name": "fill_incident_form", "parameters": params})})
+    # small talk + real incident → normal gold (the model must ignore the chatter)
+    mixed, att = 0, 0
+    while mixed < n_mix and att < n_mix * 10:
+        att += 1
+        cat = rng.choices(cats, weights=weights)[0]
+        scen = rng.choice(list(SCENARIOS[cat]))
+        lang = "en" if rng.random() < 0.7 else "hinglish"
+        try:
+            text, gold, *_ = gc.build_case(rng, cat, scen, lang, max_optional=rng.choice([None, 0, 1, 2]))
+        except Exception as e:
+            rejected[type(e).__name__] += 1
+            continue
+        text = paraphrase(rng, text, lang)
+        pre, post = (MIX_PRE_EN, MIX_POST_EN) if lang == "en" else (MIX_PRE_HI, MIX_POST_HI)
+        r = rng.random()
+        if r < 0.5:
+            text = rng.choice(pre) + " " + text
+        elif r < 0.75:
+            text = text + " " + rng.choice(post)
+        else:
+            text = rng.choice(pre) + " " + text + " " + rng.choice(post)
+        noisy = rng.random() < 0.45
+        if noisy:
+            text = asr_noise(rng, text, lang)
+        text = text.strip()
+        if not accept(text):
+            continue
+        mixed += 1
+        ext.append({"task": "extract", "id": f"{tag}-{len(ext):05d}", "lang": gold["lang"], "noisy": noisy,
+                    "category": cat, "mixed_small_talk": True, "transcript": text,
+                    "prompt": pb.render_extract(text, "ft"),
+                    "completion": compact({"name": "fill_incident_form", "parameters": gold})})
     return ext, pat, rejected
 
 
@@ -246,8 +376,8 @@ def main():
     a = ap.parse_args()
     out = Path(a.out).expanduser()
     out.mkdir(parents=True, exist_ok=True)
-    ev = gc.load_cases(ROOT / "eval" / "text_cases.jsonl") if hasattr(gc, "load_cases") else \
-        [json.loads(l) for l in open(ROOT / "eval" / "text_cases.jsonl", encoding="utf-8") if l.strip()]
+    ev = [json.loads(l) for fn in ("text_cases.jsonl", "smalltalk_cases.jsonl")
+          for l in open(ROOT / "eval" / fn, encoding="utf-8") if l.strip()]   # held-out eval: never in training
     eval_grams = [grams(c["transcript"]) for c in ev]
     eval_norm = {norm(c["transcript"]) for c in ev}
     tr_e, tr_p, rej = gen(a.n_extract, SEED, eval_grams, eval_norm, "tr")
@@ -263,6 +393,9 @@ def main():
           "rejected": dict(rej), "lang": dict(Counter(r["lang"] for r in tr_e)),
           "noisy_frac": round(sum(r["noisy"] for r in tr_e) / max(1, len(tr_e)), 3),
           "category": dict(Counter(r["category"] for r in tr_e)),
+          "no_incident_lang": dict(Counter(r["lang"] for r in tr_e if r["category"] == "NO_INCIDENT")),
+          "mixed_small_talk": sum(bool(r.get("mixed_small_talk")) for r in tr_e),
+          "dev_no_incident": sum(r.get("category") == "NO_INCIDENT" for r in dev),
           "prompt_chars_max": max(len(r["prompt"]) for r in train)}
     (out / "stats.json").write_text(json.dumps(st, indent=1), encoding="utf-8")
     print(json.dumps(st))
