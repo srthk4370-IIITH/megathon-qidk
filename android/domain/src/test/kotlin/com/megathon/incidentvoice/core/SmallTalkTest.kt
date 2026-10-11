@@ -64,6 +64,27 @@ class SmallTalkTest {
         assertEquals("Mujhe koi incident samajh nahi aaya. Kya hua tha?", SmallTalk.prompt("hinglish"))
     }
 
+    /** ML contract: small talk extracts to description "NO_INCIDENT"; the stand-in rules engine does the same. */
+    @Test fun sentinel_isRecognised_andTheRulesEngineReturnsIt() {
+        assertTrue(SmallTalk.isSentinel("NO_INCIDENT")); assertTrue(SmallTalk.isSentinel(" no_incident. ")); assertFalse(SmallTalk.isSentinel("No incident in bay 4 today")); assertFalse(SmallTalk.isSentinel(null))
+        val out = rules.extract("hello hello testing 1 2 3, can you hear me?")
+        assertEquals("{\"incident_type\":\"OTHER\",\"description\":\"NO_INCIDENT\",\"lang\":\"en\"}", out.toString())
+        assertEquals("\"hinglish\"", rules.extract("kuch nahi bas check kar raha tha")["lang"].toString())
+        assertFalse(SmallTalk.isSentinel(rules.extract("there is a water leak near the pantry")["description"].toString().trim('"')))
+    }
+
+    /** The ML branch's small-talk set must be rejected, and its real-incident set must not be. */
+    @Test fun mlEvalSets_smallTalkRejected_realIncidentsKept() {
+        val eval = java.io.File(Fx.dir.parentFile, "eval")
+        fun texts(f: String) = java.io.File(eval, f).readLines().filter { it.isNotBlank() }.map { kotlinx.serialization.json.Json.parseToJsonElement(it) as kotlinx.serialization.json.JsonObject }
+            .map { (it["id"] as kotlinx.serialization.json.JsonPrimitive).content to (it["transcript"] as kotlinx.serialization.json.JsonPrimitive).content }
+        val missed = texts("smalltalk_cases.jsonl").filter { !none(it.second) }
+        val wronglyRejected = texts("text_cases.jsonl").filter { none(it.second) }
+        println("SMALLTALK-EVAL small talk not rejected: ${missed.size}/15 ${missed}  | real incidents rejected: ${wronglyRejected.size}/150 ${wronglyRejected}")
+        assertTrue(missed.isEmpty(), "small talk filed as an incident: $missed")
+        assertTrue(wronglyRejected.isEmpty(), "real incidents rejected: $wronglyRejected")
+    }
+
     // ---- language matching and the reporter's own words
     @Test fun language_followsTheReportersWords() {
         assertEquals("hinglish", LangDetector.ofSpeech("Pantry ke paas paani leak ho raha hai"))

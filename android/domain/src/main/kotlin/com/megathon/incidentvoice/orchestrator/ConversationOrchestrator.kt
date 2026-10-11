@@ -404,6 +404,8 @@ class ConversationOrchestrator(
         userTexts.clear(); narrationText = ""
         if (noIncidentCount > 3) {
             val keepName = spokenReporter
+            // nothing was reported: do not leave an empty draft behind
+            incidentId?.let { id -> if (form.fields.values.none { it.value != null }) runCatching { repo.delete(id, Actor.System) } }
             reset(); spokenReporter = keepName
             update { it.copy(notice = "No incident was reported. Tap the button when you are ready.", reporterName = keepName) }
             return
@@ -427,7 +429,9 @@ class ConversationOrchestrator(
         val gen = generateWithRetry(LlmTask.EXTRACT, prompts.extract(text), SamplerName.GREEDY, cfg.app.llm.maxTokens.extract, preview = true) { rules.extract(text).toString() } ?: return
         var call = parseWithRepair(gen.text, Tools.FILL, null)
         // the model itself found nothing to file (no type, no description)
-        if (call != null && noIncidentCount < 3 && call.fields["incident_type"] == null && call.fields["description"] == null && !hasIncidentCue(text)) { update { it.copy(streamingFields = emptySet()) }; noIncident(text); return }
+        val said = (call?.fields?.get("description") as? JsonPrimitive)?.content
+        val nothing = call != null && (SmallTalk.isSentinel(said) || (call.fields["incident_type"] == null && said == null && !hasIncidentCue(text)))
+        if (nothing) { form = IncidentForm(lang = form.lang); update { it.copy(streamingFields = emptySet(), form = form) }; noIncident(text); return }
         if (call == null) { // §13.7: unparseable after one repair → manual fill with the transcript
             ensureDescriptionFromTranscript()
             update { it.copy(state = ConvState.ERROR_PARSE, error = "Couldn't understand fully — please check the form.", streamingFields = emptySet()) }
@@ -515,6 +519,7 @@ class ConversationOrchestrator(
         val prompt = prompts.patch(form, q.text(form.lang), q.fields, text)
         val gen = generateWithRetry(LlmTask.PATCH, prompt, SamplerName.GREEDY, cfg.app.llm.maxTokens.patch, preview = false) { rules.patch(q.fields, text).toString() } ?: return
         val call = parseWithRepair(gen.text, Tools.UPDATE, form.types)
+            ?.let { c -> if (SmallTalk.isSentinel((c.fields["description"] as? JsonPrimitive)?.content)) c.copy(fields = emptyMap()) else c }   // sentinel in an answer = no new info, never a description
         if (call != null) {
             val m = merger.merge(form, call, FieldSource.LLM_PATCH, null, userTexts.toString(), clock())
             form = m.form
@@ -620,6 +625,8 @@ class ConversationOrchestrator(
 
     private fun previewPartial(partial: String) {
         val out = parser.parse(partial, Tools.FILL) as? ParseOutcome.Ok ?: return
+        // never show the NO_INCIDENT sentinel (or its first letters) as a description while it streams in
+        (out.call.fields["description"] as? JsonPrimitive)?.content?.let { d -> if (d.isNotEmpty() && SmallTalk.SENTINEL.startsWith(d.trim().uppercase())) return }
         val pv = merger.merge(form.copy(lang = form.lang), out.call, FieldSource.LLM_EXTRACT, null, userTexts.toString(), clock()).form
         update { it.copy(form = pv, streamingFields = out.call.fields.keys) }
     }

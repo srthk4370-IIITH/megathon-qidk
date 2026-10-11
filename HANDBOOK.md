@@ -346,3 +346,13 @@ Checked on the QIDK with the current build, starting from the launcher each time
 If a report is already in progress, a quick-launch request does not interrupt it (by design). No fix was needed.
 
 **"Hey Qalam"** was already implemented before this check (Extra 2, Level B above) and is still running: the foreground service is up and Settings shows "Listening · grammar on sound-alikes". Its hit rate could **not** be re-measured in this session because the test relies on the laptop speaker, which was muted; the last measurement (about 3 of 4 with a synthetic voice) predates the stricter rule for the name said without "hey". It needs a few tries by a person before the demo.
+
+
+### Small talk: aligned with the ML branch's NO_INCIDENT sentinel (App branch, 2026-10-11 06:50)
+
+- The model now answers small talk with `{"incident_type":"OTHER","description":"NO_INCIDENT"}` (CHANGE.md, ML entry of 06:40). The app treats that description (case-insensitive) as "nothing to file": the form is cleared, "I didn't catch an incident. What happened?" is said and shown, and it listens again. The sentinel is never shown as a description, not even while it streams in. In a follow-up answer it means "no new information".
+- The stand-in rules engine returns the same sentinel when the words carry no incident.
+- The app's own keyword check still runs first, so small talk is caught even when the model is unavailable.
+- After three empty tries the empty draft is deleted, so nothing is left in the database.
+- **Measured on the ML branch's sets with the app's keyword check alone:** 15 of 15 small-talk cases (`eval/smalltalk_cases.jsonl`) rejected; 0 of 150 real incident cases (`eval/text_cases.jsonl`) rejected. One Hinglish case ("lunch ka time ho gaya kya") was first let through; the general verbs "hua / ho gaya" were removed from the incident-word list to fix it. The check is now an assertion in `SmallTalkTest`. These are the same 165 sentences the rule was adjusted on, so this is a regression guard, not an accuracy estimate.
+- Wording: the app says "I didn't catch an incident. What happened?" / "Mujhe koi incident samajh nahi aaya. Kya hua tha?" (the ML note suggests a slightly longer sentence; the shorter one was specified for the app).

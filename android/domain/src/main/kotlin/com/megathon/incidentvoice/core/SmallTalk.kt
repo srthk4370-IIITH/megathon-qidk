@@ -32,7 +32,7 @@ object SmallTalk {
     // words that say "something went wrong" without naming a category
     private val generic = Regex(
         "\\b(happen\\w*|accident\\w*|incident|problem|issue|broke|broken|break\\w*|fell|fallen|falling|leak\\w*|hurt|injur\\w*|damage\\w*|stuck|smell\\w*|smoke|" +
-            "emergency|danger\\w*|crack\\w*|spill\\w*|sparks?|sparking|not working|stopped working|hua|hui|ho gaya|ho gayi|gir\\w*|toot\\w*|chot|kharab|lag gayi|dikkat|samasya|khatra)\\b", I)
+            "emergency|danger\\w*|crack\\w*|spill\\w*|sparks?|sparking|not working|stopped working|kuch hua|haadsa|durghatna|gir\\w*|toot\\w*|chot|kharab|lag gayi|dikkat|samasya|khatra)\\b", I)
     private val nothing = Regex("\\b(nothing (happened|to report|much|really)|just (testing|checking|kidding)|only testing|mic (test|check)|kuch nahi|kuch nahin|aise hi|mazaak)\\b", I)
 
     /**
@@ -45,6 +45,10 @@ object SmallTalk {
         if (hasDomainCue(text)) return false
         return !generic.containsMatchIn(text)
     }
+
+    /** ML contract (CHANGE.md 2026-10-11 06:40): the model answers small talk with description "NO_INCIDENT". */
+    const val SENTINEL = "NO_INCIDENT"
+    fun isSentinel(description: String?): Boolean = description?.trim()?.trim('.', '"')?.equals(SENTINEL, ignoreCase = true) == true
 
     fun prompt(lang: String, name: String? = null): String {
         val en = lang == "en" || lang.isBlank()
