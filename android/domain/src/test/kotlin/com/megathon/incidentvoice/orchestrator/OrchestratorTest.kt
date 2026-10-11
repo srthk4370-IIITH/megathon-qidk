@@ -188,6 +188,27 @@ class OrchestratorTest {
         assertTrue("location" in ui.validation!!.missing); assertNotNull(ui.response)
     }
 
+    /** Small talk does not fill the form: the app asks what happened, takes the name, and files the real report that follows. */
+    @Test fun smallTalk_isNotFiled_nameIsKept_thenTheRealReportGoesThrough() = runTest {
+        val r = rig("hi wassup this is Ravi", "There was a water leak near Conference Room 2 around 10 AM.", "No one is hurt, it's minor.", "A pipe under the sink burst, it's stopped now.")
+        r.o.startNew(); r.o.onMicTapped(); advanceUntilIdle()
+        assertTrue(r.tts.spoken.first().contains("I didn't catch an incident. What happened?"), r.tts.spoken.toString())
+        assertEquals("Hi Ravi. I didn't catch an incident. What happened?", r.tts.spoken.first())
+        val ui = r.o.ui.value
+        assertEquals("Ravi", ui.reporterName); assertEquals("Ravi", r.inc.meta.reporter.name); assertEquals("E100", r.inc.meta.reporter.empId)
+        assertEquals("WATER", ui.form.incidentType); assertFalse(ui.form.str("description")!!.contains("wassup"))
+        assertEquals(1, r.repo.store.size)                                   // one draft, not two
+        assertTrue(r.inc.turns.any { it.textRaw == "hi wassup this is Ravi" }) // the words are still on record
+    }
+
+    @Test fun onlySmallTalk_givesUpPolitely_afterThreeTries() = runTest {
+        val r = rig("hello", "good morning", "can you hear me", "hello hello")
+        r.o.startNew(); r.o.onMicTapped(); advanceUntilIdle()
+        assertEquals(ConvState.IDLE, r.o.ui.value.state); assertNotNull(r.o.ui.value.notice)
+        assertEquals(3, r.tts.spoken.count { it.contains("I didn't catch an incident") })
+        assertNull(r.repo.store.values.first().form.incidentType)
+    }
+
     private fun TestScope.launchCollect(o: ConversationOrchestrator, into: MutableList<UiEvent>) =
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { o.events.collect { into += it } }
 
@@ -342,6 +363,11 @@ class OrchestratorTest {
         o2.resumeActiveResponse(); advanceUntilIdle()
         val rc = o2.ui.value.response!!
         assertEquals(Fx.now.toEpochMilli(), rc.startedAtMs); assertTrue(rc.steps.first().done); assertNotEquals(ConvState.IDLE, o2.ui.value.state)
+        // once the reporter closes it, it does not come back at the next launch
+        o2.onCancel(); advanceUntilIdle()
+        val o3 = ConversationOrchestrator(this, cfg, r.engine, r.repo, r.tts, r.audio, { OrchestratorSettings(Reporter("Asha", "E100")) }, clock = { Fx.now.plusSeconds(120) }, retryDelaysMs = emptyList())
+        o3.resumeActiveResponse(); advanceUntilIdle()
+        assertNull(o3.ui.value.response); assertEquals(ConvState.IDLE, o3.ui.value.state)
     }
 
     @Test fun responseClock_flagOff() = runTest {

@@ -48,6 +48,8 @@ data class ConversationUiState(
     val editingExisting: Boolean = false,
     /** Extra 1: non-null while the response clock is running for this incident. */
     val response: ResponseClockUi? = null,
+    /** Set when the reporter introduced themselves by voice ("this is Ravi"); shown instead of the device profile name. */
+    val reporterName: String? = null,
     /** Extra 3: after submit, an earlier report that looks like the same event; the reporter decides. */
     val duplicate: DuplicatePrompt? = null,
     /** Extra 3: set once this report was linked to a case. */
@@ -65,4 +67,6 @@ data class ResponseClockUi(val startedAtMs: Long, val steps: List<com.megathon.i
 sealed interface UiEvent {
     data class Dial(val number: String) : UiEvent
     data class Toast(val text: String) : UiEvent
+    /** Someone said who they are; the app saves it to the device profile if that is still empty. */
+    data class ReporterName(val name: String) : UiEvent
 }

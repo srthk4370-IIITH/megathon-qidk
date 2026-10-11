@@ -155,9 +155,9 @@ fun ReviewScreen(ui: ConversationUiState, cfg: AppConfigBundle, o: ConversationO
         // ---- Reporter + submit
         item {
             SectionHeader("Reporter")
-            val rep = LocalReporter.current
+            val rep = ui.reporterName ?: LocalReporter.current
             Text(if (rep.isBlank()) "Not set. Add your name in Settings." else rep)
-            Text("Taken from the device profile.", style = MaterialTheme.typography.bodySmall, color = secondaryText)
+            Text(if (ui.reporterName != null) "As introduced by voice." else "Taken from the device profile.", style = MaterialTheme.typography.bodySmall, color = secondaryText)
             Spacer(Modifier.height(16.dp))
             PrimaryButton(if (ui.editingExisting) "Save changes" else "Submit report", o::onSubmit, enabled = ui.canSubmit)
             PlainButton(if (ui.editingExisting) "Close without saving further" else "Discard (keeps a draft)", o::onCancel)

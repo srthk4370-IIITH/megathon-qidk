@@ -29,7 +29,7 @@ import com.megathon.incidentvoice.ui.theme.secondaryText
 
 @Composable
 fun ConversationScreen(ui: ConversationUiState, tx: Taxonomy, o: ConversationOrchestrator, showDebug: Boolean, footer: @Composable () -> Unit = {}) {
-    var typed by remember(ui.state) { mutableStateOf("") }
+    var typed by remember(ui.state, ui.timeline.size) { mutableStateOf("") }
     val listState = rememberLazyListState()
     LaunchedEffect(ui.timeline.size, ui.emergency != null) { if (ui.timeline.isNotEmpty()) listState.animateScrollToItem(ui.timeline.size - 1 + if (ui.emergency != null && ui.response == null) 1 else 0) }
 

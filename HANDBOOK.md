@@ -278,3 +278,15 @@ Full table, method and caveats: `eval/asr_benchmark.md` (+ `eval/asr_benchmark.c
 - **Now:** an emergency is any of: severity CRITICAL, the red banner, or a running response clock (which the keyword banner starts). In that state the app asks **one** question at most, where it is, and only if the place is missing. Whatever the answer, it then goes to review, where the response clock and Call ERT are pinned on top and every other required field is listed as "Required". Submit stays disabled until those are filled or marked unknown.
 - No new model fields, prompts or config. Change is in `ConversationOrchestrator.validateAndAdvance` / `ask`; two unit tests (`emergency_locationKnown_…`, `emergency_locationMissing_…`).
 - **20-second demo:** Type instead → "There is a fire in the server room and someone is unconscious" → no questions; the review screen opens with the clock running and "Call ERT" on top.
+
+
+## Small talk and "no incident" (App branch, 2026-10-11)
+
+- **What:** if what was said is not an incident ("hi wassup this is Ravi", a mic check, a joke, an off-topic question, a sentence that was cut off), the form is **not** filled. The app says and shows "I didn't catch an incident. What happened?" (Hinglish: "Mujhe koi incident samajh nahi aaya. Kya hua tha?") and listens again; when the report was typed it waits for typing instead.
+- **Self-introduction:** "this is X", "my name is X", "X here", "main X bol raha hoon", "mera naam X hai" set the reporter name for this report and nothing else. The device profile is filled with it only if it had no name yet. The name is also picked up when it comes with a real report ("this is Ravi, there is a fire in bay 4").
+- **How it decides (deterministic, `core/SmallTalk.kt`):** not an incident when the words contain no category or emergency keyword and no general "something went wrong" word (happened, broke, leak, hurt, stuck, hua, gir gaya …), or when the speaker says so ("nothing happened, just testing"). The same path is taken if the model returns neither a type nor a description. Safety valve so the rule can never block a real report: a second attempt of six words or more is filed as it is. After three empty tries the app goes back to the start with "No incident was reported".
+- **What is kept:** the words are still stored as a turn of the draft; they are not used for the description or for grounding.
+- **Tests:** `SmallTalkTest` (12 messy inputs that must not be filed, 8 messy real reports that must, name extraction), two orchestrator tests.
+- **Also fixed here:** a report with a running response clock that the reporter closed is no longer reopened at the next launch.
+- **Known limits:** keyword-based, so a real incident described with none of the known words gets one "What happened?" before it is accepted; a joke that contains an incident word ("my code is on fire") is filed.
+- **20-second demo:** Type instead → "hi wassup this is Ravi" → the reply is "Hi Ravi. I didn't catch an incident. What happened?" and the form stays empty → type the water-leak sentence → the report is filled, reporter "Ravi".

@@ -210,6 +210,8 @@ class RoomIncidentRepository(
 
     // ---- Extra 3: multi-witness merging ---------------------------------------------------------
 
+    override suspend fun setReporter(id: String, reporter: Reporter) = dao.setReporter(id, reporter.name, reporter.empId, nowMs())
+
     override suspend fun recentSubmitted(sinceMs: Long, limit: Int): List<IncidentDetail> = dao.submittedSince(sinceMs, limit).mapNotNull { load(it) }
 
     override suspend fun linkWitness(childId: String, parentId: String, actor: Actor) {

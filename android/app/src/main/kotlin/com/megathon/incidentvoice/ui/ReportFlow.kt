@@ -40,6 +40,8 @@ fun ReportFlow(c: AppContainer, onOpenDetail: (String) -> Unit, onGoDashboard: (
 
     LaunchedEffect(o) {
         o.events.collect { ev ->
+            // someone introduced themselves by voice: remember it as the device profile only if no name is set yet
+            if (ev is UiEvent.ReporterName) c.settings.update { if (it.reporterName.isBlank()) it.copy(reporterName = ev.name, profileAsked = true) else it }
             if (ev is UiEvent.Dial) {
                 // The QIDK has no SIM and may have no dialer app: never crash on the emergency button.
                 runCatching { ctx.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:${ev.number}")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
