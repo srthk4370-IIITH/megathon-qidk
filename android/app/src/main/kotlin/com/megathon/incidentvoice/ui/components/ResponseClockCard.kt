@@ -46,7 +46,7 @@ fun ResponseClockCard(rc: ResponseClockUi, onStep: (String) -> Unit, modifier: M
             Text(ResponseClock.mmss(now - rc.startedAtMs), color = Color.White, style = Mono.copy(fontSize = 36.sp, lineHeight = 40.sp, fontWeight = FontWeight.Medium))
             Spacer(Modifier.width(16.dp))
             Column(Modifier.weight(1f)) {
-                Text("Emergency response", color = Color.White, style = MaterialTheme.typography.titleMedium)
+                Text("Emergency", color = Color.White, style = MaterialTheme.typography.titleMedium)
                 Text("${rc.steps.count { it.done }} of ${rc.steps.size} steps done", color = Color.White, style = MaterialTheme.typography.bodySmall)
             }
             IconButton({ expanded = !expanded }, Modifier.size(48.dp)) { Icon(if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore, if (expanded) "Collapse steps" else "Show steps", tint = Color.White) }

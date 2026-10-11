@@ -100,3 +100,9 @@ Only two branches: **App** and **ML**. No separate web/dashboard branch.
 - **APK:** + Vosk (`com.alphacephei:vosk-android:0.3.47`, JNA 5.13.0) and the model `assets/model-en-in` (about 54 MB). New permissions: `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_MICROPHONE`, `POST_NOTIFICATIONS`, `SYSTEM_ALERT_WINDOW`. Still no `INTERNET`.
 - **Microphone:** the wake-word listener and the report flow never hold it together; the report flow makes the listener release first. If ML code ever records audio itself, it must do the same (`AppContainer.wake.release()`).
 - Who is affected: nobody on the ML side. Switch off with `features.wake_word` / `features.multi_witness` in `config/app_config.json`.
+
+## 2026-10-11 06:15 — App branch — App renamed to "Qalam", UI restyle
+- App label, launcher icon and splash are now **Qalam** (package name, Gradle modules and code names are unchanged: still `com.megathon.incidentvoice`). Logo sources in `branding/`.
+- Visual change only; no logic, state, database or engine change. New bundled fonts (Inter, JetBrains Mono; SIL OFL, licences in `android/app/src/main/assets/licenses`), about 1 MB.
+- New folder `shots/` with board screenshots for the slides.
+- Who is affected: anyone writing slides or docs should call the app "Qalam".

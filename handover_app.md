@@ -72,6 +72,11 @@ It checks ABI / page size / clock / eSpeak / `libcdsprpc.so`, installs, grants t
 - Extra 2, wake word: `core/WakeWord.kt` in `:domain` (strategy + matcher), `wake/WakeWord.kt` in `:app` (`WakeEngine` owns Vosk, `WakeWordService` decides when it may listen). The report flow calls `wake.release()` before every recording (`SwitchableAudioInput.beforeListen`); `AppContainer.wakeHold` keeps the listener off between a detection and the flow taking the microphone. Tune by watching `adb logcat -s IV | grep wake` or Settings → "Last heard"; variants and threshold are in `config/app_config.json`.
 - Extra 3, multi-witness merging: `core/MultiWitness.kt` in `:domain` (`DuplicateFinder`, `MergeEngine`), orchestrator `proposeDuplicate` (runs after a first submit, not after an edit), repository `linkWitness` / `caseOf` / `resolveConflict`, table in `ui/detail/DetailScreen.kt` (`WitnessTable`), DB v4 (`incidents.parent_incident_id`). Thresholds: `config/app_config.json` → `multi_witness`.
 
+## UI
+
+- Design tokens: `ui/theme/Theme.kt` (colours, Inter / JetBrains Mono, shapes). Shared pieces: `ui/components/` (`Components.kt`, `Chips.kt`, `Brand.kt`). Use `PrimaryButton` / `SecondaryButton` / `PlainButton`, `FlatCard` + `QDivider`, `IncidentRow`, `SectionHeader` rather than raw Material buttons and cards. Rules: HANDBOOK "Design system".
+- Logo sources: `branding/`. The VectorDrawables in `res/drawable/ic_qalam_*.xml` and `ic_launcher_*.xml` are generated from them; do not hand-edit the shapes.
+
 ## Gotchas to remember
 
 - Do not edit `android/core`, `android/engine`, `config/`, `android/build.gradle.kts`, `android/gradle.properties` (ML-owned, identical to the ML branch). The only shared build file the App touches is `android/settings.gradle.kts` (adds `:domain`, `:app` and the Compose/KSP plugin versions).
