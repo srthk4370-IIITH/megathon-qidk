@@ -28,9 +28,20 @@ data class IncidentListRow(
     @ColumnInfo(name = "emergency_flag") val emergencyFlag: Boolean,
     val snip: String? = null,
     @ColumnInfo(name = "parent_incident_id") val parentIncidentId: String? = null,
+    @ColumnInfo(name = "location_id") val locationId: String? = null,
+    @ColumnInfo(name = "is_demo") val isDemo: Boolean = false,
 )
 
 data class ChildCountRow(val pid: String, val n: Int)
+
+/** What the repeat / hotspot rules need of one report. */
+data class OccurrenceRow(
+    val id: String,
+    @ColumnInfo(name = "incident_type") val incidentType: String?,
+    @ColumnInfo(name = "location_id") val locationId: String?,
+    @ColumnInfo(name = "location_text") val locationText: String?,
+    @ColumnInfo(name = "created_at") val createdAt: Long,
+)
 
 @Dao
 interface IncidentDao {
@@ -102,6 +113,15 @@ interface IncidentDao {
     @Query("SELECT id FROM incidents WHERE parent_incident_id = :parent AND status != 'DRAFT' ORDER BY submitted_at") suspend fun childIds(parent: String): List<String>
     @Query("SELECT parent_incident_id AS pid, COUNT(*) AS n FROM incidents WHERE parent_incident_id IS NOT NULL AND status != 'DRAFT' GROUP BY parent_incident_id") suspend fun childCounts(): List<ChildCountRow>
     @Query("SELECT id FROM incidents WHERE status != 'DRAFT' AND submitted_at >= :since ORDER BY submitted_at DESC LIMIT :limit") suspend fun submittedSince(since: Long, limit: Int): List<String>
+
+    // repeat incidents and hotspots: submitted reports only; a linked witness account is the same event, not another one
+    @Query("SELECT id, incident_type, location_id, location_text, created_at FROM incidents WHERE status != 'DRAFT' AND parent_incident_id IS NULL")
+    suspend fun occurrences(): List<OccurrenceRow>
+    @Query("SELECT id, incident_type, location_id, location_text, created_at FROM incidents WHERE status != 'DRAFT' AND parent_incident_id IS NULL")
+    fun observeOccurrences(): Flow<List<OccurrenceRow>>
+    @Query("UPDATE incidents SET tags_json = :json WHERE id = :id") suspend fun setTags(id: String, json: String?)
+    @Query("UPDATE incidents SET is_demo = 1 WHERE id = :id") suspend fun markDemo(id: String)
+    @Query("SELECT id FROM incidents WHERE is_demo = 1") suspend fun demoIds(): List<String>
 
     // vector index
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsertVector(v: IncidentVectorEntity)

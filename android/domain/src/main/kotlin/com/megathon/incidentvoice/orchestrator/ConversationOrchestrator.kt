@@ -61,6 +61,7 @@ class ConversationOrchestrator(
     private var spokenReporter: String? = null
     private var retryAction: (suspend () -> Unit)? = null
     private val userTexts = StringBuilder() // everything the speaker said (grounding)
+    private val userTurns = ArrayList<String>() // the same, one entry per utterance, in the order of the stored USER turns (evidence spans)
     private var narrationText = ""
     private var edited = false
     private var cont: CompletableDeferred<Unit>? = null
@@ -122,12 +123,12 @@ class ConversationOrchestrator(
 
     fun onFieldEdited(key: String, value: JsonElement?) {
         form = merger.userEdit(form, key, value, clock())
-        form = merger.applyRules(form, clock()).first
+        form = merger.applyRules(form, clock()).first.let { it.copy(evidence = it.evidence - key) }
         afterReviewEdit(key, if (value == null) "cleared" else "edited")
     }
 
     fun onFieldUnknown(key: String) {
-        form = merger.userUnknown(form, key)
+        form = merger.userUnknown(form, key).let { it.copy(evidence = it.evidence - key) }
         afterReviewEdit(key, "unknown")
     }
 
@@ -144,9 +145,9 @@ class ConversationOrchestrator(
             val d = repo.load(id) ?: return@step
             incidentId = id; form = d.form; rounds = d.meta.followupRounds; emergencyFlag = d.meta.emergencyFlag
             editingRef = d.meta.refNo
-            d.turns.filter { it.role == "USER" }.forEach { userTexts.append(it.text).append(' ') }
+            d.turns.filter { it.role == "USER" }.forEach { userTexts.append(it.text).append(' '); userTurns += it.text }
             update {
-                it.copy(state = ConvState.REVIEW, incidentId = id, form = form, validation = Validator.validate(form, tx, clock()),
+                it.copy(state = ConvState.REVIEW, incidentId = id, form = form, userTurns = userTurns.toList(), validation = Validator.validate(form, tx, clock()),
                     recommendations = d.recommendations.map { r -> Recommendation(r.sopId, r.text, r.immediate, r.source, r.done) }, editingExisting = editingRef != null)
             }
         }
@@ -164,7 +165,10 @@ class ConversationOrchestrator(
             repo.saveRecommendations(id, ui.value.recommendations)
             val ref = editingRef ?: repo.submit(id, Actor.User(settings().reporter.empId))
             val wasEdit = editingRef != null
-            update { it.copy(state = ConvState.SUBMITTED, submittedRef = ref, otherIncidents = form.otherIncidents, notice = null) }
+            // "this keeps happening": the 3rd report of the same type at the same place in 7 days gets a card
+            val tags = if (wasEdit) null else runCatching { repo.reportTags(id) }.getOrNull()
+            val recurring = tags?.repeat?.let { r -> Hotspots.recurring(r, tx.category(r.type)?.label ?: r.type, tags.location ?: form.str("location").orEmpty()) }
+            update { it.copy(state = ConvState.SUBMITTED, submittedRef = ref, otherIncidents = form.otherIncidents, notice = null, recurring = recurring) }
             if (!wasEdit) runCatching { proposeDuplicate(id) }
         }
     }
@@ -378,7 +382,7 @@ class ConversationOrchestrator(
             }
             finalText = narrationText.trim().ifEmpty { text }
         }
-        userTexts.append(finalText).append(' ')
+        userTexts.append(finalText).append(' '); heard(finalText)
         val id = incidentId!!
         repo.appendTurn(id, TurnRecord("USER", "NARRATION", textRaw = text, textEdited = finalText.takeIf { it != text }, lang = form.lang,
             audioPath = audioPath, audioMs = audioMs, asrMs = asrMs))
@@ -453,6 +457,7 @@ class ConversationOrchestrator(
         }
         val merged = merger.merge(form, call, FieldSource.LLM_EXTRACT, null, userTexts.toString(), clock())
         form = merger.applyTimeDefault(merged.form, clock())
+        form = Evidence.attach(form, userTurns, tx, clock())
         // answer in the language the reporter used (their words decide, not the model's label)
         form = form.copy(lang = LangDetector.ofSpeech(text))
         // the description stays in the reporter's own words: a model rewrite that drifted from them is replaced by the lightly cleaned narration
@@ -524,7 +529,7 @@ class ConversationOrchestrator(
         retryAction = { handleAnswer(text, audioPath, audioMs, asrMs) }
         val id = ensureDraft()
         scanEmergency(text)
-        userTexts.append(text).append(' ')
+        userTexts.append(text).append(' '); heard(text)
         repo.appendTurn(id, TurnRecord("USER", "FOLLOWUP_A", textRaw = text, lang = form.lang, audioPath = audioPath, audioMs = audioMs, asrMs = asrMs, askedFields = q.fields))
         addBubble(BubbleRole.USER, text)
         update { it.copy(state = ConvState.PATCHING, error = null) }
@@ -536,7 +541,7 @@ class ConversationOrchestrator(
         if (call != null) {
             val langNow = form.lang
             val m = merger.merge(form, call, FieldSource.LLM_PATCH, null, userTexts.toString(), clock())
-            form = m.form.copy(lang = langNow)          // the reporter's words decide the language, not the model's tag
+            form = Evidence.attach(m.form.copy(lang = langNow), userTurns, tx, clock(), changed = m.changed, answerTurn = userTurns.lastIndex)   // the reporter's words decide the language, not the model's tag
             rememberTool(gen, "Form updated: " + (m.changed.filter { it != "lang" }).joinToString { tx.label(it) }.ifBlank { "nothing new" })
         } else {
             rememberTool(gen, "Couldn't read that answer")
@@ -734,6 +739,8 @@ class ConversationOrchestrator(
         addBubble(BubbleRole.SYSTEM, note)
     }
 
+    private fun heard(text: String) { userTurns += text; update { it.copy(userTurns = userTurns.toList()) } }
+
     private fun say(text: String) { addBubble(BubbleRole.ASSISTANT, text, speaking = true) }
     private fun markSpeakingDone() = update { u -> u.copy(timeline = u.timeline.map { if (it.speaking) it.copy(speaking = false) else it }) }
     private fun addBubble(role: BubbleRole, text: String, speaking: Boolean = false) =
@@ -759,7 +766,7 @@ class ConversationOrchestrator(
 
     private fun reset() {
         form = IncidentForm(); incidentId = null; rounds = 0; emergencyFlag = false; question = null; lastAskedFields = emptyList()
-        repromptedNoSpeech = false; emergencyLocationAsked = false; noIncidentCount = 0; spokenReporter = null; narrationReprompted = false; lastFromVoice = true; retryAction = null; userTexts.clear(); narrationText = ""; spokeComplete = false; bubbleSeq = 0; editingRef = null
+        repromptedNoSpeech = false; emergencyLocationAsked = false; noIncidentCount = 0; spokenReporter = null; narrationReprompted = false; lastFromVoice = true; retryAction = null; userTexts.clear(); userTurns.clear(); narrationText = ""; spokeComplete = false; bubbleSeq = 0; editingRef = null
         responseStart = null; responseActions.clear(); hintCategory = null; reminderJob?.cancel(); reminderJob = null
         _ui.value = ConversationUiState()
     }
