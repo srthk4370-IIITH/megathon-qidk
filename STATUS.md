@@ -141,3 +141,8 @@ Done on every screen (Home, Conversation, Review, Emergency, Dashboard, Detail, 
 ## On-device LLM (App branch, 2026-10-11 08:50)
 
 Qualcomm's pre-compiled Qwen3-4B (Genie, w4a16) runs on the QIDK's Hexagon NPU inside the app: 22–23 tok/s, extraction about 4.4 s, a follow-up answer about 1.8 s. Auto uses it when the bundle is in `models/llama`; the rules engine supplies a category hint, checks the model's output and answers a turn if the model fails. Accuracy and test results: `eval/RESULTS.md`. How to install the bundle, the chat template and known limits: HANDBOOK "On-device LLM: Qwen3-4B on the Hexagon NPU".
+
+### 10:12 — Final state on the QIDK (ML laptop built + installed, nothing pending elsewhere)
+- APK built from main (native fixes included) and installed with `install -r` (data + models kept). Models on board: whisper small q5_1 (+ prompt.txt hint), DSP libs, **Qwen3-4B Genie bundle** in `models/llama` (`poll:false`).
+- Measured on the board: ASR 1.5–1.7 s per utterance (was 22 s), follow-up patch 1.7 s, Qwen decode ~23 tok/s, TTFT ~70 ms; extraction stops when the tool-call JSON closes.
+- Re-apply from any laptop: `python apply.py` (models + poll fix + build/install). Fine-tuned Llama export not completed (WSL crashes during checkpoint build); pipeline is resumable (`schtasks /Change /TN IV_Supervisor /ENABLE`).
