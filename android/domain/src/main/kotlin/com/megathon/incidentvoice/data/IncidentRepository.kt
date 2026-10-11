@@ -33,6 +33,8 @@ data class VectorSource(val incidentId: String, val text: String, val hash: Stri
 data class IncidentListItem(
     val id: String, val refNo: String?, val title: String, val type: String?, val severity: String?, val status: String,
     val location: String?, val createdAt: Long, val emergency: Boolean, val snippet: String? = null,
+    /** Extra 3: witness accounts in this case (1 = a single report), unresolved conflicts between them, and for a linked account the case it belongs to. */
+    val accounts: Int = 1, val conflicts: Int = 0, val parentRef: String? = null,
 )
 
 data class TurnRecord(
@@ -87,6 +89,16 @@ interface IncidentRepository {
     suspend fun addResponseAction(id: String, action: com.megathon.incidentvoice.core.ResponseAction) {}
     /** A draft whose response clock started after [sinceMs] (the app was closed mid-emergency), newest first. */
     suspend fun activeResponseDraft(sinceMs: Long): String? = null
+    // ---- Extra 3: multi-witness merging
+    /** Submitted reports since [sinceMs], newest first (candidates for "is this the same event?"). */
+    suspend fun recentSubmitted(sinceMs: Long, limit: Int = 60): List<IncidentDetail> = emptyList()
+    /** Links [childId] to the case of [parentId] as a further witness account. Never automatic: a person chose it. */
+    suspend fun linkWitness(childId: String, parentId: String, actor: Actor) {}
+    /** Every account of the case [id] belongs to: the first report, then the linked ones in order of submission. */
+    suspend fun caseOf(id: String): List<IncidentDetail> = emptyList()
+    /** A supervisor trusts [value] for a conflicting field of the case; written to the audit log. */
+    suspend fun resolveConflict(rootId: String, field: String, value: String, actor: Actor) {}
+    suspend fun conflictResolutions(rootId: String): Map<String, String> = emptyMap()
     /** Demo reset: removes every report, draft and recording. Returns how many were deleted. */
     suspend fun deleteAll(actor: Actor): Int = 0
 }

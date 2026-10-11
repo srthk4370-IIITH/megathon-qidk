@@ -90,19 +90,31 @@ fun ReportFlow(c: AppContainer, onOpenDetail: (String) -> Unit, onGoDashboard: (
                 if (ui.state == ConvState.ERROR_AUDIO) ConversationScreen(ui, c.config.taxonomy, o, settings.showDebug)
                 else HomeScreen(c, onMic = onMic, onTypeInstead = o::onTypeInsteadRequested, notice = ui.notice, onOpen = onOpenDetail)
             ConvState.MANUAL_FILL, ConvState.RECOMMENDING, ConvState.REVIEW -> ReviewScreen(ui, c.config, o)
-            ConvState.SUBMITTED -> SubmittedScreen(ui.submittedRef.orEmpty(), ui.form.str("severity"), ui.otherIncidents, ui.editingExisting, o::onReportAnother, onGoDashboard)
+            ConvState.SUBMITTED -> {
+                SubmittedScreen(ui.submittedRef.orEmpty(), ui.form.str("severity"), ui.otherIncidents, ui.editingExisting, o::onReportAnother, onGoDashboard, ui.linkedTo)
+                // Extra 3: the app proposes, the reporter decides; nothing is ever linked automatically
+                ui.duplicate?.let { d ->
+                    AlertDialog(
+                        onDismissRequest = o::onKeepSeparate,
+                        title = { Text("Same incident?") }, text = { Text(d.question) },
+                        confirmButton = { Button(o::onLinkWitness) { Text("Link") } },
+                        dismissButton = { OutlinedButton(o::onKeepSeparate) { Text("Separate") } },
+                    )
+                }
+            }
             else -> ConversationScreen(ui, c.config.taxonomy, o, settings.showDebug)
         }
     }
 }
 
 @Composable
-private fun SubmittedScreen(ref: String, severity: String?, others: List<String>, updated: Boolean, onAnother: (String?) -> Unit, onDashboard: () -> Unit) {
+private fun SubmittedScreen(ref: String, severity: String?, others: List<String>, updated: Boolean, onAnother: (String?) -> Unit, onDashboard: () -> Unit, linkedTo: String? = null) {
     Column(Modifier.fillMaxSize().padding(24.dp), Arrangement.Center, Alignment.CenterHorizontally) {
         Text(if (updated) "Report updated" else "Report saved", style = MaterialTheme.typography.headlineMedium)
         Spacer(Modifier.height(8.dp))
         Text(ref, style = MaterialTheme.typography.titleLarge)
         Spacer(Modifier.height(8.dp)); SeverityChip(severity)
+        linkedTo?.let { Spacer(Modifier.height(8.dp)); Text("Added as a witness account to $it", style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center) }
         Spacer(Modifier.height(24.dp))
         others.firstOrNull()?.let { other ->
             Card(Modifier.fillMaxWidth()) {

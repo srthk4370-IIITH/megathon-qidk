@@ -44,7 +44,7 @@ All P0 app features plus the optional Ask tab (O-2) are built, tested (349 tests
 export JAVA_HOME=$(/usr/libexec/java_home -v 17) ANDROID_HOME=/opt/homebrew/share/android-commandlinetools
 cd android
 # -PwithAndroid=true is required for :engine, :domain and :app (ML's settings.gradle.kts gate; without it only :core is built)
-~/tools/gradle-8.10.2/bin/gradle -PwithAndroid=true :core:test :domain:test :app:testDebugUnitTest   # 190 + 138 + 21
+~/tools/gradle-8.10.2/bin/gradle -PwithAndroid=true :core:test :domain:test :app:testDebugUnitTest   # 190 + 167 + 23
 ~/tools/gradle-8.10.2/bin/gradle -PwithAndroid=true :app:assembleDebug                               # app/build/outputs/apk/debug/app-debug.apk
 ```
 The wrapper's own download times out on this network (`~/tools/gradle-8.10.2` is a manual copy); Robolectric jars are in `~/tools/robolectric-jars`. Emulator: AVD `iv_test` (`$ANDROID_HOME/emulator/emulator -avd iv_test`).
@@ -70,6 +70,7 @@ It checks ABI / page size / clock / eSpeak / `libcdsprpc.so`, installs, grants t
 - Extra 1, response clock: `core/ResponseClock.kt`, orchestrator `onResponseStep` / `resumeActiveResponse`, `ui/components/ResponseClockCard.kt`, DB v3 (`response_actions`, `incidents.response_started_at`).
 - Extra 2, one-tap launch: `quick/QuickLaunch.kt` (tile, shortcut, widget → one intent → `AppContainer.requestQuickReport()`).
 - Extra 2, wake word: `core/WakeWord.kt` in `:domain` (strategy + matcher), `wake/WakeWord.kt` in `:app` (`WakeEngine` owns Vosk, `WakeWordService` decides when it may listen). The report flow calls `wake.release()` before every recording (`SwitchableAudioInput.beforeListen`); `AppContainer.wakeHold` keeps the listener off between a detection and the flow taking the microphone. Tune by watching `adb logcat -s IV | grep wake` or Settings → "Last heard"; variants and threshold are in `config/app_config.json`.
+- Extra 3, multi-witness merging: `core/MultiWitness.kt` in `:domain` (`DuplicateFinder`, `MergeEngine`), orchestrator `proposeDuplicate` (runs after a first submit, not after an edit), repository `linkWitness` / `caseOf` / `resolveConflict`, table in `ui/detail/DetailScreen.kt` (`WitnessTable`), DB v4 (`incidents.parent_incident_id`). Thresholds: `config/app_config.json` → `multi_witness`.
 
 ## Gotchas to remember
 

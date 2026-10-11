@@ -59,6 +59,32 @@ class RepositoryTest {
         }
     }
 
+    /** Extra 3: linking, the case view, the dashboard label and audit-logged resolutions. */
+    @Test fun multiWitness_linkCaseConflictsAndResolution() = runBlocking {
+        fun form(sev: String, inj: String) = IncidentForm()
+            .with(FieldState("incident_type", kotlinx.serialization.json.JsonPrimitive("WATER_LEAK"), FieldStatus.FILLED))
+            .with(FieldState("description", kotlinx.serialization.json.JsonPrimitive("water on the floor"), FieldStatus.FILLED))
+            .with(FieldState("location", kotlinx.serialization.json.JsonPrimitive("conference room 2"), FieldStatus.FILLED))
+            .with(FieldState("severity", kotlinx.serialization.json.JsonPrimitive(sev), FieldStatus.FILLED))
+            .with(FieldState("injuries", kotlinx.serialization.json.JsonPrimitive(inj), FieldStatus.FILLED))
+        val a = repo.createDraft(reporter); repo.saveForm(a, form("LOW", "NO"), Actor.Llm); val refA = repo.submit(a)
+        val b = repo.createDraft(Reporter("Ravi", "E200")); repo.saveForm(b, form("CRITICAL", "YES"), Actor.Llm); repo.submit(b)
+        val c = repo.createDraft(Reporter("Meena", "E300")); repo.saveForm(c, form("HIGH", "YES"), Actor.Llm); repo.submit(c)
+        assertEquals(3, repo.recentSubmitted(now - 1000).size)
+        assertEquals(1, repo.caseOf(b).size)
+        repo.linkWitness(b, a, Actor.User("E200")); repo.linkWitness(c, b, Actor.User("E300"))      // linking to a linked account lands on the case
+        assertEquals(listOf(a, b, c), repo.caseOf(c).map { it.meta.id }); assertEquals(a, repo.load(c)!!.meta.parentId)
+        repo.saveForm(b, form("CRITICAL", "YES"), Actor.User("E200")); assertEquals(a, repo.load(b)!!.meta.parentId)   // an edit keeps the link
+        val list = repo.observeList(DashboardFilter()).first().associateBy { it.id }
+        assertEquals(3, list[a]!!.accounts); assertEquals(2, list[a]!!.conflicts); assertEquals(refA, list[b]!!.parentRef); assertEquals(1, list[b]!!.accounts)
+        repo.resolveConflict(a, "severity", "HIGH", Actor.User("SUP")); repo.resolveConflict(a, "severity", "CRITICAL", Actor.User("SUP"))
+        assertEquals(mapOf("severity" to "CRITICAL"), repo.conflictResolutions(a))
+        assertEquals(1, repo.observeList(DashboardFilter()).first().first { it.id == a }.conflicts)
+        assertTrue(db.dao().audit(a).any { it.action == "MERGE_RESOLVE" && it.oldValue == "HIGH" && it.newValue == "CRITICAL" && it.actor == "USER:SUP" })
+        assertTrue(db.dao().audit(b).any { it.action == "WITNESS_LINK" && it.newValue == a })
+        repo.delete(a, Actor.System); assertNull(repo.load(b)!!.meta.parentId)                       // accounts survive, unlinked
+    }
+
     /** Extra 1: response clock storage. */
     @Test fun responseClock_startIsSetOnce_actionsStored_andActiveDraftFound() = runBlocking {
         val id = repo.createDraft(reporter)

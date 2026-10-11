@@ -18,6 +18,7 @@ import androidx.room.PrimaryKey
         Index(value = ["incident_type"], name = "idx_incidents_type"),
         Index(value = ["severity"], name = "idx_incidents_severity"),
         Index(value = ["occurred_at"], name = "idx_incidents_occurred"),
+        Index(value = ["parent_incident_id"], name = "idx_incidents_parent"),
     ],
 )
 data class IncidentEntity(
@@ -55,6 +56,8 @@ data class IncidentEntity(
     @ColumnInfo(name = "sync_state") val syncState: String = "LOCAL_ONLY",
     /** Extra 1 (DB v3): when the response clock started; null = never. */
     @ColumnInfo(name = "response_started_at") val responseStartedAt: Long? = null,
+    /** Extra 3 (DB v4): the report this one is a further witness account of; null = stands alone. */
+    @ColumnInfo(name = "parent_incident_id") val parentIncidentId: String? = null,
 )
 
 private const val FK = "incident_id"

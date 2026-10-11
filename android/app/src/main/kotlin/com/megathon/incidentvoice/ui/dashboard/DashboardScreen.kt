@@ -119,6 +119,12 @@ private fun IncidentCard(i: IncidentListItem, tx: Taxonomy, onOpen: (String) -> 
                 StatusChip(i.status)
                 Text(listOfNotNull(i.refNo, i.location).joinToString(" · "), style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
+            if (i.accounts > 1) Text(
+                "${i.accounts} accounts · ${i.conflicts} conflict${if (i.conflicts != 1) "s" else ""}",
+                style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold,
+                color = if (i.conflicts > 0) SevCritical else MaterialTheme.colorScheme.primary, modifier = Modifier.padding(top = 4.dp),
+            )
+            i.parentRef?.let { Text("↳ witness account of $it", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp)) }
         }
     }
 }

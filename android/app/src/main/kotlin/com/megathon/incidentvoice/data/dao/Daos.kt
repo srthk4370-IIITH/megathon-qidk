@@ -27,7 +27,10 @@ data class IncidentListRow(
     @ColumnInfo(name = "occurred_at") val occurredAt: Long?,
     @ColumnInfo(name = "emergency_flag") val emergencyFlag: Boolean,
     val snip: String? = null,
+    @ColumnInfo(name = "parent_incident_id") val parentIncidentId: String? = null,
 )
+
+data class ChildCountRow(val pid: String, val n: Int)
 
 @Dao
 interface IncidentDao {
@@ -90,6 +93,14 @@ interface IncidentDao {
     @Query("DELETE FROM response_actions WHERE incident_id = :id") suspend fun deleteResponseActions(id: String)
     @Query("SELECT id FROM incidents WHERE status = 'DRAFT' AND response_started_at >= :since ORDER BY response_started_at DESC LIMIT 1") suspend fun activeResponseDraft(since: Long): String?
 
+    // multi-witness merging (Extra 3)
+    @Query("UPDATE incidents SET parent_incident_id = :parent, updated_at = :at WHERE id = :id") suspend fun setParent(id: String, parent: String?, at: Long)
+    @Query("UPDATE incidents SET parent_incident_id = NULL WHERE parent_incident_id = :parent") suspend fun orphanChildren(parent: String)
+    @Query("UPDATE incidents SET updated_at = :at WHERE id = :id") suspend fun touch(id: String, at: Long)
+    @Query("SELECT id FROM incidents WHERE parent_incident_id = :parent AND status != 'DRAFT' ORDER BY submitted_at") suspend fun childIds(parent: String): List<String>
+    @Query("SELECT parent_incident_id AS pid, COUNT(*) AS n FROM incidents WHERE parent_incident_id IS NOT NULL AND status != 'DRAFT' GROUP BY parent_incident_id") suspend fun childCounts(): List<ChildCountRow>
+    @Query("SELECT id FROM incidents WHERE status != 'DRAFT' AND submitted_at >= :since ORDER BY submitted_at DESC LIMIT :limit") suspend fun submittedSince(since: Long, limit: Int): List<String>
+
     // vector index
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsertVector(v: IncidentVectorEntity)
     @Query("SELECT * FROM incident_vectors WHERE model = :model") suspend fun vectors(model: String): List<IncidentVectorEntity>
@@ -101,7 +112,7 @@ interface IncidentDao {
     @Query("SELECT incident_id FROM incident_search WHERE incident_search MATCH :q") suspend fun searchIds(q: String): List<String>
 
     // dashboard (RawQuery for dynamic filters; observe both tables so the list refreshes on any change)
-    @RawQuery(observedEntities = [IncidentEntity::class, IncidentSearchEntity::class])
+    @RawQuery(observedEntities = [IncidentEntity::class, IncidentSearchEntity::class, AuditEntity::class])
     fun observeList(q: SupportSQLiteQuery): Flow<List<IncidentListRow>>
 
     // counts (plain-text count row, rev 1.1 P0)

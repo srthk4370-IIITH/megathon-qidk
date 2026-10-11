@@ -152,9 +152,36 @@ class ConversationOrchestrator(
             repo.saveForm(id, form, Actor.User(settings().reporter.empId), rounds, emergencyFlag)
             repo.saveRecommendations(id, ui.value.recommendations)
             val ref = editingRef ?: repo.submit(id, Actor.User(settings().reporter.empId))
+            val wasEdit = editingRef != null
             update { it.copy(state = ConvState.SUBMITTED, submittedRef = ref, otherIncidents = form.otherIncidents, notice = null) }
+            if (!wasEdit) runCatching { proposeDuplicate(id) }
         }
     }
+
+    // ---- Extra 3: multi-witness merging. The app only asks; it never links two reports on its own.
+    private suspend fun proposeDuplicate(id: String) {
+        if (!cfg.app.features.multiWitness) return
+        val mine = repo.load(id)?.let { WitnessAccount.of(it.meta, it.form) } ?: return
+        val now = clock().toEpochMilli()
+        val others = repo.recentSubmitted(now - cfg.app.multiWitness.lookbackH * 3_600_000L).map { WitnessAccount.of(it.meta, it.form) }
+        val best = DuplicateFinder.find(mine, others, cfg.app.multiWitness, now).firstOrNull() ?: return
+        val shared = mine.types.firstOrNull { it in best.account.types } ?: return
+        val label = tx.category(shared)?.label ?: shared
+        // link to the case, not to another linked account
+        val rootId = best.account.rootId
+        val rootRef = if (rootId == best.account.id) best.account.refNo else repo.load(rootId)?.meta?.refNo
+        update { it.copy(duplicate = DuplicatePrompt(id, rootId, rootRef, DuplicateFinder.question(best, label), best.score)) }
+    }
+
+    fun onLinkWitness() {
+        val d = ui.value.duplicate ?: return
+        scope.launch {
+            repo.linkWitness(d.incidentId, d.parentId, Actor.User(settings().reporter.empId))
+            update { it.copy(duplicate = null, linkedTo = d.parentRef ?: "the earlier report") }
+        }
+    }
+
+    fun onKeepSeparate() { update { it.copy(duplicate = null) } }
 
     /** Discard: the draft stays in the DB (§8.2). */
     fun onCancel() { cancelAll(); audio.cancel(); tts.stop(); reset() }

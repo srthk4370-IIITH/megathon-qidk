@@ -70,7 +70,8 @@ class WakeMatcher(variants: List<String>, private val minConf: Double = 0.6, pri
      */
     fun matchAlone(heard: String, confidence: Double? = null): String? {
         match(heard, confidence)?.let { if (!heard.contains("[unk]")) return it }
-        if (confidence != null && confidence < minConf) return null
+        // the name without "hey" is weaker evidence (room noise was once decoded as "column" at 0.83 on the board): ask for more
+        if (confidence == null || confidence < maxOf(minConf, ALONE_MIN_CONF)) return null
         if (heard.contains("[unk]")) return null
         val words = normalise(heard).split(' ').filter { it.isNotEmpty() }
         if (words.size != 1) return null
@@ -78,6 +79,7 @@ class WakeMatcher(variants: List<String>, private val minConf: Double = 0.6, pri
     }
 
     companion object {
+        const val ALONE_MIN_CONF = 0.93
         fun normalise(s: String): String = s.lowercase().replace(Regex("[^a-z ]"), " ").replace(Regex("\\s+"), " ").trim()
     }
 }
