@@ -100,6 +100,12 @@ class AppContainer(val context: Context) {
         fun read(n: String) = runCatching { File(dir, n).takeIf { it.exists() }?.readText() }.getOrNull()
         modelFamily.value = com.megathon.incidentvoice.core.ModelFamily.detect(read("model.json"), read("genie_config.json"))
     }
+    /** What is filling forms right now, in plain words (goes into the offline QR payload). */
+    fun engineLabel(): String = when {
+        engineKind.value != "JNI" -> "Mock engine"
+        llmBackend.value == "NPU" -> "${modelFamily.value.display} on Hexagon NPU + Whisper small (CPU)"
+        else -> "Rules engine + Whisper small (CPU)"
+    }
     fun llamaPresent(): Boolean = File(modelsDir, "${config.app.models.llamaDir}/genie_config.json").exists()
 
     /** The on-device engine can start as soon as the Whisper model is there (LLM falls back until the bundle arrives). */
