@@ -332,3 +332,7 @@ Changed for this task: case 1 (the rules engine now takes over automatically; be
 - Small talk / mic tests / noise now extract to `{"incident_type":"OTHER","description":"NO_INCIDENT","lang":..}` (prompt rule in base + ft prompts; parser/validator/scorer aware; eval `eval/smalltalk_cases.jsonl`); App must not draft on it (CHANGE.md).
 - FT data now has +200 NO_INCIDENT (70/30 en/hinglish) + 150 mixed samples, but the v2 Kaggle continuation run was CANCELLED by user decision; v1 adapter ships, small talk relies on the prompt rule. v2 tooling (continue-from-adapter in train_lora.py, versioned fetch) kept for later.
 - Supervisor: ft_export waits until ft_kaggle_fetch is done/failed (already done → v1 proceeds); optional `~/iv/state/ft_v2_deadline` guard (not set).
+
+### 2026-10-11 07:20 — ML: Qwen fallback on the Mac; this laptop = fine-tuned Llama only
+- Stock Llama export abandoned: Part 3 (3.5 GB) upload failed repeatedly (S3 SSL EOF with 128 conns; WSL crashed a 3rd time under heavy upload). Hook's "reuse recent same-name upload" fallback picked an incomplete killed upload → removed.
+- New robust uploader in `ml/export/iv_resume_hub.py` (per-part retries, 16 MiB × 32 threads). Precompiled Llama assets do not exist (licence); Qwen3-4B precompiled does (8 Elite for Galaxy, w4a16) → Mac downloads it as fallback.
