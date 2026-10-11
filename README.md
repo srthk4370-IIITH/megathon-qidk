@@ -39,6 +39,14 @@ Model weights are not in the repository. The app reads them from
 | `dsp/` | Hexagon V79 skel libraries | Qualcomm AI Runtime (QAIRT) 2.50 SDK, `lib/hexagon-v79/unsigned/`: https://softwarecenter.qualcomm.com/api/download/software/sdks/Qualcomm_AI_Runtime_Community/All/2.50.0.260828/v2.50.0.260828.zip |
 | `llama/` | Qwen3-4B Genie bundle (`genie_config.json`, `tokenizer.json`, `htp_backend_ext_config.json`, `part1_of_4.bin` … `part4_of_4.bin`) and a `model.json` containing `{"family":"qwen","name":"Qwen3-4B"}` | https://huggingface.co/qualcomm/Qwen3-4B → GENIE, w4a16, "Snapdragon 8 Elite For Galaxy Mobile" |
 
+Three small models are already in this repository, bundled into the APK, so nothing needs to be downloaded for them:
+
+| File in the repository | What | Public source |
+|---|---|---|
+| `android/app/src/main/assets/model-en-in/` | Vosk small Indian-English model (wake phrase), about 54 MB | https://alphacephei.com/vosk/models/vosk-model-small-en-in-0.4.zip |
+| `android/app/src/main/assets/models/minilm/model_quantized.onnx` | all-MiniLM-L6-v2, quantised ONNX (search over reports), 22 MB | https://huggingface.co/Xenova/all-MiniLM-L6-v2 |
+| `android/app/src/main/assets/models/silero_vad.onnx` | Silero VAD v5 (end of speech), 2 MB | https://github.com/snakers4/silero-vad |
+
 Exact download and `adb push` commands: HANDBOOK, section "On-device LLM: Qwen3-4B on the Hexagon NPU".
 
 Without the `llama/` bundle the app still runs: speech recognition is real and a built-in rules engine fills the
