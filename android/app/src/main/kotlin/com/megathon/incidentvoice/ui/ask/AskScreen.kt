@@ -28,7 +28,7 @@ import com.megathon.incidentvoice.ask.AskExchange
 import com.megathon.incidentvoice.ask.AskHit
 import com.megathon.incidentvoice.core.Taxonomy
 import com.megathon.incidentvoice.ui.components.LevelMeter
-import com.megathon.incidentvoice.ui.components.SeverityChip
+import com.megathon.incidentvoice.ui.components.SeverityLabel
 import com.megathon.incidentvoice.ui.relativeTime
 import com.megathon.incidentvoice.ui.theme.Grey
 import com.megathon.incidentvoice.ui.theme.SevCritical
@@ -113,7 +113,7 @@ fun HitCard(h: AskHit, tx: Taxonomy, showDebug: Boolean, onOpen: (String) -> Uni
     Card(Modifier.fillMaxWidth().clickable { onOpen(h.id) }) {
         Column(Modifier.padding(10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                SeverityChip(h.severity)
+                SeverityLabel(h.severity)
                 Text(tx.category(h.type ?: "")?.label ?: "Incident", style = MaterialTheme.typography.labelMedium, color = Grey, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                 h.semantic?.let { Text("${(it * 100).toInt()}% match", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary) }
                 Text(relativeTime(h.whenMs), style = MaterialTheme.typography.labelSmall)

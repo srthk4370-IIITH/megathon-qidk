@@ -25,8 +25,8 @@ import com.megathon.incidentvoice.core.Taxonomy
 import com.megathon.incidentvoice.data.IncidentDetail
 import com.megathon.incidentvoice.data.IncidentRepository
 import com.megathon.incidentvoice.ui.FormDisplay
-import com.megathon.incidentvoice.ui.components.SeverityChip
-import com.megathon.incidentvoice.ui.components.StatusChip
+import com.megathon.incidentvoice.ui.components.SeverityLabel
+import com.megathon.incidentvoice.ui.components.StatusText
 import com.megathon.incidentvoice.ui.fmtDateTime
 import com.megathon.incidentvoice.ui.theme.Amber
 import kotlinx.coroutines.launch
@@ -82,7 +82,7 @@ private fun DetailBody(d: IncidentDetail, tx: Taxonomy, disclaimer: String, modi
     LazyColumn(modifier.fillMaxSize().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(vertical = 12.dp)) {
         item {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                SeverityChip(f.str("severity")); StatusChip(d.meta.status.name)
+                SeverityLabel(f.str("severity")); StatusText(d.meta.status.name)
                 Text(f.types.joinToString(" + ") { tx.category(it)?.label ?: it }, style = MaterialTheme.typography.labelLarge)
             }
             Spacer(Modifier.height(8.dp))

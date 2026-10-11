@@ -20,7 +20,7 @@ import com.megathon.incidentvoice.AppContainer
 import kotlinx.coroutines.launch
 import com.megathon.incidentvoice.orchestrator.ConvState
 import com.megathon.incidentvoice.orchestrator.UiEvent
-import com.megathon.incidentvoice.ui.components.SeverityChip
+import com.megathon.incidentvoice.ui.components.SeverityLabel
 import com.megathon.incidentvoice.ui.conversation.ConversationScreen
 import com.megathon.incidentvoice.ui.home.HomeScreen
 import com.megathon.incidentvoice.ui.review.LocalOrchestrator
@@ -87,7 +87,7 @@ fun ReportFlow(c: AppContainer, onOpenDetail: (String) -> Unit, onGoDashboard: (
     CompositionLocalProvider(LocalOrchestrator provides o, LocalReporter provides listOf(settings.reporterName, settings.reporterEmpId).filter { it.isNotBlank() }.joinToString(" · ")) {
         when (ui.state) {
             ConvState.IDLE, ConvState.ERROR_AUDIO ->
-                if (ui.state == ConvState.ERROR_AUDIO) ConversationScreen(ui, c.config.taxonomy, o, settings.showDebug)
+                if (ui.state == ConvState.ERROR_AUDIO) ConversationScreen(ui, c.config.taxonomy, o, settings.showDebug) { com.megathon.incidentvoice.ui.components.ProofLine(c) }
                 else HomeScreen(c, onMic = onMic, onTypeInstead = o::onTypeInsteadRequested, notice = ui.notice, onOpen = onOpenDetail)
             ConvState.MANUAL_FILL, ConvState.RECOMMENDING, ConvState.REVIEW -> ReviewScreen(ui, c.config, o)
             ConvState.SUBMITTED -> {
@@ -102,7 +102,7 @@ fun ReportFlow(c: AppContainer, onOpenDetail: (String) -> Unit, onGoDashboard: (
                     )
                 }
             }
-            else -> ConversationScreen(ui, c.config.taxonomy, o, settings.showDebug)
+            else -> ConversationScreen(ui, c.config.taxonomy, o, settings.showDebug) { com.megathon.incidentvoice.ui.components.ProofLine(c) }
         }
     }
 }
@@ -113,7 +113,7 @@ private fun SubmittedScreen(ref: String, severity: String?, others: List<String>
         Text(if (updated) "Report updated" else "Report saved", style = MaterialTheme.typography.headlineMedium)
         Spacer(Modifier.height(8.dp))
         Text(ref, style = MaterialTheme.typography.titleLarge)
-        Spacer(Modifier.height(8.dp)); SeverityChip(severity)
+        Spacer(Modifier.height(8.dp)); SeverityLabel(severity)
         linkedTo?.let { Spacer(Modifier.height(8.dp)); Text("Added as a witness account to $it", style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center) }
         Spacer(Modifier.height(24.dp))
         others.firstOrNull()?.let { other ->

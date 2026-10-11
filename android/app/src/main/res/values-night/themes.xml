@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.IncidentVoice" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/qalam_bg_dark</item>
+        <item name="android:windowSplashScreenBackground">@color/qalam_bg_dark</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_splash</item>
+        <item name="android:windowSplashScreenAnimationDuration">0</item>
+    </style>
+</resources>

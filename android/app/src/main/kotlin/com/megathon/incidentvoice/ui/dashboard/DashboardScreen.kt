@@ -21,8 +21,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.megathon.incidentvoice.core.Taxonomy
 import com.megathon.incidentvoice.data.IncidentListItem
-import com.megathon.incidentvoice.ui.components.SeverityChip
-import com.megathon.incidentvoice.ui.components.StatusChip
+import com.megathon.incidentvoice.ui.components.SeverityLabel
+import com.megathon.incidentvoice.ui.components.StatusText
 import com.megathon.incidentvoice.ui.relativeTime
 import com.megathon.incidentvoice.ui.theme.SevCritical
 
@@ -105,7 +105,7 @@ private fun IncidentCard(i: IncidentListItem, tx: Taxonomy, onOpen: (String) -> 
     Card(Modifier.fillMaxWidth().clickable { onOpen(i.id) }) {
         Column(Modifier.padding(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                SeverityChip(i.severity)
+                SeverityLabel(i.severity)
                 Text(tx.category(i.type ?: "")?.label ?: (i.type ?: "Incident"), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(Modifier.weight(1f))
                 if (i.emergency) Text("EMERGENCY", color = SevCritical, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
@@ -116,7 +116,7 @@ private fun IncidentCard(i: IncidentListItem, tx: Taxonomy, onOpen: (String) -> 
             i.snippet?.let { Text(it, style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.primary) }
             Spacer(Modifier.height(6.dp))
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                StatusChip(i.status)
+                StatusText(i.status)
                 Text(listOfNotNull(i.refNo, i.location).joinToString(" · "), style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             if (i.accounts > 1) Text(

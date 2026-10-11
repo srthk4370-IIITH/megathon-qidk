@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Themed-icon layer: the Qalam mark in one colour. The coral outline around the nib and the line and dot inside it
+     become gaps (a single-colour layer cannot show a second colour); the outline gap is the nib offset by 8 units,
+     i.e. the SVG's 16-unit stroke. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+    <group android:scaleX="0.14" android:scaleY="0.14" android:translateX="19.84" android:translateY="20.40">
+        <group android:translateX="338" android:translateY="334" android:rotation="-45">
+            <clip-path android:pathData="M-600.0,-600.0 L600.0,-600.0 L600.0,600.0 L-600.0,600.0 Z M-50.0,-25.9 L-49.9,-22.5 L-49.8,-19.0 L-49.5,-15.6 L-49.2,-12.2 L-48.8,-8.8 L-48.3,-5.5 L-47.7,-2.2 L-47.0,1.1 L-46.2,4.3 L-45.4,7.5 L-44.5,10.7 L-43.6,13.8 L-42.6,16.9 L-41.5,20.0 L-40.4,23.1 L-39.3,26.1 L-38.1,29.2 L-36.9,32.2 L-35.6,35.2 L-34.3,38.2 L-33.0,41.2 L-31.7,44.2 L-30.3,47.1 L-28.9,50.1 L-27.6,53.1 L-26.2,56.0 L-24.8,59.0 L-23.4,62.0 L-22.0,65.0 L-20.6,67.9 L-19.2,70.9 L-17.8,74.0 L-16.4,77.0 L-15.1,80.0 L-13.8,83.1 L-12.4,86.2 L-11.2,89.3 L-9.9,92.4 L-8.7,95.6 L-7.5,98.8 L-7.0,99.9 L-6.3,100.9 L-5.5,101.8 L-4.6,102.6 L-3.5,103.2 L-2.4,103.6 L-1.2,103.9 L-0.0,104.0 L1.2,103.9 L2.4,103.6 L3.5,103.2 L4.6,102.6 L5.5,101.8 L6.3,100.9 L7.0,99.9 L7.5,98.8 L8.7,95.6 L9.9,92.4 L11.2,89.3 L12.4,86.2 L13.8,83.1 L15.1,80.0 L16.4,77.0 L17.8,74.0 L19.2,70.9 L20.6,67.9 L22.0,65.0 L23.4,62.0 L24.8,59.0 L26.2,56.0 L27.6,53.1 L28.9,50.1 L30.3,47.1 L31.7,44.2 L33.0,41.2 L34.3,38.2 L35.6,35.2 L36.9,32.2 L38.1,29.2 L39.3,26.1 L40.4,23.1 L41.5,20.0 L42.6,16.9 L43.6,13.8 L44.5,10.7 L45.4,7.5 L46.2,4.3 L47.0,1.1 L47.7,-2.2 L48.3,-5.5 L48.8,-8.8 L49.2,-12.2 L49.5,-15.6 L49.8,-19.0 L49.9,-22.5 L50.0,-25.9 L50.0,-78.0 L49.9,-79.3 L49.6,-80.5 L49.1,-81.6 L48.5,-82.7 L47.7,-83.7 L46.7,-84.5 L45.6,-85.1 L44.5,-85.6 L43.3,-85.9 L42.0,-86.0 L-42.0,-86.0 L-43.3,-85.9 L-44.5,-85.6 L-45.6,-85.1 L-46.7,-84.5 L-47.7,-83.7 L-48.5,-82.7 L-49.1,-81.6 L-49.6,-80.5 L-49.9,-79.3 L-50.0,-78.0 Z"/>
+            <path android:pathData="M-126,-149.907 A126,126 0 1 1 126,-149.907 A126,126 0 1 1 -126,-149.907 Z" android:strokeColor="#FFFFFF" android:strokeWidth="56"/>
+        </group>
+        <group android:translateX="338" android:translateY="334" android:rotation="-45">
+            <path android:pathData="M-42,-78 L42,-78 L42,-26 C42,18 16,52 0,96 C-16,52 -42,18 -42,-26 Z M5,-11.09 A12,12 0 1 0 -5,-11.09 L-5,88 A5,5 0 0 0 5,88 Z" android:fillColor="#FFFFFF"/>
+        </group>
+    </group>
+</vector>
