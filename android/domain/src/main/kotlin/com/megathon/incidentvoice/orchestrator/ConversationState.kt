@@ -31,6 +31,8 @@ data class ConversationUiState(
     /** Keys currently streaming in from the LLM (shimmer in the live preview). */
     val streamingFields: Set<String> = emptySet(),
     val transcriptDraft: String = "",
+    /** What the reporter said, one entry per utterance (review screen: transcript with evidence highlights). */
+    val userTurns: List<String> = emptyList(),
     val countdownMs: Int = 0,
     val level: Float = 0f,
     val elapsedMs: Long = 0,

@@ -45,6 +45,8 @@ data class IncidentRow(
     val lang: String?, val reporterName: String?, val reporterEmpId: String?, val emergencyFlag: Boolean, val followupRounds: Int,
     val createdAt: Long, val updatedAt: Long, val reportedAt: Long, val submittedAt: Long?, val modelVersionsJson: String,
     val responseStartedAt: Long? = null, val parentIncidentId: String? = null,
+    /** Evidence spans per field as JSON; null on reports saved before DB v5 (computed when the report is opened). */
+    val evidenceJson: String? = null,
 )
 
 data class PersonRow(val name: String?, val role: String, val injured: Boolean, val injury: String?, val contact: String?)
@@ -65,6 +67,7 @@ object FormMapper {
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
     private val metaSer = MapSerializer(String.serializer(), FieldMetaDto.serializer())
     private val listSer = ListSerializer(String.serializer())
+    private val evidenceSer = MapSerializer(String.serializer(), ListSerializer(EvidenceSpan.serializer()))
 
     /** Keys stored in their own columns / child tables; everything else goes to details_json. */
     private val columnKeys = setOf(
@@ -104,6 +107,7 @@ object FormMapper {
             emergencyFlag = meta.emergencyFlag, followupRounds = meta.followupRounds, createdAt = meta.createdAt, updatedAt = now,
             reportedAt = meta.reportedAt, submittedAt = meta.submittedAt, modelVersionsJson = meta.modelVersionsJson,
             responseStartedAt = meta.responseStartedAt, parentIncidentId = meta.parentId,
+            evidenceJson = json.encodeToString(evidenceSer, form.evidence),
         )
         return StoredIncident(row, form.secondaryTypes, persons, form.value("equipment").asStringList(), form.value("actions_taken").asStringList())
     }
@@ -150,6 +154,7 @@ object FormMapper {
             lang = r.lang ?: "en", fields = fields, timeExpression = r.timeExpression, occurredApprox = r.occurredAtApprox,
             otherIncidents = runCatching { json.decodeFromString(listSer, r.otherIncidentsJson) }.getOrDefault(emptyList()),
             locationId = r.locationId,
+            evidence = r.evidenceJson?.let { runCatching { json.decodeFromString(evidenceSer, it) }.getOrNull() } ?: emptyMap(),
             severitySource = when (r.severitySource) { "USER" -> FieldSource.USER; "RULE" -> FieldSource.RULE; "LLM" -> FieldSource.LLM_EXTRACT; else -> null },
         )
     }

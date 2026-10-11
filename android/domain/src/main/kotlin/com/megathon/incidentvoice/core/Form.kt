@@ -42,6 +42,8 @@ data class IncidentForm(
     val locationId: String? = null,
     val severitySource: FieldSource? = null,
     val locationSuggestionId: String? = null,
+    /** Field key → the words of the transcript that support its value ([Evidence]). */
+    val evidence: Map<String, List<EvidenceSpan>> = emptyMap(),
 ) {
     fun state(key: String): FieldState? = fields[key]
     fun value(key: String): JsonElement? = fields[key]?.value
