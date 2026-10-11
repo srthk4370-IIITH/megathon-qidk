@@ -29,6 +29,8 @@ def sh(cmd):
 
 
 if KAGGLE:
+    # Kaggle image ships torchao 0.10, which recent peft rejects at LoRA injection ("only versions above 0.16")
+    print(sh("pip uninstall -y -q torchao 2>&1 | tail -1"))
     try:
         import peft  # noqa: F401
     except ImportError:
