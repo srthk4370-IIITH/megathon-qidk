@@ -258,3 +258,15 @@ Severity is a small dot plus a word, never a filled pill: Low `#16A34A`, Medium 
 - Screenshots of every screen taken on the QIDK are in `shots/`.
 
 **Known gaps.** The dark theme is defined but was only checked in light mode on the board. The wide witness table still scrolls sideways on a phone-width screen. The Settings tab stays in the bottom bar and the top-bar settings icon opens the same screen.
+
+
+## ASR benchmark (App branch, 2026-10-11)
+
+Full table, method and caveats: `eval/asr_benchmark.md` (+ `eval/asr_benchmark.csv`). Report only; the app was not changed.
+
+- **Sample:** 39 clips — 15 scripted English, 15 scripted Hinglish, 9 live English recordings from the board microphone (their references were reconstructed from the demo sentences). Small sample; read the numbers as "clearly better / clearly worse", not to the decimal.
+- **Scripted English WER, no hint:** tiny.en 10.3 %, base.en 6.8 %, small q5_1 (the shipped model) 4.4 %. **With the domain hint:** 8.2 % / 4.9 % / 2.8 %.
+- **Live English WER (noisy, about 11 dB):** no hint 27.9 % / 14.0 % / 9.3 %; with hint 10.5 % / 5.8 % / 2.3 %. The hint was tuned after seeing errors on some of these clips, so this column is optimistic.
+- **Speed on the QIDK, 10.2 s clip, median of 5:** tiny.en 253 ms, base.en 411 ms, small q5_1 1815 ms. The hint costs nothing measurable.
+- **Conclusion:** the shipped choice (small + hint) is the most accurate of the three and still runs about 5.6 times faster than real time. base.en + hint is the fallback if latency ever matters more than accuracy.
+- **Hinglish:** 91–111 % WER in every configuration. Literal Hinglish transcription does not work with these models; this is a known limitation, not something the hint fixes.
