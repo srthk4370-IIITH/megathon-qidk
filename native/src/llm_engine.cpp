@@ -88,6 +88,14 @@ json rewrite_genie_config(const json& cfg, const std::string& bundle_dir) {
     json out = cfg;
     rewrite_paths(out, bundle_dir);
     if (out.contains("dialog")) out["dialog"]["sampler"] = kGreedy;
+    // "poll": true makes Genie's worker threads busy-spin on the prime cores (cpu-mask 0xe0) even when idle;
+    // on the QIDK that slowed whisper.cpp ASR from ~2.5 s to ~22 s per utterance. Interrupt-driven instead
+    // (IV_GENIE_POLL=1 restores polling).
+    const char* gp = getenv("IV_GENIE_POLL");
+    if (!(gp && gp[0] == '1') && out.contains("dialog") && out["dialog"].contains("engine")) {
+        auto& be = out["dialog"]["engine"]["backend"];
+        if (be.contains("QnnHtp")) be["QnnHtp"]["poll"] = false;
+    }
     return out;
 }
 

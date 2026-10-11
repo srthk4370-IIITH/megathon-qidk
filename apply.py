@@ -100,6 +100,9 @@ def main():
         apk = os.path.join(ROOT, "android", "app", "build", "outputs", "apk", "debug", "app-debug.apk")
         adb("install", "-r", "-g", apk)
 
+    # Genie "poll": true busy-spins 3 threads on the prime cores → whisper ASR 2.5 s → 22 s. Force interrupt mode.
+    gc = f"{DEV_MODELS}/llama/genie_config.json"
+    adb("shell", f"[ -f {gc} ] && sed -i 's/\"poll\": *true/\"poll\": false/' {gc}", check=False)
     adb("shell", "settings put secure tts_default_synth com.reecedunn.espeak", check=False)
     adb("shell", f"am force-stop {PKG}", check=False)
     adb("shell", f"monkey -p {PKG} -c android.intent.category.LAUNCHER 1", check=False, capture=True)
