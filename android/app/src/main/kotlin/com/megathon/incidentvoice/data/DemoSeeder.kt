@@ -53,6 +53,7 @@ class DemoSeeder(private val cfg: AppConfigBundle, private val repo: IncidentRep
                     form = merger.merge(form, c, FieldSource.LLM_PATCH, 1, d.transcript, Instant.ofEpochMilli(at)).form
                 }
             }
+            form = Evidence.attach(form, listOf(d.transcript), cfg.taxonomy, Instant.ofEpochMilli(at), times)
             val id = repo.createDraft(reporter, at)
             repo.appendTurn(id, TurnRecord("USER", "NARRATION", textRaw = d.transcript, lang = form.lang))
             repo.saveForm(id, form, Actor.Llm, emergency = form.str("severity") == "CRITICAL")

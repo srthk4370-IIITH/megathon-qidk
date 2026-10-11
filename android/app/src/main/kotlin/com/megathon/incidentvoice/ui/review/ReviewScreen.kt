@@ -2,6 +2,7 @@ package com.megathon.incidentvoice.ui.review
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -44,10 +45,14 @@ fun ReviewScreen(ui: ConversationUiState, cfg: AppConfigBundle, o: ConversationO
     // Optional fields nobody mentioned are folded away so the screen shows what matters: filled values and gaps.
     var showOptional by remember { mutableStateOf(false) }
     fun visible(key: String) = showOptional || key in missing || (f.state(key)?.status ?: FieldStatus.MISSING) != FieldStatus.MISSING
+    // "Show your evidence": tapping a short field highlights the words it came from; tapping it again clears the highlight
+    var evidenceFor by remember(ui.incidentId) { mutableStateOf<String?>(null) }
 
+    CompositionLocalProvider(LocalEvidence provides EvidenceUi(f, evidenceFor) { k -> evidenceFor = if (evidenceFor == k) null else k }) {
     Column(Modifier.fillMaxSize()) {
     // Extra 1: the response clock stays pinned while the form scrolls underneath
     ui.response?.let { com.megathon.incidentvoice.ui.components.ResponseClockCard(it, o::onResponseStep, Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp)) }
+    if (ui.userTurns.isNotEmpty()) TranscriptCard(ui.userTurns, evidenceFor?.let { f.evidence[it] }.orEmpty(), evidenceFor?.let { tx.label(it) }, Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp))
     LazyColumn(Modifier.weight(1f).fillMaxWidth().padding(horizontal = 16.dp), contentPadding = PaddingValues(bottom = 16.dp)) {
         item {
             ScreenTitle(if (ui.editingExisting) "Edit report" else "Review report")
@@ -63,7 +68,7 @@ fun ReviewScreen(ui: ConversationUiState, cfg: AppConfigBundle, o: ConversationO
         item { SectionHeader("Summary") }
         item {
             FlatCard {
-                FieldRow("Type", tx.category(f.incidentType ?: "")?.label ?: "–", f.state("incident_type")?.status, "incident_type" in missing) { editing = "incident_type" }
+                FieldRow("Type", tx.category(f.incidentType ?: "")?.label ?: "–", f.state("incident_type")?.status, "incident_type" in missing, evidenceKey = "incident_type") { editing = "incident_type" }
                 QDivider()
                 FieldRow("Also involves", f.secondaryTypes.joinToString(", ") { tx.category(it)?.label ?: it }.ifBlank { "Nothing else" }, null, false) { editing = "secondary_types" }
                 QDivider()
@@ -99,10 +104,10 @@ fun ReviewScreen(ui: ConversationUiState, cfg: AppConfigBundle, o: ConversationO
                 val st = f.state("occurred_at")
                 val txt = FormDisplay.valueText("occurred_at", st?.value, f, tx)
                 FieldRow("Date and time", if (st?.status == FieldStatus.UNKNOWN) "Unknown" else txt, st?.status, "occurred_at" in missing, onUnknown = { o.onFieldUnknown("occurred_at") },
-                    hint = if (st?.status == FieldStatus.DEFAULTED) "Time was not mentioned; the time of the report is assumed" else null) { editing = "occurred_at" }
+                    hint = if (st?.status == FieldStatus.DEFAULTED) "Time was not mentioned; the time of the report is assumed" else null, evidenceKey = "occurred_at") { editing = "occurred_at" }
                 QDivider()
                 FieldRow("Location", f.str("location") ?: "–", f.state("location")?.status, "location" in missing, onUnknown = { o.onFieldUnknown("location") },
-                    hint = null, note = f.locationId?.let { id -> cfg.registry.locations.firstOrNull { it.id == id }?.let { "Site location: ${it.display}" } }) { editing = "location" }
+                    hint = null, evidenceKey = "location", note = f.locationId?.let { id -> cfg.registry.locations.firstOrNull { it.id == id }?.let { "Site location: ${it.display}" } }) { editing = "location" }
                 f.locationSuggestionId?.let { id ->
                     cfg.registry.locations.firstOrNull { it.id == id }?.let { loc ->
                         PlainButton("Did you mean ${loc.name} (${loc.building})?", { o.onFieldEdited("location", JsonPrimitive(loc.name)) }, Modifier.padding(horizontal = 4.dp))
@@ -165,6 +170,7 @@ fun ReviewScreen(ui: ConversationUiState, cfg: AppConfigBundle, o: ConversationO
     }
 
     }
+    }
 
     editing?.let { key ->
         FieldEditor(key, ui, tx, onDismiss = { editing = null }) { value ->
@@ -189,7 +195,7 @@ private fun GenericRow(key: String, ui: ConversationUiState, tx: Taxonomy, missi
         FieldStatus.UNKNOWN -> "Unknown"
         else -> FormDisplay.valueText(key, st.value, ui.form, tx)
     }
-    FieldRow(def.label.ifBlank { key }, txt, st?.status, key in missing, unknownKey = key.takeUnless { it in setOf("incident_type", "description") }) { onEdit(key) }
+    FieldRow(def.label.ifBlank { key }, txt, st?.status, key in missing, unknownKey = key.takeUnless { it in setOf("incident_type", "description") }, evidenceKey = key) { onEdit(key) }
 }
 
 /**
@@ -200,15 +206,21 @@ private fun GenericRow(key: String, ui: ConversationUiState, tx: Taxonomy, missi
 @Composable
 private fun FieldRow(
     label: String, value: String, status: FieldStatus?, requiredMissing: Boolean, onUnknown: (() -> Unit)? = null,
-    hint: String? = null, unknownKey: String? = null, note: String? = null, onEdit: () -> Unit,
+    hint: String? = null, unknownKey: String? = null, note: String? = null, evidenceKey: String? = null, onEdit: () -> Unit,
 ) {
     val check = status == FieldStatus.INFERRED || status == FieldStatus.DEFAULTED
     val orch = LocalOrchestrator.current
-    Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(start = 16.dp, end = 4.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+    val ev = LocalEvidence.current?.takeIf { evidenceKey in Evidence.FIELDS }
+    val shown = ev != null && ev.selected == evidenceKey
+    val needsReview = ev != null && Evidence.needsReview(ev.form, evidenceKey!!)
+    Row(Modifier.fillMaxWidth().background(if (shown) MaterialTheme.colorScheme.primary.copy(alpha = 0.08f) else androidx.compose.ui.graphics.Color.Transparent)
+        .then(if (ev != null) Modifier.clickable(onClickLabel = "Show evidence for $label") { ev.toggle(evidenceKey!!) } else Modifier)
+        .heightIn(min = 56.dp).padding(start = 16.dp, end = 4.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(label, style = MaterialTheme.typography.bodySmall, color = secondaryText)
                 if (requiredMissing) Text("Required", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                else if (needsReview) NeedsReviewChip()
                 else if (check) Text("Check", style = MaterialTheme.typography.labelMedium, color = Amber)
             }
             Text(value, color = if (status == FieldStatus.UNKNOWN) secondaryText else MaterialTheme.colorScheme.onSurface)

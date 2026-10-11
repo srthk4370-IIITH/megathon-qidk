@@ -155,7 +155,10 @@ class RoomIncidentRepository(
         }
         val recs = dao.recs(id).map { RecRow(it.id, it.sopId, it.text, it.immediate, it.source, it.done) }
         val actions = dao.responseActions(id).map { ResponseAction(it.stepId, it.label, it.doneAt, it.source) }
-        return IncidentDetail(metaOf(st.row), FormMapper.toForm(st), turns, recs, actions)
+        var form = FormMapper.toForm(st)
+        // a report saved before evidence was stored: work the spans out from its transcript (kept once the report is saved again)
+        if (st.row.evidenceJson == null) form = Evidence.attach(form, turns.filter { it.role == "USER" }.map { it.text }, tx, Instant.ofEpochMilli(st.row.reportedAt))
+        return IncidentDetail(metaOf(st.row), form, turns, recs, actions)
     }
 
     override fun observeCounts(): Flow<DashboardCounts> = combine(
@@ -349,7 +352,7 @@ class RoomIncidentRepository(
         e.id, e.refNo, e.status, e.incidentType, e.title, e.description, e.severity, e.severitySource, e.locationText, e.locationId,
         e.occurredAt, e.occurredAtApprox, e.timeExpression, e.injuries, e.injuredCount, e.nearMiss, e.hazardOngoing, e.detailsJson,
         e.fieldMetaJson, e.otherIncidentsJson, e.lang, e.reporterName, e.reporterEmpId, e.emergencyFlag, e.followupRounds, e.createdAt,
-        e.updatedAt, e.reportedAt, e.submittedAt, e.modelVersionsJson, e.responseStartedAt, e.parentIncidentId,
+        e.updatedAt, e.reportedAt, e.submittedAt, e.modelVersionsJson, e.responseStartedAt, e.parentIncidentId, e.evidenceJson,
     )
 
     private fun toEntity(st: StoredIncident, rowid: Long): IncidentEntity {
@@ -358,7 +361,7 @@ class RoomIncidentRepository(
             rowid, r.id, r.refNo, r.status, r.incidentType, r.title, r.description, r.severity, r.severitySource, r.locationText,
             r.locationId, r.occurredAt, r.occurredAtApprox, r.timeExpression, r.injuries, r.injuredCount, r.nearMiss, r.hazardOngoing,
             r.detailsJson, r.fieldMetaJson, r.otherIncidentsJson, r.lang, r.reporterName, r.reporterEmpId, r.emergencyFlag,
-            r.followupRounds, r.createdAt, r.updatedAt, r.reportedAt, r.submittedAt, r.modelVersionsJson, responseStartedAt = r.responseStartedAt, parentIncidentId = r.parentIncidentId,
+            r.followupRounds, r.createdAt, r.updatedAt, r.reportedAt, r.submittedAt, r.modelVersionsJson, responseStartedAt = r.responseStartedAt, parentIncidentId = r.parentIncidentId, evidenceJson = r.evidenceJson,
         )
     }
 

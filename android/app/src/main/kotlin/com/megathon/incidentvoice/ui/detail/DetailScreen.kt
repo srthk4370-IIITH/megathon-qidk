@@ -84,7 +84,12 @@ fun DetailScreen(
 @Composable
 private fun DetailBody(d: IncidentDetail, tx: Taxonomy, disclaimer: String, modifier: Modifier, similarHits: List<com.megathon.incidentvoice.ask.AskHit>, onOpen: (String) -> Unit, case: MergedCase?, onTrust: (String, String) -> Unit, onTick: (Long, Boolean) -> Unit) {
     val f = d.form
-    LazyColumn(modifier.fillMaxSize().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(vertical = 16.dp)) {
+    // "Show your evidence": tap a short field to see the words it came from in the transcript pinned on top
+    var evidenceFor by remember(d.meta.id) { mutableStateOf<String?>(null) }
+    val said = remember(d.turns) { d.turns.filter { it.role == "USER" }.map { it.text } }
+    Column(modifier.fillMaxSize()) {
+    if (said.isNotEmpty()) com.megathon.incidentvoice.ui.components.TranscriptCard(said, evidenceFor?.let { f.evidence[it] }.orEmpty(), evidenceFor?.let { tx.label(it) }, Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp))
+    LazyColumn(Modifier.weight(1f).fillMaxWidth().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(vertical = 16.dp)) {
         item {
             Text(f.str("title") ?: "Report", style = MaterialTheme.typography.titleLarge)
             Spacer(Modifier.height(8.dp))
@@ -101,10 +106,14 @@ private fun DetailBody(d: IncidentDetail, tx: Taxonomy, disclaimer: String, modi
             FlatCard {
                 FormDisplay.rows(f, tx).forEachIndexed { n, r ->
                     if (n > 0) QDivider()
-                    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    val tappable = r.key in com.megathon.incidentvoice.core.Evidence.FIELDS && said.isNotEmpty()
+                    Column(Modifier.fillMaxWidth().background(if (evidenceFor == r.key) MaterialTheme.colorScheme.primary.copy(alpha = 0.08f) else androidx.compose.ui.graphics.Color.Transparent)
+                        .then(if (tappable) Modifier.clickable(onClickLabel = "Show evidence for ${r.label}") { evidenceFor = if (evidenceFor == r.key) null else r.key } else Modifier)
+                        .padding(horizontal = 16.dp, vertical = 8.dp)) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                             Text(r.label, style = MaterialTheme.typography.bodySmall, color = secondaryText)
-                            if (r.status == FieldStatus.DEFAULTED || r.status == FieldStatus.INFERRED) Text("Check", style = MaterialTheme.typography.labelMedium, color = Amber)
+                            if (tappable && com.megathon.incidentvoice.core.Evidence.needsReview(f, r.key)) com.megathon.incidentvoice.ui.components.NeedsReviewChip()
+                            else if (r.status == FieldStatus.DEFAULTED || r.status == FieldStatus.INFERRED) Text("Check", style = MaterialTheme.typography.labelMedium, color = Amber)
                         }
                         Text(r.value)
                     }
@@ -154,6 +163,7 @@ private fun DetailBody(d: IncidentDetail, tx: Taxonomy, disclaimer: String, modi
             SectionTitle("Reporter")
             Text("${d.meta.reporter.name.ifBlank { "—" }} ${d.meta.reporter.empId}".trim() + " · reported ${fmtDateTime(d.meta.reportedAt)}")
         }
+    }
     }
 }
 
