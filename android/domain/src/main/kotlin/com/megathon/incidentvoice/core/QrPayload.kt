@@ -188,7 +188,12 @@ object QrReportBuilder {
             ts = time(d.meta.createdAt),
             type = f.types.joinToString(" + ") { tx.category(it)?.label ?: it }.ifBlank { "Not set" },
             sev = f.str("severity").orEmpty(),
-            loc = listOfNotNull(said, site?.display?.takeIf { said == null || !it.equals(said, ignoreCase = true) }?.let { if (said == null) it else "($it)" }).joinToString(" "),
+            // as said, plus the registry place in brackets; just the registry place when that is exactly what was said
+            loc = when {
+                site == null -> said.orEmpty()
+                said == null || said.equals(site.name, ignoreCase = true) -> site.display
+                else -> "$said (${site.display})"
+            },
             at = (f.value("occurred_at") as? JsonPrimitive)?.longOrNull?.let { QrTime(time(it), f.occurredApprox) },
             inj = when (f.state("injuries")?.status) {
                 FieldStatus.UNKNOWN -> "Unknown"

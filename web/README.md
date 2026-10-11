@@ -97,8 +97,9 @@ Libraries and licences: `vendor/LICENSES.md`.
 
 - **Live camera from a file.** Browsers decide whether a page opened from disk may use the camera. Desktop Chrome
   allows it; some mobile browsers do not. "Scan from photo" always works and gives the same result.
-- **iPhone.** Opening an HTML file from the Files app shows a preview that does not run scripts. Open it in a
-  browser that loads local pages, or serve the folder over https once (it then works offline through `sw.js`).
+- **iPhone.** Not tried on an iPhone. The Files app may show an HTML file as a preview that does not run scripts;
+  if so, open it in a browser that loads local pages, or serve the folder over https once (it then works offline
+  through `sw.js`).
 - **Not tamper-proof.** CRC32 catches a misread code, not a forged one.
 - **One QR code per report.** Very long reports lose the transcript and part of the description (the page says
   so with `…`); the full report stays on the device that created it.

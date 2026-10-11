@@ -359,3 +359,70 @@ If a report is already in progress, a quick-launch request does not interrupt it
 ### 2026-10-11 07:20 — ML: Qwen fallback on the Mac; this laptop = fine-tuned Llama only
 - Stock Llama export abandoned: Part 3 (3.5 GB) upload failed repeatedly (S3 SSL EOF with 128 conns; WSL crashed a 3rd time under heavy upload). Hook's "reuse recent same-name upload" fallback picked an incomplete killed upload → removed.
 - New robust uploader in `ml/export/iv_resume_hub.py` (per-part retries, 16 MiB × 32 threads). Precompiled Llama assets do not exist (licence); Qwen3-4B precompiled does (8 Elite for Galaxy, w4a16) → Mac downloads it as fallback.
+
+## Evidence, hotspots and offline QR handoff (App branch, branch `wow-features`, 2026-10-11 08:00–09:00)
+
+Three features built in a second session while the board was busy with the evals. Everything below was built and unit-tested on the Mac and checked on the Mac's Android emulator (mock engine, typed input). **Nothing here has run on the QIDK yet**; the board checks are listed at the end.
+
+### 1. Show your evidence (review screen and report detail)
+
+- **What it does.** Each short field (type, location, time, injuries, persons, equipment, actions taken, witnesses) remembers which words of the transcript support it. Tapping the field shows those words on a coral tint (20 %) in bold in a transcript card pinned at the top of the screen; tapping again clears it. A value that nothing in the transcript supports gets an amber "Needs review" chip. Description and SOP steps have no highlight.
+- **Storage.** `EvidenceSpan(turn, start, end)`: `turn` is the index of the reporter's utterance (0 = narration, then each follow-up answer), `start`/`end` are character offsets in that utterance. `IncidentForm.evidence` holds key → spans; stored as JSON in the new column `incidents.evidence_json` (**DB v5**, migration 4→5 adds the column, existing rows keep NULL). A report saved before v5 gets its spans computed from its transcript when it is opened, so old data shows evidence too.
+- **How a span is found** (`core/Evidence.kt`, on top of `Grounding`, no model):
+  - *Said word for word*: every occurrence is highlighted (a value repeated twice gives two spans).
+  - *Otherwise* the tightest run of words that covers at least half of the value's words and every number in it. Uses the same lexicon and prefix matching as the grounding check, plus number words ("room two") and the recogniser's sound-alikes ("room to"). "Conference Room 2" is supported by "conf room two" and not by "conference room 1".
+  - *Type*: the category's own cue words from the taxonomy ("leak", "aag"), also through the Hinglish lexicon ("paani").
+  - *Time*: the stored phrase first, so "at 10, no, 11" points to "11". If the model paraphrased ("half an hour ago" for "aadha ghanta pehle"), every time phrase in the transcript is resolved by `TimeResolver` and the one that gives the stored time is taken. A time that was assumed (not said) has no span.
+  - *Injuries*: injury words for YES, a denial ("nobody was hurt", "kisi ko chot nahi lagi") for NO. A YES never rests on words inside a denial.
+  - *Follow-up answers*: a value set by an answer is looked for in that answer first; if no single word carries it ("No."), the whole answer is the span. Fields the answer did not change keep their spans.
+  - A value typed by the reporter on the review screen has no span and no chip (it is theirs).
+- **Tests.** `EvidenceTest` (9: English, Hinglish, self-correction, no evidence, follow-up answer, repeated value, recogniser spellings, denial, storage) and `EvidenceStorageTest` (3: through Room, pre-v5 row, migration).
+
+### 2. Hotspots and repeat incidents
+
+Rules on the local database, no model. Every threshold is in `core/HotspotRules.kt`:
+
+| Constant | Value | Meaning |
+|---|---|---|
+| `REPEAT_MIN_REPORTS` / `REPEAT_WINDOW_DAYS` | 3 / 7 | REPEAT: 3 or more reports of the same type at the same location within 7 days, counted up to and including the report |
+| `HOTSPOT_MIN_REPORTS` / `HOTSPOT_WINDOW_DAYS` | 5 / 30 | HOTSPOT: 5 or more reports of any type at the location in 30 days |
+| `HOTSPOT_TOP_N` / `HOTSPOT_TOP_MIN_REPORTS` | 3 / 2 | or one of the top 3 locations by count, with at least 2 reports |
+| `TREND_DAYS` | 7 | trend = last 7 days against the 7 days before |
+
+- **`HOTSPOT_TOP_MIN_REPORTS` is an addition to the brief.** Without it, on a nearly empty device every place with a single report would be a "top 3" hotspot.
+- **Location key** (`LocationKeys`): the site-registry id when the place is known, so "conf room 2", "near conference room two" and "Conference Room 2" are all `A-1-CR2`. A place outside the registry is keyed by its cleaned-up words ("Workshop", "in the workshop" → `text:workshop`).
+- **What is counted**: submitted reports only; drafts and linked witness accounts (the same event told twice) are not. The window edge is inside the window (a report exactly 7 days earlier counts, 1 ms older does not).
+- **Tags**: computed when a report is submitted or edited and stored in `incidents.tags_json`; the chips on the list are recounted live so they stay right when reports are added or deleted.
+  - "Repeat incident · 3rd water leak here in 7 days" (coral chip) on the report that made it a repeat.
+  - "Hotspot" chip on every report at a hotspot location.
+- **After submit**: if the report is a repeat, a card: "Recurring hazard: N <type> reports at <location> in 7 days. Recommend inspection of <location>."
+- **Dashboard**: a "Hotspots" section at the top with the top 3 locations (reports in 30 days, most common type, last 7 days and the 7 before, ↑ more / ↓ fewer / → same). Tapping one filters the list to that place; "Show all" clears it.
+- **Demo data** (Settings → Demo data, debug builds only): "Seed demo data" inserts 12 reports over the last 30 days, every row marked `is_demo = 1` and labelled "Demo data" in the list: 2 water leaks at Conference Room 2 inside the last 7 days (the next leak there is the 3rd and shows the card), 5 at the Workshop, 2 at the Loading Dock, 3 single ones. "Clear demo data" deletes only `is_demo = 1` rows. The older "Load demo reports" rows are marked as demo data too.
+- **DB v6**: `incidents.is_demo` (INTEGER NOT NULL DEFAULT 0) and `incidents.tags_json`.
+- **Tests.** `HotspotsTest` (10, incl. the 7-day edge and location normalisation) and `HotspotRepositoryTest` (7: seed, dashboard order, 3rd leak, place filter, clear demo, drafts and witness accounts, migration).
+
+### 3. Offline QR handoff and the reader page
+
+- **App**: report detail → "Share offline" → full-screen QR code, black on white, screen brightness at maximum while it is shown, caption "Scan with the Qalam Reader". Drawn with ZXing `core` 3.5.3 at error-correction level M. No network, no pairing.
+- **Payload** (the contract with `web/reader.html`; also in `web/README.md`):
+  - `QALAM1:` + base64url (no padding) of raw DEFLATE (`Deflater(9, true)`, no zlib header) of compact UTF-8 JSON.
+  - Keys: `v` (1), `id`, `ts`, `type`, `sev`, `loc`, `at` (`{"t": ISO time, "approx": bool}`), `inj`, `per`, `eq`, `act`, `wit`, `desc`, `det` (label → value), `sop` (steps), `tags` (sentences), `eng`, `tx` (optional), `crc` (always last).
+  - `crc` = CRC32 (8 lower-case hex digits) of the JSON text with its tail `"crc":"xxxxxxxx"}` replaced by `"crc":""}`. The reader checks the text it received and never re-serialises.
+  - Size: at most 1,200 bytes compressed. Too big → drop `tx`, then shorten `desc`; as a last resort keep 3 `sop` steps and drop `det`.
+  - Values are readable text (labels, not codes). The reporter's name and employee id are not in the code.
+- **Reader** (`web/reader.html`, 563 KB, one file, zero network): live camera (native `BarcodeDetector` when the browser has it, else jsQR), "Scan from photo", "Paste code"; green "Integrity check passed" or red "Corrupted / not a Qalam code" with the note "Checks for transmission errors; not a tamper-proof signature."; one-page A4 PDF `Qalam_Incident_<type>_<date>.pdf`; history in `localStorage` with Clear; 360 px layout; light and dark. jsQR, jsPDF, pako (inflate) and a Latin subset of Inter (19 KB) are inlined. `manifest.json` and `sw.js` only matter when the folder is served over https.
+- **Tests.** Kotlin `QrPayloadTest` (6: round trip, wire format, size limit, damage, built from a saved report, writes `web/samples`) and `QrShareTest` (the drawn QR read back by ZXing). Web: `npm test` in `web/` runs the Kotlin → JS round trip on the samples, the photo path (PNG → jsQR) and headless Chrome on the file opened from disk (paste, PDF download, damage, photo, history, dark mode, a fake camera for the live scan, and a check that no request leaves the page).
+- **End to end on the emulator**: a screenshot of the app's QR screen was decoded by the reader's own decoder with the checksum passing.
+
+### Build notes
+
+- New dependency: `com.google.zxing:core:3.5.3` (app). The web tools are dev-only (`web/package.json`); Node is not installed on the Mac, so the tests were run with a Node 22 binary unpacked in a temporary folder.
+- The database goes from v4 to v6 in two steps. Both migrations only add columns.
+- Unit tests after the three features: 431, none failing (`:core:test :domain:test :app:testDebugUnitTest`).
+
+### Not done yet (needs the board)
+
+1. F1: tap the fields of a fresh spoken water-leak report and check the highlights.
+2. F2: seed demo data, report a water leak at Conference Room 2 by voice, confirm the card and the dashboard section.
+3. F3: photograph the board's QR screen with a phone and decode it in `reader.html`; try the live camera scan.
+4. Rebase on the latest main (the Qwen commits touch `ConversationOrchestrator.kt`, which these features also edit in a few lines), rerun the tests, merge what passes.

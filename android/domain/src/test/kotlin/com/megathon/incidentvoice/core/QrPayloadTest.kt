@@ -111,6 +111,8 @@ class QrPayloadTest {
         assertEquals(Fx.tx.category("MEDICAL")!!.label + " + " + Fx.tx.category("STRUCTURAL")!!.label, r.type)
         assertEquals("MEDIUM", r.sev); assertEquals("Yes, 1 person", r.inj)
         assertEquals("near pantry (Pantry · Block A · Floor 1)", r.loc)
+        val exact = QrReportBuilder.build(detail.copy(form = Fx.merger.userEdit(form, "location", Fx.s("pantry"), Fx.now)), Fx.tx, Fx.registry, null, "", Fx.zone)
+        assertEquals("Pantry · Block A · Floor 1", exact.loc); assertTrue(exact.tags.isEmpty())
         assertEquals(QrTime("2026-10-10T09:07:00+05:30", true), r.at)
         assertEquals(listOf("Ramesh (affected): ankle injury"), r.per); assertEquals(listOf("First aid given"), r.act)
         assertEquals("Conscious stable", r.det[Fx.tx.label("patient_condition")]); assertEquals("wet floor", r.det[Fx.tx.label("damage_type")])
